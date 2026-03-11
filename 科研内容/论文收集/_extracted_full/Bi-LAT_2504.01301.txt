@@ -1,0 +1,484 @@
+=== Page 1 ===
+Bi-LAT: Bilateral Control-Based Imitation Learning via Natural
+Language and Action Chunking with Transformers
+Takumi Kobayashi1†, Masato Kobayashi1,2,3†∗, Thanpimon Buamanee1, Yuki Uranishi1,2
+Abstract—We present Bi-LAT, a novel imitation learning
+framework that unifies bilateral control with natural language
+processing to achieve precise force modulation in robotic ma-
+nipulation.Bi-LATleveragesjointposition,velocity,andtorque
+data from leader-follower teleoperation while also integrating
+visual and linguistic cues to dynamically adjust applied force.
+By encoding human instructions such as “softly grasp the
+cup” or “strongly twist the sponge” through a multimodal
+Transformer-based model, Bi-LAT learns to distinguish nu-
+anced force requirements in real-world tasks. We demonstrate
+Bi-LAT’s performance in (1) unimanual cup-stacking scenario
+where the robot accurately modulates grasp force based on
+language commands, and (2) bimanual sponge-twisting task
+that requires coordinated force control. Experimental results
+show that Bi-LAT effectively reproduces the instructed force
+levels, particularly when incorporating SigLIP among tested Fig. 1: Bilateral Control-Based Imitation Learning via Nat-
+language encoders. Our findings demonstrate the potential
+ural Language and Action Chunking with Transformers
+of integrating natural language cues into imitation learning,
+paving the way for more intuitive and adaptive human–robot
+interaction. For additional material, please visit the website:
+https://mertcookimg.github.io/bi-lat/ demonstrators only provide position commands. Although
+these systems are relatively straightforward to implement,
+I. INTRODUCTION
+they often struggle to capture the rich force interactions
+In today’s rapidly evolving landscape of robotics, inte- essential for manipulating fragile or deformable objects.
+grating advanced manipulation capabilities with social in- In parallel with advances in imitation learning, the emer-
+telligence is pivotal to shaping our hybrid future. Robotic gence of foundation models and large language models
+manipulationplaysacentralroleinarangeofhuman-centric (LLM) has dramatically broadened the horizons of robotics
+applications—from cooking assistance [1] and eldercare [2] research [7], [8]. Although these models have achieved
+to dynamic interactive scenarios [3]—where robots are en- notable success in planning and semantic perception, they
+visioned as collaborative partners. While conventional in- often fall short when it comes to the fine-grained control
+dustrialrobotsexcelatexecutingpre-programmed,repetitive of force and torque, which are critical factors for safe and
+actions,theemerginggenerationofserviceandcollaborative effective object manipulation.
+robots must adapt to dynamic environments and handle To bridge this gap in force-centric manipulation, many
+objects with diverse shapes and material properties. This researchers have turned to bilateral control, wherein both
+transformationcallsforlearning-basedapproachesthatrepli- position and force information are exchanged between the
+cate complex, human-like manipulation strategies, including human demonstrator and the robot [9]. Bilateral control-
+precise force regulation, and that are seamlessly integrated based teleoperation enables the demonstrator to feel con-
+into broader human-robot interaction frameworks. tact forces in real time, capturing more accurate physical
+Amongthesemethods,imitationlearning(IL)hasemerged interactions for training data. Indeed, prior studies have
+as an effective method for enabling robots to acquire new demonstrated that bilateral control-based imitation learning
+skills directly from imitating human demonstrations [4]. By enables better generalization across objects with different
+circumventing the need to explicitly design a reward func- hardness and weights compared to unilateral setups [10],
+tion,ILaddressestasksthataredifficulttoformalize,suchas [11],[12].Recently,bilateralcontrol-basedimitationlearning
+delicate assembly [5] or surgical procedures [6], and distills viaactionchunkingwithtransformers(Bi-ACT)[13]showed
+expertknowledgeintoaparameterizedpolicy.However,most thatcombiningbilateralcontrolinformationandvisualinputs
+existing IL frameworks in robotics traditionally assume uni- with Transformer-based models improves action accuracy.
+lateral control-based teleoperation setups, in which human However, it does not yet incorporate natural language in-
+structions specifying how much force to apply.
+† Equal Contribution, 1 Graduate School of Information Science and In this paper, we propose Bi-LAT: Bilateral Control-
+Technology,TheUniversityofOsaka,2D3Center,TheUniversityofOsaka,
+Based Imitation Learning via Natural Language and Ac-
+3GraduateSchoolofMaritimeSciences,KobeUniversity,*corresponding
+author:kobayashi.masato.cmc@osaka-u.ac.jp tionChunkingwithTransformers.Byleveragingmultimodal
+5202
+luJ
+82
+]OR.sc[
+2v10310.4052:viXra
+=== Page 2 ===
+Transformers that fuse robot information (joint angles, ve-
+locities,torques),visualinformation,andlinguisticcues,Bi-
+LATlinkseverydaylanguageinstructions(e.g.,“softlygrasp
+the cup”) directly to explicit force modulation during task
+execution. This integration enables robots to autonomously
+adjust force based on higher-level, human-readable com-
+mands rather than relying on numerically defined torque
+thresholds. We validate Bi-LAT on two real-world tasks,
+the unimanual cup-stacking task and the bimanual sponge-
+twistingtask,bothhighlightingthenecessityofpreciseforce
+Fig. 2: Bi-LAT: Data Collection
+control.
+Our main contributions are as follows:
+• We propose Bi-LAT, a bilateral control-based imitation Bi-ACT include ALPHA-α [9], a low-cost bimanual robotic
+learning framework that integrates robot position and platform, and the data augmentation method for bilateral
+force data, visual observations, and natural language control-based imitation learning with images (DABI) [15],
+instructions. which enhances training data by downsampling both image
+• We evaluate several language/text encoders in uniman- and robot data to improve learning efficiency.
+ual cup-stacking scenario and demonstrate that the In this paper, we extend Bi-ACT by integrating natural
+SigLIP text encoder particularly excels at modulating languageprocessingwithalanguage/textencoder,creatinga
+grasp force according to language instructions. bilateral control-based imitation learning framework called
+• We further demonstrate the effectiveness of Bi-LAT in Bi-LAT that generates actions based on human language
+bimanual setting, where coordinated force control is instructions while effectively leveraging force information.
+required to twist a deformable sponge, validating our
+method for more complex tasks. B. Imitation Learning Using Language Models
+This paper consists of six sections. Section II explains Traditionally,robots havebeencontrolled throughexplicit
+Related Works. Section III proposes Bi-LAT method. Sec- programming, with commands defined as specific control
+tions IV and V confirm the method’s efficiency based on values such as current, torque, and position. However, the
+the unimanual and bimanual experimental results. Section adventoflanguagemodelshasrevolutionizedthisparadigm,
+VI concludes this paper. enabling human operators to provide instructions using nat-
+ural language [16], [17]. Large language models further
+II. RELATEDWORKS
+enhance a robot’s ability to interpret natural language in-
+A. Bilateral Control-Based Imitation Learning structions and generate structured action plans, such as
+determining the correct sequence of actions to execute a
+Bilateralcontrolisusedfordatacollection,whichinvolves
+task [7], [8]. The emergence of vision-language models
+the remote operation of a follower robot in the environment,
+(VLM) has facilitated the integration of visual and textual
+guided by a leader robot controlled by human [9]. This
+information, allowing robots to process and interpret images
+approachprovidesoperatorswithforcefeedbackduringdata
+andvideosalongsidelanguagecommands[18],[19].Collec-
+collection, which is crucial for capturing motion data that
+tively, these advancements represent a paradigm shift from
+closely aligns with human intuition. These are achieved
+rigid,pre-programmedinstructionstoflexible,context-aware,
+through position tracking and the use of action-reaction
+and human-intuitive interaction mechanisms.
+principles.
+In this paper, we proposed Bi-LAT. By linking linguistic
+Many studies on bilateral control-based imitation learning
+information with the haptic feedback provided by bilateral
+employ neural network architecture such as Long Short-
+control, Bi-LAT enables robots to execute tasks with precise
+Term Memory (LSTM). For example, previous studies have
+force modulation instructed by human operators.
+demonstrated tasks like drawing straight lines along a ruler
+[10], wiping a whiteboard with an eraser [11], and thinly
+III. BI-LAT:BILATERALCONTROL-BASEDIMITATION
+slicing cucumbers [12], all of which require precise force
+LEARNINGVIANATURALLANGUAGEANDACTION
+controlforsuccessfulexecution.Morerecently,Transformers
+CHUNKINGWITHTRANSFORMERS
+havegainedtractioninroboticcontrol.Notably,Bi-ACT[13]
+A. Overview
+integrates Action Chunking with Transformers (ACT) [14]
+into bilateral control-based imitation learning. Bi-ACT pre- Bi-ACT leverages bilateral control to perform robot con-
+dicts not only the next action but also sequences of actions, trol using both positional and force information, enabling
+therebyaddressingtheissueofcumulativeerrors,acommon flexible adaptation even when handling previously unseen
+challenge in imitation learning. Moreover, Bi-ACT extends objects.Additionally,byincorporatingimagedatafromRGB
+bilateral control-based imitation learning by incorporating cameras, the system achieves visual-based robot control.
+visualdata,whichenablesflexibleadaptationtoobjectswith Buildingonthisfoundation,theproposedmethodBi-LAT
+varying weights and shapes. Recent developments related to integrates a language encoder into the framework to ensure
+=== Page 3 ===
+Fig. 3: Bi-LAT: Learning Model
+Fig. 4: Language Encoder Fig. 5: Bi-LAT: Inference
+thatgeneratedactionscorrespondtotheforcelevelspecified
+enhance the performance of the language model, we employ
+by the operator, as shown in Fig. 1. Incorporating natural
+prompt engineering techniques that have proven effective
+language processing techniques allows robots to execute
+with Contrastive Language–Image Pre-training (CLIP) [22].
+tasks based on user-provided natural language instructions.
+Previous studies have indicated that CLIP’s accuracy can
+B. Data Collection degrade when processing ambiguous sentences or isolated
+words; however, appending the phrase “a photo of a” to the
+Bi-LAT employs four-channel bilateral control method
+beginning of a prompt has been shown to improve perfor-
+for data collection. The key concept underlying bilateral
+mance. We also apply similar prompt engineering strategies
+control is that both the operator and the controlled target
+during data collection.
+continuously share position, force, and other relevant infor-
+mationtoachievecoordinatedbehavior.Thiscoordinationis C. Language Encoder
+mathematically characterized by the equations:
+As shown in Fig. 4, we adopt several language encoders
+θ −θ =0 (1) from CLIP [22] and Bidirectional Encoder Representations
+l f
+from Transformers (BERT) [23] architectures to convert
+τ +τ =0 (2)
+l f natural language instructions into distributed representations
+In these expressions, θ denotes joint angles and τ denotes forprocessingbytheBi-LATmodel.Specifically,weemploy
+torques,withthesubscripts⃝ and⃝ indicatingtheleader CLIP and its derivative, SigLIP [24], from the CLIP series,
+l f
+and follower systems. Encoders are used to capture joint alongwithDistilBERT[25]andModernBERT[26]fromthe
+angles. Meanwhile, the torque response is estimated via BERT series. CLIP-based models excel at integrating visual
+disturbanceobserver(DOB)[20]andreactionforceobserver and textual cues, whereas BERT-based models are highly
+(RFOB) [21]. This method facilitates the estimation of envi- effective in natural language understanding. By leveraging
+ronmental reaction torques without force/torque sensors. the strengths of these architectures, our approach enables
+Bi-LAT extends the data collection process by incorporat- robustinterpretationoflanguagecommandsforpreciseforce
+ing natural language instructions provided by the operator, control in robotic tasks.
+as shown in Fig. 2. The operator teleoperates the follower
+D. Learning Model
+robotviatheleaderrobot,whilenaturallanguageinstructions
+describingthemovementsarerecordedalongsiderobotjoint The Bi-LAT learning model is built upon a Transformer-
+data and camera images. This additional modality enables driven Conditional Variational Autoencoder (CVAE) archi-
+the system to later interpret these natural language cues for tecture, as illustrated in Fig. 3. In this framework, the
+precise force control, effectively bridging the gap between model receives the follower robot joints’ angle, velocity,
+human tactile perception and robotic actuation. To further and torque data along with corresponding visual inputs
+=== Page 4 ===
+Fig. 6: Unimanual Experimental Environment Fig. 7: Detailed Cup-Stacking Task
+and natural language instructions. Based on this multimodal
+input, the model outputs sequences of action chunks that
+specify the predicted joint angles, velocities, and torques of
+leader robots. Natural language instructions are processed
+by a dedicated language encoder (LE), which converts the
+Fig. 8: Training Data of Joint5 (Gripper)
+textual commands into fixed-length vector representations.
+In this paper, we select four language encoders among
+many available options, namely DistilBERT, ModernBERT,
+B. Experimental Conditions
+CLIP, and SigLIP, as shown in Fig. 4. These linguistic
+features are integrated with visual features extracted from To verify that language instructions are correctly associ-
+ResNet-18 and the follower robot’s joint angles, velocities, ated with the robot’s joint position and torque values, we
+and torques to form a comprehensive latent representation. conductedacup-stackingexperimentusingthreepapercups.
+This representation is then passed through the CVAE-based The deformable nature of these cups allowed us to test
+Transformerdecoder,whichpredictsthefutureleaderrobot’s whether the robot could autonomously control its grasping
+actions as a series of action chunks. The learning process is force based on natural language instructions.
+driven by minimizing the error between the predicted leader AsdepictedinFig.7,thecup-stackingtaskisdividedinto
+joint data and the corresponding ground-truth data collected three stages:
+during bilateral control teleoperation. • Pick: The robot moves from its initial position to the
+front of the cup, opens its gripper, moves forward, and
+E. Inference
+then closes its gripper to grasp the cup.
+Fig. 5 illustrates the operational diagram for Bi-LAT • Move: While maintaining its grip on the cup, the robot
+inference. During inference, the Bi-LAT model receives the moves to the apex of the two centrally placed cups.
+mostrecentjointdatafromthefollowerrobotalongwithcor- • Place: The robot opens its gripper in the center of the
+responding camera images and natural language instruction two base cups to release and place the cup.
+specifyingthedesiredaction.Basedonthisinput,themodel To examine the effect of varying force requirements, we
+predicts the subsequent action chunk of leader robot’s joints collected demonstrations for two distinct instructions:
+information. Bi-LAT outputs action data that include joint
+• “Softly grasp the cup” (lighter grip force)
+angles, velocities, and torques for each joint. These outputs
+• “Strongly grasp the cup” (firmer grip force)
+are then converted into the requisite current for each joint
+Because the paper cups were deformable, these instruc-
+by calculations performed by the bilateral control system.
+tionsproducednoticeablydifferenttorqueprofiles,especially
+IV. UNIMANUALEXPERIMENT during the grasping phase.
+A. Hardware C. Training Setup
+Fig. 6 shows the environment in which the unimanual Jointangles,angularvelocities,andtorqueswererecorded
+experiment was conducted. We used the OpenManipulator- from the leader and follower robots using the four-channel
+X from ROBOTIS. This manipulator features four joints bilateral control system, operating at a control frequency of
+(Joint1 to Joint4) for arm rotation, while Joint5 is dedicated 1000Hz.Thisresultedin15-dimensionaljointdata(3values
+togripperactuation.Intheunimanualexperiment,tworobot × 5 joints) per robot, and 30-dimensional joint data in total
+arms were used: one configured as the leader robot and across both robots, capturing detailed motor-level dynamics
+the other as the follower robot. For collecting image data, essentialforimitationlearning.Simultaneously,RGBimages
+we used the ELP USB camera (model ELP-USBFHD08S- were captured from three cameras at a frequency of 100 Hz.
+L36),whichcapturesRGBimagesataresolutionof640×360 AsshowninFig.8,eachdemonstrationwaspairedwitha
+pixels. Three of these cameras were deployed overhead, on natural language instruction. Among the six demonstrations,
+the side, and on the gripper to ensure comprehensive visual three involved “softly grasp the cup”, while the other three
+coverage. involved “strongly grasp the cup.” Histograms for Joint5
+=== Page 5 ===
+TABLE I: Cup-Stacking Success Rates
+Method Instruction SuccessRate ForceAccuracy
+Bi-ACT(None) NoInstruction 5/5(100%) ×
+Softly 5/5(100%)
+Bi-LAT(DistilBERT) △
+Strongly 5/5(100%)
+Softly 5/5(100%)
+Bi-LAT(ModernBERT) ×
+Strongly 5/5(100%)
+Softly 5/5(100%) (a) Bi-ACT (None)
+Bi-LAT(CLIP) ×
+Strongly 5/5(100%)
+Softly 5/5(100%)
+Bi-LAT(SigLIP) ⃝
+Strongly 5/5(100%)
+(b) Bi-LAT (DistilBERT)
+(c) Bi-LAT (ModernBERT)
+Fig.9:AutonomousExecutionusingBi-ACT(NoLanguage
+Instructions) and using Bi-LAT (with SigLIP)
+(Gripper)angleandtorqueduringthegraspingphasesupport
+these findings. Under the “softly grasp the cup” instruction, (d) Bi-LAT (CLIP)
+most joint angles are distributed between 2.45 and 2.60 rad,
+with torques between 0 and 0.05 Nm. Under the “strongly
+grasp the cup” instruction, most joint angles concentrate
+between 2.65 and 2.75 rad, with torques between 0.15 and
+0.20 Nm.
+Moreover, to augment the training data, we employed
+(e) Bi-LAT (SigLIP)
+the DABI [15]. DABI is particularly effective when high-
+frequency robot sensor data and lower-frequency image data Fig. 10: Results of Gripper Joint5 Angle and Torque
+arecollectedsimultaneously.Bydownsamplingthe1000Hz
+control data to 100 Hz, DABI expanded the original six
+demonstrations to 60, thereby increasing the dataset size by
+andtorquesbetween0.10and0.20Nm.Thisresultindicates
+a factor of ten. For additional details, please refer to [15].
+that the Bi-ACT model is unable to differentiate between
+Basedonthisdataset,wetrainedBi-ACT,andBi-LATusing
+the“softly”and“strongly”actions,therebyfailingtoencode
+DistilBERT, ModernBERT, CLIP text encoder, and SigLIP
+the nuanced force requirements for varying task conditions.
+text encoder. We configured Bi-LAT models with 4 encoder
+These findings underscore the necessity of incorporating
+layers and 7 decoder layers.
+natural language cues to guide force modulation, ultimately
+D. Experiment Result enablingamorepreciseandcontext-awareimitationlearning
+As shown in Table I, the cup-stacking task was success- process.
+fully achieved in 100% of trials. Fig. 9 shows the results We tested action-oriented prompts, “softly grasp the cup”
+of autonomous execution using the conventional Bi-ACT and “strongly grasp the cup”, to determine whether Bi-LAT
+(no language instructions) and Bi-LAT with SigLIP as the could replicate the training distributions shown in Fig. 8.
+language encoder. Whiletheoveralltaskwasexecutedsuccessfully,timeseries
+In the conventional Bi-ACT model, which was trained graph and histogram analyses revealed varying levels of
+without language inputs, data from both “softly” and differentiation among the language models. For example,
+“strongly”demonstrationsweremergedintoasingletraining as shown in Fig. 10(b), DistilBERT produced a joint angle
+set. As a result, the model treated both force modalities as distribution for “softly grasp the cup” between 2.65 and
+equivalent aspects of the same task. As shown in Fig. 10(a), 2.7 rad, while for “strongly grasp the cup” the joint angles
+whennolanguageinstructionwasprovided,theinferredjoint exceeded 2.7 rad, and corresponding torques were near 0
+angle and torque profiles were biased toward strong force Nm and around 0.20 Nm, respectively. However, compared
+characteristics, with joint angles distributed around 2.75 rad to the training data, the motions generated for “softly grasp
+=== Page 6 ===
+Fig. 11: Data Collection of Sponge-Twisting Task using ALPHA-α
+control cycle was set to 1000 Hz for precise movement
+and data collection of joint angle, velocity, and torque.
+Furthermore, four RGB cameras were positioned overhead,
+on the side, and on the right and left gripper joints of the
+follower robots to capture visual observations.
+B. Experimental Conditions
+To evaluate the effectiveness of Bi-LAT with SigLIP in
+linkingnaturallanguageinstructionstoroboticmotorbehav-
+ior,weranasponge-twistingtaskviabilateralteleoperation.
+Fig. 12: Bimanual Experimental Environment
+As illustrated in Fig. 11, the sponge-twisting task consists
+of three stages:
+the cup” exhibited higher than expected angles and torques. • Grab: The robots open their grippers, move forward,
+Incontrast,theresultsshowninFig.10(c)forModernBERT and close them to grasp the sponge.
+and Fig. 10(d) for CLIP demonstrated some differentiation • Lift: The sponge is lifted from the table surface.
+in the maximum values, but the overall distributions did not • Twist: The sponge is twisted while being held.
+clearlydistinguishbetweenthetwoconditions.Mostnotably, To examine the effect of varying force requirements, we
+Fig.10(e)showsthatSigLIPprovidedtheclearestseparation, collected demonstrations for two distinct instructions:
+withtheinferencedataforeachinstructioncloselymatching • “Softly twist the sponge” (lighter grip force)
+the training distributions. • “Strongly twist the sponge” (firmer grip force)
+Thesefindingsconfirmthatincorporatingnaturallanguage Becausethespongewasdeformable,theseinstructionsin-
+cues into a bilateral control-based imitation learning frame- ducednoticeablydifferenttorqueprofiles,particularlyduring
+work is essential for precise force modulation. By aligning the grabbing and twisting phases.
+with the distributions in the training data, SigLIP-based
+Bi-LAT can effectively map language instructions to the C. Training Setup
+appropriate joint angle and torque profiles. Jointangles,angularvelocities,andtorqueswererecorded
+fromboththeleaderandfollowerrobotsusingthe4-channel
+V. BIMANUALEXPERIMENT
+bilateral control system, operating at the control frequency
+A. Hardware
+of 1000 Hz. This resulted in 21-dimensional joint data (3
+As shown in Fig. 12, the bimanual robots ALPHA-α[9] values×7joints)perrobot,and84-dimensionaldataintotal
+wereusedforexperimentsinbimanualroboticmanipulation. across both robots, capturing detailed motor-level dynamics
+A total of four robots were employed, including two leader essentialforimitationlearning.Simultaneously,RGBimages
+robots operated by the human operator and two follower were captured from four cameras at a frequency of 100 Hz.
+robots. Each robot features 6 degrees of freedom (DOF) for As shown in Fig. 14, each demonstration was paired with
+versatile movement, and an additional DOF for the gripper, anaturallanguageinstruction;amongthesixdemonstrations,
+utilizing a total of 7 motors for its operation. The bilateral three involved “strongly twist the sponge”, while the other
+=== Page 7 ===
+Fig. 13: Results of Sponge-Twisting Task using ALPHA-α
+Fig. 14: Training Data of Follower Robots Fig. 15: Results of Follower Robots via Bi-LAT
+TABLEII:Sponge-TwistingSuccessRatesbyStage(Bi-LAT D. Experiment Result
+with SigLIP)
+AsshowninFig.13,weconductedautonomousexecutions
+Instruction Pick Lift Twist Overall of the sponge-twisting task under two distinct instructions:
+Softly 5/5(100%) 5/5(100%) 5/5(100%) 5/5(100%) “softlytwistthesponge”and“stronglytwistthesponge.”As
+Strongly 5/5(100%) 5/5(100%) 4/5(80%) 4/5(80%)
+summarizedinTableII,thesystemachieveda100%success
+rate across all Pick, Lift, Twist phases under the soft twist
+instruction. In contrast, under the strong twist instruction,
+Pick and Lift both succeeded in 100% of trials, whereas
+three involved “softly twist the sponge.” The histograms
+Twist succeeded in four out of five trials (80%). A closer
+were generated from data captured after six seconds, cor-
+examination of the failure case revealed that the sponge’s
+responding to the interval in which the sponge was actively
+higher internal resistance caused the robot to lose a secure
+grasped.Underthe“softlytwistthesponge”instruction,most
+grip during twisting.
+joint angles were distributed between 3.0 and 3.25 rad, with
+Duringautonomousexecution,asshowninFig.15,theBi-
+torques between 0 and 0.10 Nm. Under the “strongly twist
+LATmodelfollowedcomparablespatialtrajectoriesforboth
+the sponge” instruction, joint angles concentrated between
+“soft” and “strong” conditions, yet produced markedly dif-
+3.25 and 3.5 rad, with torques between 0.10 and 0.30 Nm.
+ferent torque profiles. Red lines represent strongly grasped-
+By applying DABI, we expanded the original six demon- and-twisted runs, while blue lines indicate softly grasped-
+strations into 60 by downsampling the 1000 Hz control data and-twistedruns.Althoughtheoverallmotionssharesimilar
+to 100 Hz, thereby increasing the dataset size by a factor paths, torque values diverge sharply during grasping and
+of ten. Based on this dataset, we trained Bi-LAT using the twisting. Furthermore, histograms of both joint angles and
+SigLIPtextencoderandconfiguredthemodelwith4encoder torques confirm that the two conditions form distinct dis-
+layers and 7 decoder layers. tributions that closely match their respective training data.
+=== Page 8 ===
+These results demonstrate the model’s ability to modulate [9] M.Kobayashi,T.Buamanee,andT.Kobayashi,“Alpha-α andbi-act
+force based on natural language instructions rather than areallyouneed:Importanceofpositionandforceinformation/control
+forimitationlearningofunimanualandbimanualroboticmanipulation
+reproducing a uniform trajectory, showcasing the value of
+withlow-costsystem,”IEEEAccess,2025.
+integrating language cues into a bilateral control-based imi- [10] T.Adachi,K.Fujimoto,S.Sakaino,andT.Tsuji,“Imitationlearning
+tation learning framework for nuanced force control. for object manipulation based on position/force information using
+bilateral control,” in 2018 IEEE/RSJ International Conference on
+IntelligentRobotsandSystems(IROS). IEEE,2018,pp.3648–3653.
+VI. CONCLUSIONS
+[11] K. Hayashi, S. Sakaino, and T. Tsuji, “An independently learnable
+hierarchicalmodelforbilateralcontrol-basedimitationlearningappli-
+This paper presented Bi-LAT, a novel framework that
+cations,”IEEEAccess,vol.10,pp.32766–32781,2022.
+integrates natural language processing into bilateral control- [12] S. Sakaino, K. Fujimoto, Y. Saigusa, and T. Tsuji, “Imitation learn-
+basedimitationlearningtoachieveintuitiveforcemodulation ing for variable speed contact motion for operation up to control
+bandwidth,”IEEEOpenJournaloftheIndustrialElectronicsSociety,
+in robotic manipulation. Building on the foundation of Bi-
+vol.3,pp.116–127,2022.
+ACT,Bi-LATleveragesvisual,proprioceptive,andlinguistic [13] T.Buamanee,M.Kobayashi,Y.Uranishi,andH.Takemura,“Bi-act:
+data to generate actions that accurately reflect the nuanced Bilateral control-based imitation learning via action chunking with
+transformer,” in 2024 IEEE International Conference on Advanced
+force levels specified by human operators.
+IntelligentMechatronics(AIM). IEEE,2024,pp.410–415.
+Experimentsinbothunimanualandbimanualsettingscon- [14] T.Z.Zhao,V.Kumar,S.Levine,andC.Finn,“Learningfine-grained
+firmed that Bi-LAT reliably reproduces a range of force in- bimanual manipulation with low-cost hardware,” arXiv preprint
+arXiv:2304.13705,2023.
+tensities,particularlywhenusingSigLIPasthetextencoder.
+[15] M. Kobayashi, T. Buamanee, and Y. Uranishi, “Dabi: Evaluation of
+Thisprecisioninforcemodulation,integratedwithlanguage- data augmentation methods using downsampling in bilateral control-
+based commands and haptic feedback, demonstrates the based imitation learning with images,” 2024. [Online]. Available:
+https://arxiv.org/abs/2410.04370
+framework’srobustnessinadaptingtodynamicmanipulation
+[16] S. Stepputtis, J. Campbell, M. Phielipp, S. Lee, C. Baral, and
+tasks. Our results underscore the potential of combining bi- H.BenAmor,“Language-conditionedimitationlearningforrobotma-
+lateralcontrol-basedimitationlearningwithnaturallanguage nipulationtasks,”AdvancesinNeuralInformationProcessingSystems,
+vol.33,pp.13139–13150,2020.
+cues to enhance the adaptability and intuitiveness of robotic
+[17] H.Zhou,Z.Bing,X.Yao,X.Su,C.Yang,K.Huang,andA.Knoll,
+manipulation.Thehybridapproachenhancescomplexobject “Language-conditionedimitationlearningwithbaseskillpriorsunder
+manipulationandpromotesseamlesshuman-robotcollabora- unstructured data,” IEEE Robotics and Automation Letters, vol. 9,
+no.11,pp.9805–9812,2024.
+tion across service, industrial, and assistive robotics.
+[18] J.Gao,B.Sarkar,F.Xia,T.Xiao,J.Wu,B.Ichter,A.Majumdar,and
+Future work will address more diverse object properties D. Sadigh, “Physically grounded vision-language models for robotic
+includingrigidanddeformablematerials,incorporatevarying manipulation,” in 2024 IEEE International Conference on Robotics
+andAutomation(ICRA). IEEE,2024,pp.12462–12469.
+task difficulties, refine real-time language interactions, and
+[19] D. Li, C. Zhao, S. Yang, L. Ma, Y. Li, and W. Zhang, “Learning
+explore large-scale datasets for enhanced generalization. instruction-guided manipulation affordance via large models for em-
+bodiedrobotictasks,”in2024InternationalConferenceonAdvanced
+RoboticsandMechatronics(ICARM). IEEE,2024,pp.662–667.
+REFERENCES
+[20] K. Ohnishi, M. Shibata, and T. Murakami, “Motion control for
+advanced mechatronics,” IEEE/ASME transactions on mechatronics,
+[1] J.Liu,Y.Chen,Z.Dong,S.Wang,S.Calinon,M.Li,andF.Chen,
+vol.1,no.1,pp.56–67,1996.
+“Robot cooking with stir-fry: Bimanual non-prehensile manipulation
+[21] T. Murakami, F. Yu, and K. Ohnishi, “Torque sensorless control in
+ofsemi-fluidobjects,”IEEERoboticsandAutomationLetters,vol.7,
+multidegree-of-freedommanipulator,”IEEETransactionsonIndustrial
+no.2,pp.5159–5166,2022.
+Electronics,vol.40,no.2,pp.259–265,2002.
+[2] X.Liu,C.Huang,H.Zhu,Z.Wang,J.Li,andA.Cangelosi,“State-
+[22] A.Radford,J.W.Kim,C.Hallacy,A.Ramesh,G.Goh,S.Agarwal,
+of-the-artelderlyservicerobot:Environmentalperception,compliance
+G.Sastry,A.Askell,P.Mishkin,J.Clark,etal.,“Learningtransferable
+control,intentionrecognition,andresearchchallenges,”IEEESystems,
+visual models from natural language supervision,” in International
+Man,andCyberneticsMagazine,vol.10,no.1,pp.2–16,2024.
+conferenceonmachinelearning. PmLR,2021,pp.8748–8763.
+[3] Y.-L.Tsai,P.R.Bana,S.Loiselle,andH.Knight,“Sanitizerbot:How
+[23] J.Devlin,M.-W.Chang,K.Lee,andK.Toutanova,“Bert:Pre-training
+human-in-the-loop social robots can playfully support humans,” in
+of deep bidirectional transformers for language understanding,” in
+2022 IEEE/RSJ International Conference on Intelligent Robots and
+Proceedings of the 2019 conference of the North American chapter
+Systems(IROS). IEEE,2022,pp.8278–8285.
+of the association for computational linguistics: human language
+[4] M.Zare,P.M.Kebria,A.Khosravi,andS.Nahavandi,“Asurveyof
+technologies,2019,pp.4171–4186.
+imitationlearning:Algorithms,recentdevelopments,andchallenges,”
+[24] X. Zhai, B. Mustafa, A. Kolesnikov, and L. Beyer, “Sigmoid loss
+IEEETransactionsonCybernetics,vol.54,no.12,2024.
+for language image pre-training,” in Proceedings of the IEEE/CVF
+[5] L. Ankile, A. Simeonov, I. Shenfeld, and P. Agrawal, “Juicer: Data-
+internationalconferenceoncomputervision,2023,pp.11975–11986.
+efficient imitation learning for robotic assembly,” in 2024 IEEE/RSJ
+[25] V.Sanh,L.Debut,J.Chaumond,andT.Wolf,“Distilbert,adistillfed
+International Conference on Intelligent Robots and Systems (IROS).
+version of bert: smaller, faster, cheaper and lighter,” arXiv preprint
+IEEE,2024,pp.5096–5103.
+arXiv:1910.01108,2019.
+[6] R.Arduini,Y.Michel,H.Singh,J.Klodmann,andD.Lee,“Learning
+[26] B. Warner, A. Chaffin, B. Clavie´, O. Weller, O. Hallstro¨m,
+from demonstration of robot motions and stiffness behaviors for
+S.Taghadouini,A.Gallagher,R.Biswas,F.Ladhak,T.Aarsen,etal.,
+surgicalbluntdissection,”in202433rdIEEEInternationalConference
+“Smarter, better, faster, longer: A modern bidirectional encoder for
+onRobotandHumanInteractiveCommunication(ROMAN). IEEE,
+fast, memory efficient, and long context finetuning and inference,”
+2024,pp.1491–1496.
+arXivpreprintarXiv:2412.13663,2024.
+[7] A. Brohan, Y. Chebotar, C. Finn, K. Hausman, A. Herzog, D. Ho,
+J.Ibarz,A.Irpan,E.Jang,R.Julian,etal.,“Doasican,notasisay:
+Grounding language in robotic affordances,” in Conference on robot
+learning. PMLR,2023,pp.287–318.
+[8] S. S. Kannan, V. L. Venkatesh, and B.-C. Min, “Smart-llm: Smart
+multi-agentrobottaskplanningusinglargelanguagemodels,”in2024
+IEEE/RSJInternationalConferenceonIntelligentRobotsandSystems
+(IROS). IEEE,2024,pp.12140–12147.

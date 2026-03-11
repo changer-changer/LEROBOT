@@ -1,0 +1,979 @@
+=== Page 1 ===
+PointVLA: Injecting the 3D World into Vision-Language-Action Models
+ChengmengLi1,2,∗ YichenZhu1,∗,† JunjieWen3 YanPeng2 YaxinPeng2,† FeifeiFeng1
+1MideaGroup 2ShanghaiUniversity 3EastChinaNormalUniversity
+†Correspondingauthor
+pointvla.github.io
+Pretrain Finetune Packing on a Moving Conveyor Belt
+Large-scale
+3
+2D robot data
+A small set
+of 3D robot data 2
+Inject
+4
+1
+Vision-Language
+Action Expert
+Model
+5
+PointVLA
+Few-Shot Multi-Tasking Real-vs-Photo Discrimination Height Adaptability
+No Object
+Charge the phone Wipe the plate A pictureof laundry detergent
+52mm
+3mm
+Train data height: Test data height:
+Place the bread Transfer the banana A reallaundry detergent 3mm 52mm
+Figure1. PointVLAbuildsuponthestrengthsofVLA,whichispre-trainedonlarge-scale2Drobotdatawhileincorporating3Dworld
+intotheactionexpert. Weevaluateourmethodacrossvarioussettings,includingachallenginglong-horizonpackingtask(topright),a
+few-shotmulti-tasksetup(bottomleft),andtestsofthemodel’sreal-vs-photodiscriminationandheightadaptability.
+Abstract the vanilla action expert and injects 3D features via a
+lightweight modular block. To identify the most effective
+Vision-Language-Action (VLA) models excel at robotic wayofintegratingpointcloudrepresentations,weconduct
+tasks by leveraging large-scale 2D vision-language pre- a skip-block analysis to pinpoint less useful blocks in the
+training, but their reliance on RGB images limits spatial vanilla action expert, ensuring that 3D features are in-
+reasoning critical for real-world interaction. Retraining jectedonlyintotheseblocks—minimizingdisruptiontopre-
+these models with 3D data is computationally prohibitive, trainedrepresentations.
+while discarding existing 2D datasets wastes valuable re- Extensive experiments demonstrate that PointVLA out-
+sources. To bridge this gap, we propose PointVLA, a performs state-of-the-art 2D imitation learning meth-
+frameworkthatenhancespre-trainedVLAswithpointcloud ods, such as OpenVLA [25], Diffusion Policy [9] and
+inputs without requiring retraining. Our method freezes DexVLA[46],acrossbothsimulatedandreal-worldrobotic
+1
+5202
+raM
+01
+]OR.sc[
+1v11570.3052:viXra
+=== Page 2 ===
+tasks. Specifically, we highlight several key advantages wouldbecomputationallyprohibitive,anddiscardingvalu-
+of PointVLA enabled by point cloud integration: (1) Few- able2Drobotdataisimpractical. Therefore,itisessential
+shot multi-tasking, where PointVLA successfully performs to explore novel frameworks that can integrate additional
+four different tasks using only 20 demonstrations each; 3D input into pre-existing foundation robot models, a re-
+(2) Real-vs-photo discrimination, where PointVLA distin- searchareathathasnotbeenunderexploredintheprevious
+guishesrealobjectsfromtheirimages,leveraging3Dworld literature.
+knowledge to improve safety and reliability; (3) Height In this paper, we introduce PointVLA, a novel frame-
+adaptability, Unlike conventional 2D imitation learning work that integrates point clouds into pre-trained vision-
+methods, PointVLA enables robots to adapt to objects language-actionmodels. Weassumethatthenew3Drobot
+at varying table height that unseen in train data. Fur- dataissignificantlysmallerthanthepre-trained2Ddata. In
+thermore, PointVLA achieves strong performance in long- thisscenario,itiscriticalnottodisruptthewell-established
+horizon tasks, such as picking and packing objects from a 2D feature representations. To address this, we propose
+moving conveyor belt, showcasing its ability to generalize a 3D modular block that injects point cloud information
+acrosscomplex,dynamicenvironments. directly into the action expert. By keeping the vision-
+languagebackboneintact,weensurethatthe2Dvisual-text
+embeddings are preserved and remain a reliable source of
+1.Introduction information. Furthermore,weaimtominimizedisruptions
+to the action expert’s feature space. Through a skip block
+Robot foundation models, particularly Vision-Language-
+analysis,weidentifylayersthatarelesscriticalattesttime.
+Action (VLA) models [4, 5, 25, 45, 46], have demon-
+The feature embeddings of these ”less useful” layers are
+strated remarkable capabilities in enabling robots to per-
+moreadaptabletothenewmodality. Afteridentifyingthese
+ceive, understand, and interact with the physical world.
+lessessentialblocks,weinjecttheextracted3Dfeaturesvia
+These models leverage pre-trained vision-language mod-
+anadditiveapproach. Ouroverallmethodmaintainsthein-
+els (VLMs) [3, 8, 20, 30, 42] as backbones for process-
+tegrity of the pre-trained VLA while incorporating the ad-
+ingvisualandlinguisticinformation,embeddingtheminto
+vantagesofpointcloudinputs.
+a shared representation space, and subsequently translat-
+Weconductextensiveexperimentstovalidatetheeffec-
+ing them into robot actions. This process allows robots
+tiveness of our approach. For instance, on RoboTwin [32]
+to interact with their environment in a meaningful way.
+simulationplatform,ourmethodoutperformspurely3Dim-
+The strength of a VLA model is largely dependent on the
+itationlearningmethodslikethe3DDiffusionPolicy[51].
+scale and quality of its training data. For instance, Open-
+Additionally, we conduct real-world experiments on two
+VLA [25] is trained on 4k hours of open-source datasets,
+types of bimanual robots: humanoid-like UR5e arms and
+whereasmoreadvancedmodelslikeπ utilize10khoursof
+0 AglieX arms resembling the Aloha platform. Further-
+proprietary data, leading to significantly improved perfor-
+more, our experiments highlight several key advantages of
+mance. Inadditiontotheselarge-scalefoundationmodels,
+PointVLA:
+numerousprojectshavecontributedextensivedatasetscol-
+• Few-shot multi-tasking: PointVLA can perform four
+lected from real-world human demonstrations on physical
+tasksfollowinginstruction,witheachtasktrainedononly
+robots. Forexample,AgiBot-World[6]hasreleasedasub-
+20 demonstrations. Training on such a small dataset
+stantial dataset containing millions of trajectories demon-
+across multiple tasks is challenging, and our approach
+stratingcomplexhumanoidinteractions. Thesepre-trained
+significantlyoutperformsthebaseline.
+VLAmodels,alongwithopen-sourceroboticdatasets,have
+• Real-vs-photo discrimination: Real objects and their
+significantlyadvancedrobotlearningbyprovidingawealth
+photographic representations can appear very similar in
+ofdiverseandhigh-qualitytrainingdata.
+2D images, potentially leading to confusion and safety
+Despite these advances, most existing robot foundation
+hazards for robots. PointVLA can reliably differentiate
+models [4, 5, 21, 25, 46] are trained on 2D visual in-
+betweenrealobjectsandtheirimages,avoidingdeception
+puts [23, 35]. This represents a crucial limitation because
+byunrealobjects.
+humansperceiveandinteractwiththeworldinthreedimen-
+• Heightadaptability: PointVLAcanadjustrobotactions
+sions. The lack of comprehensive 3D spatial information
+inresponsetochangesintableheight(e.g., graspingthe
+in training data hinders a robot’s ability to develop a deep
+sameitemonamuchhighertable),ascenariowheretra-
+understanding of its environment. This is particularly crit-
+ditional2DVLAmodelstypicallyfail.
+ical for tasks that demand precise spatial awareness, depth
+perception, andobjectmanipulation. Whatmotivatesusis Furthermore, we tackle challenging, long-horizon tasks
+thefactthatmanyorganizationshavealreadyinvestedheav- suchaspickingmultipleitemsfromamovingconveyorbelt
+ily in foundational VLA models and large-scale 2D robot and packing them into a box. These experiments demon-
+datasets.Retrainingthesemodelsfromscratchwith3Ddata strate the robust performance and generalizability of our
+2
+=== Page 3 ===
+proposed PointVLA framework across diverse scenarios, 3.Methodology
+suggesting a promising direction for integrating additional
+3.1. Preliminaries: Vision-Language-Action Mod-
+modalitiesintopre-trainedVLAmodels.
+els
+Vision-Language-Action (VLA) models are driving a sig-
+nificantshiftinreal-worldrobotlearning.Theirpowerorig-
+inatesfromtheunderlyingVision-LanguageModel(VLM),
+a robust backbone trained on vast internet datasets. This
+2.RelatedWorks
+trainingenableseffectivealignmentofimageandtextrep-
+resentations within a shared embedding space. The VLM
+acts as the model’s ’brain,’ processing instructions and
+Vision-Language-Actionmodels. Recentresearchhasin-
+current visual input to understand the task state. Subse-
+creasingly focused on developing generalist robot policies
+quently, an ’action expert’ module translates the VLM’s
+trained on large-scale robotic learning datasets [11, 14,
+state information into robot actions. This work builds
+23, 27, 35]. Vision-Language-Action (VLA) models have
+upon DexVLA [46], which employs a 2 billion parameter
+emerged as a promising approach for training such poli-
+Qwen2-VL [2, 43] VLM as its backbone and a 1 billion
+cies[4,9,12,13,24,33,36,40,45,46,48,54,55]. VLAs
+parameter ScaleDP [57] (a diffusion policy variant) as its
+extend vision-language models (VLMs)—pre-trained on
+action expert. DexVLA undergoes three training stages: a
+massiveinternet-scaleimageandtextdatasets[1,8,20,28–
+100-hour cross-embodiment training phase (Stage 1) fol-
+30,42,53,58,59]—toroboticcontrol[44]. Thisapproach
+lowed by embodiment-specific training (Stage 2), and an
+provides several key advantages: leveraging large-scale
+optionaltask-specifictraining(Stage3)forcomplextasks.
+vision-language model backbones with billions of param-
+All three stages utilize 2D visual input. While these VLA
+eters enables effective learning from vast robotic datasets,
+modelsexhibitimpressivecapabilitiesindiversemanipula-
+while reusing pre-trained weights from internet-scale data
+tion tasks, their reliance on 2D vision limits their perfor-
+enhancesVLAs’abilitytointerpretdiverselanguagecom-
+manceintasksrequiring3Dunderstanding, suchasobject
+mands and generalize to novel objects and environments,
+deceptionviaphotographsorgeneralizationacrossvarying
+makingthemhighlyadaptableforreal-worldroboticappli-
+tableheights. Thefollowingsectionaimtoillustratehowto
+cations.
+inject the 3D world into the pre-trained VLA. The overall
+frameworkcanbeviewedatFigure2.
+Robot learning with 3D modalities. Learning robust
+visuomotorpolicyin3Dscene[7,15–17,19,22,37,39,41,
+3.2.InjectingPointCloudintoVLA
+49–52] is an important domain in robot learning. Existing
+approacheslike3DVLA[17]haveproposedcomprehensive Motivation. As previously established, Vision-Language-
+frameworksthatintegratediverse3Dtasks,suchasgeneral- Action (VLA) models are typically pre-trained on large-
+ization,visualquestionanswering(VQA),3Dsceneunder- scale 2D robotic datasets. A critical observation under-
+standing, and robot control, into unified vision-language- pinningourapproachistheinherentdisparityindatascale
+action models. However, a limitation of 3DVLA is its re- between existing 2D pretraining corpora and emerging 3D
+liance on simulation for robot control experiments, which roboticdatasets. Specifically, wepositthat3Dsensordata
+presents a significant sim-to-real gap. Other works, such (e.g., point clouds, depth maps) remains orders of magni-
+as 3D diffusion policies [51], have demonstrated that us- tude smaller in volume compared to 2D vision-language
+ingextrinsic3Dinput(e.g.,fromexternalcameras)canim- datasets,aconsequenceoftheextensivehistoricalfocuson
+prove model generalization to varying lighting conditions 2D perception in robotics research. This discrepancy ne-
+and object attributes. iDP3 [50] further enhanced the 3D cessitatesamethodologythatpreservestherichvisualrep-
+visual encoder and applied it to humanoid robots, achiev- resentations learned from 2D pretraining while effectively
+ing robust performance in diverse environments with both integratingsparse3Ddata.
+egocentricandexternalcameraviews. However,discarding A naive strategy to address this challenge involves di-
+existing2Drobotdataorcompletelyretrainingthefounda- rectlyconverting3Dvisualinputinto3Dvisualtokensand
+tionmodelwithadded3Dvisualinputwouldbecomputa- blending them into the Large Language Model (LLM) - a
+tionallyexpensiveandresource-intensive. Amorepractical popularapproachthathasbeenleveragedbymany3DVLM,
+solution is to develop a method that integrates 3D visual suchasLLaVA-3D[56]. However,currentvision-language
+inputasasupplementaryknowledgesourceintoawellpre- modelsexhibitlimited3Dcomprehensionwhenfine-tuned
+trained foundation model, thereby reaping the benefits of onsmall-scale3Ddatasets,alimitationexacerbatedbytwo
+new modalities without compromising the performance of factors: (1) the substantial domain gap between 2D pixels
+thetrainedmodel. and 3D geometric structures, and (2) the scarcity of high-
+3
+=== Page 4 ===
+PointVLA Framework Point Cloud Injector
+(chunksize, 1280) (128)
+2D visual Input& Instruction 3D Point Cloud Action Emb Point-Cloud Emb
+Block_1 (128→1280) Zero Linear
+(chunk size, 1280)
+“Place the banana” Adapter
+Block_12 Injection Block_1
+Vision-Language Model Point Cloud Encoder
+add
+Zero Linear
+Embedding
+Block_13 Injection Block_2
+Action Expert Point Cloud Injector
+Block_16 Injection Block_5
+Robot Action
+add (chunksize, 1280)
+Zero Linear
+Figure2. OverviewofPointVLAframework. Left: The2Dimageobservationandinstructionareprocessedbythevision-language
+model. Thevanillaactionexpertremainsfrozen,whilethenewpointcloudrepresentationisintegratedintotheactionexpertthrougha
+modularnetwork.Right:Detailsofthepointcloudinjector.
+quality 3D-text paired data compared to the abundance of from the limited 3D visual knowledge on the pre-trained
+image-text and text-only corpora. To circumvent these is- action embedding derived from 2D visual input, we con-
+sues,weproposeaparadigmthattreats3Dpointclouddata ductedananalysistoidentifyblocksthatcouldbeskipped
+as a complementary conditioning signal rather than a pri- during inference without compromising performance. We
+maryinputmodality.Thisstrategydecouples3Dprocessing subsequentlyinjected3Dfeaturesonlyintotheselesscriti-
+fromthecore2Dvisualencoder,therebypreservingthein- calblocks.
+tegrityofpretrained2Drepresentationswhileenablingthe
+modeltoleveragegeometriccues. Bydesign,ourapproach
+mitigates catastrophic forgetting of 2D knowledge and re-
+ducestheriskofoverfittingtolimited3Ddata.
+Modelarchitectureforpointcloudinjector. Theover- Point cloud encoder. Consistent with observations in
+allarchitectureofthepointcloudinjectorisshowninFig- DP3 [51] and iDP3 [50], we found that pre-trained 3D
+ure1(right). Specifically,fortheincomingpointcloudem- visual encoders hindered performance, often preventing
+bedding,wefirsttransformthechanneldimensiontomatch successful robot behavior learning in new environments.
+thatofthevanillaactionexpert.Sincetheactionembedding Therefore, we adopted a simplified, hierarchical convo-
+fromthepointcloudcanbelarge,dependingonthechunk lutional architecture. The upper convolutional layers ex-
+size,wedesignanactionembeddingbottlenecktocompress tracted low-level features, while the lower convolutional
+theinformationfromtheactionexpertwhilealigningitwith blocks learned high-level scene representations. The max
+the 3D point cloud embedding. For selected blocks in the pooling was employed between layers to progressively re-
+actionexpert,wefirstapplyanMLPlayerasanadapterfor duce point cloud density. Finally, we concatenated fea-
+eachblock, followedbyanadditionoperationtoinjectthe tureembeddingsfromeachconvolutionalblockintoauni-
+pointcloudembeddingintothemodel. fied embedding, encapsulating multi-level 3D representa-
+Notably, we avoided injecting the 3D features into ev- tion knowledge. The extracted point cloud feature embed-
+ery block of the action expert for two primary reasons. dingisretainedforsubsequentuse.Thisarchitectureissim-
+First, the computational cost would be prohibitively high ilartotheiDP3encoder. Webelievethatemployingamore
+due to the required conditioning blocks. Second, injec- advancedpointcloudencodercouldfurtherenhancemodel
+tion inevitably alters the model’s representation at the af- performance.However,asthisisnotthecorenoveltyofour
+fectedblock. Giventhatweaimedtominimizeinterference approach,weleaveitforfuturediscussion.
+4
+=== Page 5 ===
+Skip Block Analysis onShirtFoldingTask skipped,thegripperfailstoclosetightly,makingitdifficult
+forthemodeltocompletethetask. However,startingfrom
+Skip only one block
+the 11 block onward, skipping a single block becomes ac-
+1.0
+ceptable,upuntilthelastblock. Thisindicatesthatblocks
+0.8 11 to 31 contribute less to performance after training. To
+Performance drop stabilize
+furtherinvestigatewhichblockswouldbefitforpointcloud
+erocS
+egarevA
+0
+0
+.
+.
+6
+4
+after 11thblock
+i
+b
+t
+n
+h
+l
+j
+o
+a
+e
+t
+c
+c
+k
+u
+ti
+p
+o
+1
+t
+n
+1
+o
+,
+o
+fi
+w
+n
+v
+e
+w
+e
+c
+a
+c
+o
+r
+o
+n
+d
+n
+d
+,
+s
+u
+e
+a
+c
+c
+s
+t
+u
+s
+a
+ti
+h
+v
+m
+o
+e
+w
+u
+b
+l
+n
+l
+t
+o
+i-
+i
+c
+b
+n
+k
+lo
+s
+F
+c
+c
+i
+k
+g
+a
+u
+n
+s
+r
+k
+b
+e
+i
+e
+p
+3
+p
+sk
+i
+(
+n
+i
+r
+p
+g
+ig
+p
+a
+h
+e
+n
+t
+d
+)
+a
+.
+l
+b
+y
+e
+s
+W
+f
+i
+o
+s
+e
+r
+f
+e
+r
+fi
+o
+t
+n
+h
+m
+d
+e
+Block beyond the 9thbecome
+less important model fails at task completion. This suggests that 3D rep-
+0.2
+resentationcanbeselectivelyinjectedintotheactionexpert
+0 5 10 15 28 30 31 through specific blocks, optimizing efficiency without sig-
+Action Expert Block Index
+nificantlyimpactingperformance. Asaresult,wesetall3D
+Skip multiple consecutive blocks
+conditioningblockstobetrainablewhennewdataisintro-
+1.0
+duced. We freeze all modules in the vanilla action expert
+0.8 Performance stabilize for exceptforthefinallayers,whichareadjustedtofittheem-
+skipping 5 blocks bodiment’soutput. Ultimately,weonlytrainfiveadditional
+erocS
+egarevA
+0
+0
+.
+.
+6
+4
+i
+f
+n
+er
+je
+e
+c
+n
+t
+c
+i
+e
+o
+,
+n
+m
+b
+a
+lo
+k
+c
+in
+k
+g
+s,
+o
+w
+ur
+hi
+a
+c
+p
+h
+pr
+a
+o
+re
+ac
+l
+h
+ig
+h
+h
+i
+t
+g
+w
+h
+e
+ly
+ig
+c
+h
+o
+t
+s
+a
+t-
+n
+e
+d
+ffi
+f
+c
+a
+i
+s
+e
+t
+n
+d
+t
+u
+.
+ring in-
+Performance drop instantly
+after skipping 6 blocks 4.Experiment
+0.2
+Thissectionpresentsaseriesofexperimentstovalidatethe
+10 12 15 20 25 30 31
+Action Expert Block Index effectivenessofourapproach. Specifically,weprovidede-
+Figure3. SkipblockanalysisforactionexpertinVLAmodel. taileddescriptionsoftherealrobotandworkspacesetupin
+Left:skippingonlyoneblockatatime.Right:Skippingmultiple Section4.1. Weevaluatethefew-shotmulti-taskingsetting
+consecutiveblocksstartingfromthe11thblock. andlong-horizonchallengingtasksinSections4.2and4.3,
+respectively.InSections4.4and4.5,weexploretwounique
+types of generalization that can only be observed with 3D
+3.3. Which Blocks to Inject Point Cloud? A Skip visualinput. Finally,wecompareourmethodagainstsimu-
+BlockAnalysis lationbenchmarks.
+4.1.ImplementationDetails
+As mentioned earlier, injecting the point cloud into ev-
+ery block of the action expert is not ideal, as it increases Inthiswork,weconductrealrobotexperimentsontwoem-
+computationalcostanddisruptsthevanillaactionrepresen- bodiments:
+tation learned from extensive 2D visual-based robot data. • Bimanual UR5e. Two UR5e robots, each with a Robo-
+Therefore,weanalyzewhichblocksintheactionexpertare tiq parallel jaw gripper and a wrist-mounted camera. A
+less critical—i.e., those that can be skipped during infer- top-down camera is positioned between the two arms.
+ence without affecting performance. This approach aligns This setup has a total of three camera views and a 14-
+conceptuallywithtechniquesusedinimagegeneration,vi- dimensionalconfigurationandactionspace. Dataiscol-
+sion models, and large language models [10, 18, 26, 38]. lected at 15Hz. We use the RealSense D435i camera as
+Specifically,weuseshirtfoldinginDexVLA[46]asacase thewristcamera.
+studyforouranalysis. RecallthattheDexVLAisequipped • Bimanual AgileX. Two 6-DoF AgileX arms, each with
+with 1 billion parameter action expert with 32 diffusion a wrist-mounted camera and a base camera. This setup
+transformer blocks. The evaluation follows the same met- hasa14-dimensionalconfigurationandactionspace,sup-
+rics—average score, a standard measure for long-horizon ported by three cameras in total. Data is collected at
+tasks [4, 31, 46]—by dividing the task into multiple steps 30Hz. We use the RealSense D435i camera as a wrist
+and assessing performance based on step completion. We camera.
+start by skipping one block at a time and summarize our We useRealSense L515 camerato collectthe point cloud.
+findingsinthefigurebelow. We set the VLM model trainable as the model needs to
+We illustrated the results in Figure 3 (left). Our exper- learn new language instruction. For both experiments, we
+iment reveals that the first 11 blocks are crucial for the use stage 1 pre-trained weights from DexVLA [46] and
+model—skippinganyofthemleadstoasignificantdropin fine-tune for our model. We use the same training hyper-
+performance. Specifically,whenblocksbeforelayer11are parametersasthestage2traininginDexVLA,andusethe
+5
+=== Page 6 ===
+Direct prompting Packing the laundry detergent
+Pick up the laundry Pick up the first Pick up the next
+detergent from the Straighten the box and Close the first hinge of Close the second hinge
+detergent, and place detergent, and place
+conveyor belt, and pack ready for packing. the box. of the box.
+the box. into the box into the box
+Figure4. SetupforbimanualUR5e. Weutilizethreecameras: twoRealSenseD435imountedonthewristsandoneRealSenseL515
+positionedabove.Ourmodelisevaluatedonachallenginglong-horizontaskthatinvolvespickinguptwolaundrydetergentbottlesfroma
+movingconveyorbeltandpackingthemintoabox.
+Mobile AgileX Few-Shot Multi-Tasking
+Charge the phone Wipe the plate Place the bread Transport the banana
+Figure5. SetupforbimanualAgileX.Weutilizethreecameras: twoRealSenseD435imountedonthewristsandoneRealSenseL515
+positionedabove.Ourmodelisevaluatedonfourtasksinafew-shotsetting.
+1.00 PointVLA 4.2.Few-ShotMulti-Tasking
+DexVLA
+0.80 0.82 0.73 0.73 S D c if a f l u e s D io P n -1 P B olicy Task description. As illustrated in Fig 5, we designed
+0.64 0.64 OpenVLA
+0.60 0.55 Octo fourfew-shottasksforourreal-worldexperiment:Charge-
+Phone,WipePlate,PlaceBread,TransportFruit. Objects
+0.40 0.36 0.36
+wereplacedrandomlywithinasmallrange, andwereport
+0.20 0.18 theaveragesuccessrateforeachmethod.1)ChargePhone:
+0.09 0.09 0.09 0.09
+0.00 0 0 0 0 0 0 0 0 0 0 0 The robot picks up a smartphone and places it on a wire-
+ChargePhone TransportFruit WipePlate PlaceBread
+lesscharger. Thephone’ssizetestsactionprecision,while
+Figure 6. Experimental results on few-shot multi-tasking on its fragility requires careful handling. 2) WipePlate: The
+bimanualAgileX. robot simultaneously picks up a sponge and a plate, using
+thespongetowipetheplate,assessingbimanualmanipula-
+tion skills. 3) PlaceBread: The robot picks up a piece of
+breadandplacesitonaplate. Athinfoamlayerunderthe
+breadensuresheightgeneralizationtesting. 4)Transport-
+last checkpoint for evaluation to avoid cherry picking. We
+Fruit: Therobotpicksuparandomlyorientedbananaand
+setchunksizeto50foralltasks.
+placesitinacentrallylocatedbox.
+As our approach aims to verify the few-shot multi-
+Baseline. In our experiments, we compared with
+tasking ability of the model, we collected 20 demonstra-
+manystate-of-the-artmodel,includingtheDiffusionPolicy
+tionsforeachtask,resultinginatotalof80demonstrations.
+(DP)[9],3DDiffusionPolicy(DP3)[51],ScaleDP-1B[57],
+Theobjects’positionsarerandomizedwithinasmallspace.
+a variant of scaling up diffusion policy to 1B parameters,
+Thesetasksassessthemodel’scapabilitytomanagebothin-
+Octo [34], OpenVLA [25], and DexVLA [46]. Note that
+dependentandcoordinatedrobotmovementsacrossdiverse
+since PointVLA is built on top of DexVLA, the DexVLA
+scenarios. Alldataarecollectedusing30Hz.
+can be viewed as an ablation of our proposed PointVLA
+withouttheincorporationof3Dpointclouddata. Experimentalresults. Theexperimentalresultsarepre-
+6
+=== Page 7 ===
+Table1. Experimentalresultsforlong-horizontaskonbiman-
+Bimanual
+ualUR5e. Thetaskiscompletedinasequence. TheAvg. Len.
+UR5e RealSense
+L515 denotestheaveragesuccesslengthofthemodel.
+PackingLaundryDetergent
+Re D a 4 lS 3 e 5 n i se Re D a 4 lS 3 e 5 n i se Method 1 2 3 4 5 Avg.Len.
+NoObject Octo[34] 1/11 1/11 0 0 0 0.27
+Robotiq
+gripper OpenVLA[24] 2/11 1/11 0 0 0 0.36
+DiffusionPolicy[9] 2/11 1/11 0 0 0 0.36
+ScaleDP-1B[57] 4/11 2/11 0 0 0 0.72
+L515PointCloud DexVLA[46] 2/11 5/11 1/11 1/11 0 1.72
+PointVLA 3/11 1/11 1/11 2/11 2/11 2.36
+L515Image abilitytolearnfromthe2Dpre-trainedVLA.
+4.3.Long-HorizonTask: PackingonAssemblyLine
+Beyond conventional multi-tasking, we further fine-tune
+PointVLA on long-horizon packing tasks, as illustrated in
+Figure4. Thisisanexceptionallychallengingtaskforsev-
+eralreasons. First,theassemblylineisinmotion,requiring
+the robot to quickly and precisely grasp objects. Second,
+theembodimentinthisscenariodiffers fromthosepresent
+in the pre-trained data, necessitating rapid adaptation to a
+L515PointCloud
+completelynewsetup.Third,asalong-rangetask,therobot
+mustsequentiallypickandplacetwobagsoflaundrydeter-
+gent before sealing the packing box. These complexities
+L515Image makethetaskhighlydemanding.
+TheevaluationmetricsaredetailedintheAppendix. As
+Model OpenVLA DiffusionPolicy ScaleDP-1B DexVLA PointVLA
+SuccessRate 0/3 0/3 0/3 0/3 3/3 shown in Table 1, PointVLA achieves the highest average
+length in long-range tasks, surpassing DexVLA, a strong
+Figure 7. The experimental setup for real-vs-photo discrimi- baseline, by 0.64. It also outperforms several other base-
+nation. Wereplacethereallaundrydetergentwithitsphotodis- lines. However, the next section highlights an even more
+playedonascreenplacedontheconveyorbelt.Fromanexocentric critical aspect of PointVLA, the object hallucination prob-
+view,theimageappearsnoticeablydifferentfromtherealobject.
+lem.
+However,fromtheegocentrictopcamera’sperspective,thephoto
+closelyresemblestheactualdetergent. Weshowexperimentalre- 4.4.Real-vs-PhotoDiscrimination
+sultsonthebottomtable.
+In this section, we explore a unique setup called real-vs-
+photo discrimination. Specifically, we replace the real ob-
+ject with a picture of the object. From a 2D perspective,
+sentedinTable6, whereourmethodoutperformsallbase-
+the”fake”objectdisplayedonascreenappearsnearlyiden-
+lines in this scenario. Notably, the Diffusion Policy fails
+tical to the real object, yet it does not physically exist.
+inmostcases, likelybecausethesamplesizeforeachtask
+Humans can easily recognize this discrepancy and refrain
+istoosmall, causingtheactionrepresentationspacetobe-
+fromreachingfortheobjectbecauseweunderstanditisnot
+come entangled—an observation consistent with previous
+real—butcanarobotmodeldothesame?
+findings in the previous literature [47]. Furthermore, even
+Toillustratethisscenario,weconductanexperimentus-
+increasing the model size (ScaleDP-1B) does not lead to
+ing a bimanual UR5e in a packing task. We set the exper-
+significantimprovement.
+iments by replacing laundry detergent with a photo of the
+DexVLAdemonstratesstrongfew-shotlearningcapabil- laundrydetergentprojectedonascreen. Theexperimental
+ities despite the limited data; however, its performance re- setup can be found in Figure 7. From an exocentric view,
+mainsonparwithorinferiortoPointVLA.Theincorpora- the image appears noticeably different from the real ob-
+tionofpointclouddatainPointVLAenablesmoresample- ject. How-ever,fromtheegocentrictopcamera’sperspec-
+efficient learning, emphasizing the necessity of integrating tive, the photo closely resembles the actual detergent. We
+3D information into the model. More importantly, our re- observethatconventional2D-basedvision-language-action
+sults confirm that our method successfully preserves the models,suchasOpenVLAandDexVLA,failtodistinguish
+7
+=== Page 8 ===
+betweentheimageandarealobject. Thesemodelsattempt
+tograsptheobject,andinthecaseofDexVLA,itrepeatedly
+triestopickupthenon-existentdetergent. Sincethemodel
+believestheobjectispresentbutcontinuouslyfailstograsp
+it,itentersarepetitivegraspingloop.Incontrast,PointVLA
+successfullyrecognizesthatnorealobjectexistsonthecon-
+veyorbelt.Byleveraging3Dspatialunderstanding,itdeter- 3mm 52mm
+Train Data Table Height Test Data Table Height
+minesthatthespacewheretheobjectshouldbeisactually
+TableHeight/Model OpenVLA DiffusionPolicy ScaleDP-1B DexVLA PointVLA
+empty.Thiskeyadvantagehighlightsthestrengthofourap-
+52mm 0/5 0/5 0/5 0/5 5/5
+proach, demonstrating the superiority of 3D-aware models
+inmitigatingobjecthallucination. Figure8. HeightadaptabilityforPointVLA.Evenifthemodel
+is trained on a standard height, when PointVLA encounters dif-
+4.5.HeightAdaptability ferent table heights at test time, it can adapt to the new height
+andsuccessfullycompletethetask. Incontrast,conventional2D
+In our context, height generalization refers to a model’s
+vision-basedimitationlearningmethodsfailcompletely.
+ability to adapt to different table heights. This is a crucial
+capability for robotic models, as most demonstrations are
+conductedonafixedtableheight. However,whathappens
+tionof320×180forcamerainput,includingtheL515and
+whentherobotisdeployedinanenvironmentwithasignif-
+thetopcamera.
+icantlydifferenttableheightthanwhatitwastrainedon?
+The tests were conducted using datasets of 20 and 50
+Toinvestigatethisquestion,wedesignedanexperiment
+samples.FollowingthetrainingsetupinRoboTwin,thepol-
+illustrated in Figure 8. Specifically, in the ”place bread”
+icy was trained using three random seeds (0, 1, 2) without
+task, we placed a foam plastic layer beneath the bread.
+cherry picking for each experiment. Each policy was then
+During training, this foam layer was 3mm thick, and all
+tested100times,yieldingthreesuccessrates.Themeanand
+collected data was based on this height. During infer-
+standarddeviationofthesesuccessrateswerecomputedto
+ence,weincreasedthefoamthicknessto52mmtoevaluate
+obtaintheexperimentalresultspresentedbelow.
+the model’s height generalization. Our observations show
+TheexperimentalresultsarepresentedinTable2. Base-
+that conventional 2D-based VLA models, such as Open-
+line results, including those for the 3D Diffusion Policy
+VLA[25],DP[9],ScaleDP-1B[57],andDexVLA[46]all
+and Diffusion Policy, are reported by RoboTwin. No-
+failedinthisscenario.Upondetectingthebread,thesemod-
+tably, across all tasks and diverse settings, our proposed
+elsattemptedtopushitdownandgraspitattheheightseen
+PointVLAachievesthehighestaveragesuccessrate,regard-
+inthetrainingdata,failingtoadjusttotheincreasedheight.
+less of whether it is trained on 20 or 50 demonstrations.
+Incontrast,PointVLAsuccessfullycompletedthetask. By
+This demonstrates that our method is effective even when
+leveragingthepointclouddata, itaccuratelyperceivedthe
+data resources are limited and continues to perform well
+bread’snewheight,adjusteditsgripperaccordingly,andex-
+whenabundanttrainingdataisavailable.
+ecutedasuccessfulpick-up. Thisexperimentdemonstrates
+Additionally,weobservethatforpurely3Dmodelslike
+that incorporating 3D information enables VLA models to
+DP3, directly incorporating RGB input can negatively im-
+handle variations in object height—an ability that purely
+pactperformance. Incontrast, ourapproachhighlightsthe
+2D-basedmodelslack.
+necessity of conditionally integrating 3D point cloud data
+into the model, which significantly enhances performance
+4.6. Experimental Results on Simulation Bench-
+comparedtomodelsthatrelysolelyon2Dvisualinput.
+marks
+We evaluate our approach on RoboTwin [32], a widely 5.Conclusion
+used mobile bimanual platform equipped with 14-degree-
+of-freedomrobots. Thisbenchmarkencompassesadiverse While Vision-Language-Action (VLA) models excel in
+set of tasks. We compare our method against Diffusion robotlearningthroughlarge-scale2Dpretraining, theirre-
+Policy [9] and 3D Diffusion Policy (DP3) [51]. Diffusion liance on RGB inputs limits 3D spatial reasoning. Re-
+Policy is a well-established baseline for visuomotor pol- trainingwith3Ddataiscostly, anddiscarding2Ddatasets
+icy learning, while DP3 extends it to the 3D domain. The reduces generalization. To address this, we introduced
+vanillaDP3usesonlypointclouddataasinput. Forafair PointVLA, a framework that enhances pre-trained VLAs
+comparison, we also incorporate RGB images into DP3. with 3D point cloud inputs while preserving their 2D rep-
+TheimplementationiscarriedoutbyRoboTwin. Wecom- resentations. By integrating a modular 3D feature injec-
+pare both versions of DP3 alongside the vanilla Diffusion tor and leveraging skip block analysis, our method incor-
+Policy. Inallexperiments,weuseastandardimageresolu- porates spatial information efficiently without full retrain-
+8
+=== Page 9 ===
+Task Num 2 b 0 erofDemonst 5 ra 0 tions Task Num 2 b 0 erofDemonst 5 r 0 ations MichaelEqui, ChelseaFinn, NiccoloFusai, LachyGroom,
+BlockHammerBeat BlockHandover Karol Hausman, Brian Ichter, Szymon Jakubczak, Tim
+DP3(PointCloud) 47.7±7.4 58.3±6.5 DP3(PointCloud) 82.7±6.1 85.0±15.6 Jones,LiyimingKe,SergeyLevine,AdrianLi-Bell,Mohith
+DP3(PointCloud+RGB) 44.7±3.8 79.0±2.0 DP3(PointCloud+RGB) 88.7±5.0 94.3±7.2
+DP 0.0±0.0 0.0±0.0 DP 0.0±0.0 0.0±0.0 Mothukuri, Suraj Nair, Karl Pertsch, Lucy Xiaoyang Shi,
+PointVLA 61.2±4.8 84.6±3.9 PointVLA 89.7±4.3 96.1±1.9
+JamesTanner,QuanVuong,AnnaWalling,HaohuanWang,
+BlocksStack(Easy) BlocksStack(Hard)
+DP3(PointCloud) 3.3±3.2 17.0±7.0 DP3(PointCloud) 0.3±0.6 1.7±0.6 andUryZhilinsky.π 0 :Avision-language-actionflowmodel
+DP3(PointCloud+RGB) 2.7±1.2 17.0±1.0 DP3(PointCloud+RGB) 0.0±0.0 2.0±2.0
+DP 0.0±0.0 0.0±0.0 DP 0.0±0.0 0.0±0.0 forgeneralrobotcontrol,2024. 2,3,5
+PointVLA 10.8±2.8 24.3±4.7 PointVLA 2.3±0.9 3.7±1.4
+[5] Anthony Brohan, Noah Brown, Justice Carbajal, Yevgen
+BottleAdjust ContainerPlace
+DP3(PointCloud) 55.7±1.5 70.7±2.5 DP3(PointCloud) 52.7±4.5 74.0±5.6 Chebotar, Xi Chen, Krzysztof Choromanski, Tianli Ding,
+DP3(PointCloud+RGB) 28.3±12.9 27.7±16.5 DP3(PointCloud+RGB) 38.0±7.9 58.3±5.9
+DP 13.0±11.8 24.7±13.8 DP 5.3±4.2 16.3±2.5 Danny Driess, Avinava Dubey, Chelsea Finn, et al. Rt-2:
+PointVLA 61.2±2.8 74.5±9.7 PointVLA 58.5±4.8 81.3±3.9 Vision-language-action models transfer web knowledge to
+DiverseBottlesPick DualBottlesPick(Easy)
+roboticcontrol. arXivpreprintarXiv:2307.15818,2023. 2
+DP3(PointCloud) 13.3±5.5 34.7±6.7 DP3(PointCloud) 37.0±4.6 60.3±7.1
+DP3(PointCloud+RGB) 0.7±0.6 5.3±2.1 DP3(PointCloud+RGB) 29.7±3.5 67.3±9.3 [6] Qingwen Bu, Guanghui Ren, Chiming Liu, Chengen Xie,
+DP 0.0±0.0 0.3±0.6 DP 1.3±1.5 26.7±3.1
+PointVLA 21.5±3.8 38.7±5.7 PointVLA 41.2±3.2 68.5±4.8 ModiShi,XindongHe,JianhengSong,YuxiangLu,Siyuan
+DualBottlesPick(Hard) DualShoesPlace
+Feng,YaoMu,ChengyueZhao,ShukaiYang,ZiyuXiong,
+DP3(PointCloud) 33.0±2.6 48.0±5.2 DP3(PointCloud) 5.7±0.6 10.0±2.6
+DP3(PointCloud+RGB) 23.0±2.0 46.3±7.8 DP3(PointCloud+RGB) 1.7±2.9 3.7±0.6 XuHuang,DafengWei,GuoXu,YiLiu,YuxinJiang,Xiuqi
+DP 2.0±1.7 32.3±5.9 DP 0.0±0.0 3.0±1.7
+PointVLA 34.2±2.7 51.3±3.2 PointVLA 7.5±1.8 13.1±2.9 Cui, ChengRuan, JiaZeng, LeiYang, LiChen, YanDing,
+EmptyCupPlace MugHanging(Easy) Jisong Cai, Chonghao Sima, Huijie Wang, Yongjian Shen,
+DP3(PointCloud) 33.0±6.2 70.3±7.2 DP3(PointCloud) 7.3±2.9 14.0±3.6
+DP3(PointCloud+RGB) 26.3±10.4 71.3±4.0 DP3(PointCloud+RGB) 1.0±1.0 2.0±2.0 JialuLi,JiaqiZhao,JianchaoZhu,JiaqiShan,YuehanNiu,
+DP 0.3±0.6 14.7±6.0 DP 0.0±0.0 0.0±0.0
+PointVLA 41.2±4.8 73.5±4.2 PointVLA 9.3±1.9 19.1±2.8 ChengJing,MingkangShi,ChiZhang,QinglinZhang,Cun-
+MugHanging(Hard) PickAppleMessy biaoYang,WenhaoWang,XuanHu,PingLuo,JunchiYan,
+DP3(PointCloud) 12.7±0.6 11.0±6.1 DP3(PointCloud) 5.7±4.5 10.7±4.0 Bin Zhao, Jiangmiao Pang, Jianlan Luo, Hongyang Li, Yu
+DP3(PointCloud+RGB) 0.0±0.0 2.0±2.0 DP3(PointCloud+RGB) 6.7±2.3 28.7±9.5
+DP 0.0±0.0 0.3±0.6 DP 3.3±1.5 6.0±5.0 Qiao,andMaoqingYao.Agibotworldcolosseo:Large-scale
+PointVLA 13.5±1.7 16.2±1.9 PointVLA 9.3±2.8 31.5±4.7
+manipulationplatformforscalableandintelligentembodied
+Table2. ExperimentalresultsonRoboTwin[32]. Performance systems. arXivpreprintarXiv:25xx.xxx-to-appear,2025. 2
+comparisonacrossdifferenttasksanddemonstrations(resultsfor [7] Shizhe Chen, Ricardo Garcia, Ivan Laptev, and Cordelia
+20and50demonstrations). Schmid. Sugar: Pre-training 3d visual representations for
+robotics. In Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, pages 18049–
+ing. Experiments in both simulated and real-world envi- 18060,2024. 3
+ronmentsdemonstratePointVLA’seffectiveness,achieving [8] ZheChen,JiannanWu,WenhaiWang,WeijieSu,GuoChen,
+few-shot multi-task learning (4 tasks with only 20 demon- Sen Xing, Muyan Zhong, Qinglong Zhang, Xizhou Zhu,
+strationseach)andexcellinginlong-horizontaskslikedy- LeweiLu,etal.Internvl:Scalingupvisionfoundationmod-
+namic item packing. Real-world tests on bimanual robots elsandaligningforgenericvisual-linguistictasks. InPro-
+(UR5e and AgileX arms) further validate its practicality ceedingsoftheIEEE/CVFConferenceonComputerVision
+and safety. Our work highlights the feasibility of aug- andPatternRecognition,pages24185–24198,2024. 2,3
+mentingpre-trainedrobotmodelswithnewmodalitieswith- [9] Cheng Chi, Siyuan Feng, Yilun Du, Zhenjia Xu, Eric
+outcostlyretraining. Futureworkincludesexpanding3D- Cousineau, Benjamin Burchfiel, and Shuran Song. Diffu-
+sionpolicy:Visuomotorpolicylearningviaactiondiffusion.
+awarepretrainingacrosslargerdatasets.
+arXivpreprintarXiv:2303.04137,2023. 1,3,6,7,8
+[10] JavierMart´ınDanielVerdu´. Flux.1lite: Distillingflux1.dev
+References
+forefficienttext-to-imagegeneration. 2024. 5
+[1] MarahAbdin,JyotiAneja,HanyAwadalla,AhmedAwadal- [11] SudeepDasari, OierMees, SebastianZhao, MohanKumar
+lah, Ammar Ahmad Awan, Nguyen Bach, Amit Bahree, Srirama,andSergeyLevine. Theingredientsforroboticdif-
+Arash Bakhtiari, Jianmin Bao, Harkirat Behl, et al. Phi-3 fusiontransformers.arXivpreprintarXiv:2410.10088,2024.
+technical report: A highly capable language model locally 3
+onyourphone. arXivpreprintarXiv:2404.14219,2024. 3 [12] PengxiangDing,HanZhao,WenjieZhang,WenxuanSong,
+[2] ShuaiBai, KeqinChen, Xuejing Liu, JialinWang, Wenbin MinZhang,SitengHuang,NingxiYang,andDonglinWang.
+Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Quar-vla: Vision-language-action model for quadruped
+Tang, et al. Qwen2. 5-vl technical report. arXiv preprint robots. pages352–367.Springer,2024. 3
+arXiv:2502.13923,2025. 3 [13] Pengxiang Ding, Jianfei Ma, Xinyang Tong, Binghong
+[3] LucasBeyer,AndreasSteiner,Andre´SusanoPinto,Alexan- Zou, Xinxin Luo, Yiguo Fan, Ting Wang, Hongchao Lu,
+derKolesnikov,XiaoWang,DanielSalz,MaximNeumann, Panzhong Mo, Jinxin Liu, et al. Humanoid-vla: Towards
+Ibrahim Alabdulmohsin, Michael Tschannen, Emanuele universal humanoid control with visual integration. arXiv
+Bugliarello,etal. Paligemma: Aversatile3bvlmfortrans- preprintarXiv:2502.14795,2025. 3
+fer. arXivpreprintarXiv:2407.07726,2024. 2 [14] Hao-Shu Fang, Hongjie Fang, Zhenyu Tang, Jirong Liu,
+[4] Kevin Black, Noah Brown, Danny Driess, Adnan Esmail, Chenxi Wang, Junbo Wang, Haoyi Zhu, and Cewu Lu.
+9
+=== Page 10 ===
+Rh20t:Acomprehensiveroboticdatasetforlearningdiverse [27] Fanqi Lin, Yingdong Hu, Pingyue Sheng, Chuan Wen, Ji-
+skillsinone-shot.arXivpreprintarXiv:2307.00595,2023.3 achengYou,andYangGao. Datascalinglawsinimitation
+[15] AnkitGoyal,JieXu,YijieGuo,ValtsBlukis,Yu-WeiChao, learningforroboticmanipulation,2024. 3
+andDieterFox. Rvt:Roboticviewtransformerfor3dobject [28] Haotian Liu, Chunyuan Li, Yuheng Li, and Yong Jae Lee.
+manipulation.InConferenceonRobotLearning,pages694– Improved baselines with visual instruction tuning. arXiv
+710.PMLR,2023. 3 preprintarXiv:2310.03744,2023. 3
+[29] HaotianLiu,ChunyuanLi,QingyangWu,andYongJaeLee.
+[16] AnkitGoyal,ValtsBlukis,JieXu,YijieGuo,Yu-WeiChao,
+Visual instruction tuning. In Thirty-seventh Conference on
+and Dieter Fox. Rvt-2: Learning precise manipulation
+NeuralInformationProcessingSystems,2023.
+fromfewdemonstrations. arXivpreprintarXiv:2406.08545,
+[30] Haoyu Lu, Wen Liu, Bo Zhang, Bingxuan Wang, Kai
+2024.
+Dong,BoLiu,JingxiangSun,TongzhengRen,ZhuoshuLi,
+[17] Jiangyong Huang, Silong Yong, Xiaojian Ma, Xiongkun
+Hao Yang, et al. Deepseek-vl: towards real-world vision-
+Linghu, Puhao Li, Yan Wang, Qing Li, Song-Chun Zhu,
+languageunderstanding. arXivpreprintarXiv:2403.05525,
+Baoxiong Jia, and Siyuan Huang. An embodied generalist
+2024. 2,3
+agentin3dworld. InICLR2024Workshop: HowFarAre
+[31] Oier Mees, Lukas Hermann, Erick Rosete-Beas, and Wol-
+WeFromAGI. 3
+fram Burgard. Calvin: A benchmark for language-
+[18] Ajay Jaiswal, Bodun Hu, Lu Yin, Yeonju Ro, Shiwei Liu,
+conditioned policy learning for long-horizon robot manip-
+TianlongChen, andAdityaAkella. Ffn-skipllm: Ahidden
+ulationtasks. IEEERoboticsandAutomationLetters,7(3):
+gemforautoregressivedecodingwithadaptivefeedforward
+7327–7334,2022. 5
+skipping. arXivpreprintarXiv:2404.03865,2024. 5
+[32] Yao Mu, Tianxing Chen, Shijia Peng, Zanxin Chen, Zeyu
+[19] YueruJia,JiamingLiu,SixiangChen,ChenyangGu,Zhilue Gao, Yude Zou, Lunkai Lin, Zhiqiang Xie, and Ping Luo.
+Wang,LongzanLuo,LilyLee,PengweiWang,Zhongyuan Robotwin: Dual-armrobotbenchmarkwithgenerativedigi-
+Wang,RenruiZhang,etal.Lift3dfoundationpolicy:Lifting taltwins(earlyversion). arXivpreprintarXiv:2409.02920,
+2d large-scale pretrained models for robust 3d robotic ma- 2024. 2,8,9
+nipulation. arXivpreprintarXiv:2411.18623,2024. 3 [33] Dantong Niu, Yuvan Sharma, Giscard Biamby, Jerome
+[20] Siddharth Karamcheti, Suraj Nair, Ashwin Balakrishna, Quenum,YutongBai,BaifengShi,TrevorDarrell,andRoei
+Percy Liang, Thomas Kollar, and Dorsa Sadigh. Prismatic Herzig. Llarva: Vision-action instruction tuning enhances
+vlms:Investigatingthedesignspaceofvisually-conditioned robotlearning. arXivpreprintarXiv:2406.11815,2024. 3
+language models. arXiv preprint arXiv:2402.07865, 2024. [34] Octo Model Team, Dibya Ghosh, Homer Walke, Karl
+2,3 Pertsch, Kevin Black, Oier Mees, Sudeep Dasari, Joey
+[21] RiturajKaushik,Timothe´eAnne,andJean-BaptisteMouret. Hejna, Charles Xu, Jianlan Luo, Tobias Kreiman, You
+Fastonlineadaptationinroboticsthroughmeta-learningem- LiangTan,LawrenceYunliangChen,PannagSanketi,Quan
+beddings of simulated priors. In 2020 IEEE/RSJ Interna- Vuong, TedXiao, DorsaSadigh, ChelseaFinn, andSergey
+tionalConferenceonIntelligentRobotsandSystems(IROS), Levine. Octo: An open-source generalist robot policy.
+pages5269–5276.IEEE,2020. 2 In Proceedings of Robotics: Science and Systems, Delft,
+Netherlands,2024. 6,7
+[22] Tsung-Wei Ke, Nikolaos Gkanatsios, and Katerina Fragki-
+[35] Abby O’Neill, Abdul Rehman, Abhinav Gupta, Abhiram
+adaki. 3ddiffuseractor: Policydiffusionwith3dscenerep-
+Maddukuri, AbhishekGupta, AbhishekPadalkar, Abraham
+resentations. arXivpreprintarXiv:2402.10885,2024. 3
+Lee, Acorn Pooley, Agrim Gupta, Ajay Mandlekar, et al.
+[23] Alexander Khazatsky, Karl Pertsch, Suraj Nair, Ash-
+Open x-embodiment: Robotic learning datasets and rt-x
+win Balakrishna, Sudeep Dasari, Siddharth Karamcheti,
+models. 2024. 2,3
+SoroushNasiriany,MohanKumarSrirama,LawrenceYun-
+[36] KarlPertsch,KyleStachowicz,BrianIchter,DannyDriess,
+liang Chen, Kirsty Ellis, et al. Droid: A large-scale
+Suraj Nair, Quan Vuong, Oier Mees, Chelsea Finn, and
+in-the-wild robot manipulation dataset. arXiv preprint
+SergeyLevine.Fast:Efficientactiontokenizationforvision-
+arXiv:2403.12945,2024. 2,3
+language-actionmodels. arXivpreprintarXiv:2501.09747,
+[24] MooJinKim,KarlPertsch,SiddharthKaramcheti,TedXiao,
+2025. 3
+AshwinBalakrishna,SurajNair,RafaelRafailov,EthanFos-
+[37] Delin Qu, Haoming Song, Qizhi Chen, Yuanqi Yao, Xinyi
+ter,GraceLam,PannagSanketi,QuanVuong,ThomasKol-
+Ye, Yan Ding, Zhigang Wang, JiaYuan Gu, Bin Zhao,
+lar,BenjaminBurchfiel,RussTedrake,DorsaSadigh,Sergey
+Dong Wang, et al. Spatialvla: Exploring spatial represen-
+Levine, Percy Liang, and Chelsea Finn. Openvla: An
+tations for visual-language-action model. arXiv preprint
+open-source vision-language-action model. arXiv preprint
+arXiv:2501.15830,2025. 3
+arXiv:2406.09246,2024. 3,7
+[38] ZhiqiangShen,ZechunLiu,andEricXing. Slicedrecursive
+[25] MooJinKim,KarlPertsch,SiddharthKaramcheti,TedXiao, transformer. InEuropeanConferenceonComputerVision,
+AshwinBalakrishna,SurajNair,RafaelRafailov,EthanFos- pages727–744.Springer,2022. 5
+ter, GraceLam, PannagSanketi, etal. Openvla: Anopen- [39] Ishika Singh, Anthony Liang, Mohit Shridhar, and Jesse
+sourcevision-language-actionmodel. 1,2,6,8 Thomason. Self-supervised 3d representation learning
+[26] Black Forest Labs. Flux. https://github.com/ for robotics. In ICRA2023 Workshop on Pretraining for
+black-forest-labs/flux,2024. 5 Robotics(PT4R),2023. 3
+10
+=== Page 11 ===
+[40] Xinyang Tong, Pengxiang Ding, Donglin Wang, Wen- unsupervised monocular depth estimation. arXiv preprint
+jie Zhang, Can Cui, Mingyang Sun, Yiguo Fan, Han arXiv:2405.16960,2024. 3
+Zhao, Hongyin Zhang, Yonghao Dang, et al. Quart- [53] Han Zhao, Min Zhang, Wei Zhao, Pengxiang Ding, Siteng
+online: Latency-free large multimodal language model for Huang, and Donglin Wang. Cobra: Extending mamba to
+quadrupedrobotlearning.arXivpreprintarXiv:2412.15576, multi-modal large language model for efficient inference.
+2024. 3 2025. 3
+[41] ChenxiWang,HongjieFang,Hao-ShuFang,andCewuLu. [54] Wei Zhao, Pengxiang Ding, Min Zhang, Zhefei Gong,
+Rise:3dperceptionmakesreal-worldrobotimitationsimple Shuanghao Bai, Han Zhao, and Donglin Wang. Vlas:
+andeffective. arXivpreprintarXiv:2404.12281,2024. 3 Vision-language-action model with speech instructions
+[42] PengWang,ShuaiBai,SinanTan,ShijieWang,ZhihaoFan, for customized robot manipulation. arXiv preprint
+Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin arXiv:2502.13508,2025. 3
+Ge, et al. Qwen2-vl: Enhancing vision-language model’s [55] ZhongyiZhou, YichenZhu, MinjieZhu, JunjieWen, Ning
+perception of the world at any resolution. arXiv preprint Liu, Zhiyuan Xu, Weibin Meng, Ran Cheng, Yaxin Peng,
+arXiv:2409.12191,2024. 2,3 Chaomin Shen, et al. Chatvla: Unified multimodal un-
+[43] PengWang,ShuaiBai,SinanTan,ShijieWang,ZhihaoFan, derstanding and robot control with vision-language-action
+Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin model. arXivpreprintarXiv:2502.14420,2025. 3
+Ge, et al. Qwen2-vl: Enhancing vision-language model’s [56] ChenmingZhu,TaiWang,WenweiZhang,JiangmiaoPang,
+perception of the world at any resolution. arXiv preprint and Xihui Liu. Llava-3d: A simple yet effective pathway
+arXiv:2409.12191,2024. 3 to empowering lmms with 3d-awareness. arXiv preprint
+[44] Taiyi Wang, Zhihao Wu, Jianheng Liu, Jianye Hao, Jun arXiv:2409.18125,2024. 3
+Wang, andKunShao. Distrl: Anasynchronousdistributed [57] Minjie Zhu, Yichen Zhu, Jinming Li, JunjieWen, Zhiyuan
+reinforcement learning framework for on-device control Xu, Ning Liu, Ran Cheng, Chaomin Shen, Yaxin Peng,
+agents. arXivpreprintarXiv:2410.14803,2024. 3 FeifeiFeng,etal. Scalingdiffusionpolicyintransformerto
+[45] JunjieWen,YichenZhu,JinmingLi,MinjieZhu,KunWu, 1billionparametersforroboticmanipulation.2025IEEEIn-
+Zhiyuan Xu, Ning Liu, Ran Cheng, Chaomin Shen, Yaxin ternationalConferenceonRoboticsandAutomation(ICRA),
+Peng, et al. Tinyvla: Towards fast, data-efficient vision- 2025. 3,6,7,8
+language-action models for robotic manipulation. arXiv [58] Minjie Zhu, Yichen Zhu, Xin Liu, Ning Liu, Zhiyuan Xu,
+preprintarXiv:2409.12514,2024. 2,3 ChaominShen,YaxinPeng,ZhicaiOu,FeifeiFeng,andJian
+[46] JunjieWen,YichenZhu,JinmingLi,ZhibinTang,Chaomin Tang. Mipha: Acomprehensiveoverhaulofmultimodalas-
+Shen,andFeifeiFeng. Dexvla:Vision-languagemodelwith sistantwithsmalllanguagemodels.ProceedingsoftheAAAI
+plug-in diffusion expert for general robot control. arXiv ConferenceonArtificialIntelligence,2025. 3
+preprintarXiv:2502.05855,2025. 1,2,3,5,6,7,8 [59] YichenZhu,MinjieZhu,NingLiu,ZhiyuanXu,andYaxin
+[47] Kun Wu, Yichen Zhu, Jinming Li, Junjie Wen, Ning Liu, Peng. Llava-phi: Efficientmulti-modalassistantwithsmall
+Zhiyuan Xu, Qinru Qiu, and Jian Tang. Discrete policy: language model. In Proceedings of the 1st International
+Learning disentangled action space for multi-task robotic WorkshoponEfficientMultimediaComputingunderLimited,
+manipulation. 2025 IEEE International Conference on pages18–22,2024. 3
+RoboticsandAutomation(ICRA),2025. 7
+[48] Michał Zawalski, William Chen, Karl Pertsch, Oier Mees,
+Chelsea Finn, and Sergey Levine. Robotic control via
+embodied chain-of-thought reasoning. arXiv preprint
+arXiv:2407.08693,2024. 3
+[49] Yanjie Ze, Ge Yan, Yueh-Hua Wu, Annabella Macaluso,
+YuyingGe,JianglongYe,NicklasHansen,LiErranLi,and
+Xiaolong Wang. Gnfactor: Multi-task real robot learning
+with generalizable neural feature fields. In Conference on
+RobotLearning,pages284–301.PMLR,2023. 3
+[50] YanjieZe,ZixuanChen,WenhaoWang,TianyiChen,Xialin
+He,YingYuan,XueBinPeng,andJiajunWu.Generalizable
+humanoidmanipulationwithimproved3ddiffusionpolicies.
+arXivpreprintarXiv:2410.10803,2024. 3,4
+[51] Yanjie Ze, Gu Zhang, Kangning Zhang, Chenyuan Hu,
+MuhanWang,andHuazheXu.3ddiffusionpolicy:General-
+izablevisuomotorpolicylearningviasimple3drepresenta-
+tions.InICRA2024Workshopon3DVisualRepresentations
+forRobotManipulation,2024. 2,3,4,6,8
+[52] MengtanZhang,YiFeng,QijunChen,andRuiFan. Dcpi-
+depth: Explicitly infusing dense correspondence prior to
+11

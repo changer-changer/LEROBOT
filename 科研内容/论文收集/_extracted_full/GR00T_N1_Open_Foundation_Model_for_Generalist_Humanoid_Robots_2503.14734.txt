@@ -1,0 +1,1568 @@
+=== Page 1 ===
+2025-3-28
+GR00T N1: An Open Foundation Model for Generalist
+Humanoid Robots
+NVIDIA1
+Abstract
+General-purposerobotsneedaversatilebodyandanintelligentmind. Recentadvancementsinhumanoid
+robotshaveshowngreatpromiseasahardwareplatformforbuildinggeneralistautonomyinthehuman
+world. Arobotfoundationmodel,trainedonmassiveanddiversedatasources,isessentialforenabling
+therobotstoreasonaboutnovelsituations,robustlyhandlereal-worldvariability,andrapidlylearnnew
+tasks. To this end, we introduce GR00T N1, an open foundation model for humanoid robots. GR00T
+N1 is a Vision-Language-Action (VLA) model with a dual-system architecture. The vision-language
+module(System2)interpretstheenvironmentthroughvisionandlanguageinstructions. Thesubsequent
+diffusiontransformermodule(System1)generatesfluidmotoractionsinrealtime. Bothmodulesare
+tightlycoupledandjointlytrainedend-to-end. WetrainGR00TN1withaheterogeneousmixtureofreal-
+robottrajectories,humanvideos,andsyntheticallygenerateddatasets. Weshowthatourgeneralistrobot
+modelGR00TN1outperformsthestate-of-the-artimitationlearningbaselinesonstandardsimulation
+benchmarksacrossmultiplerobotembodiments. Furthermore,wedeployourmodelontheFourierGR-1
+humanoidrobotforlanguage-conditionedbimanualmanipulationtasks,achievingstrongperformance
+withhighdataefficiency.
+1. Introduction
+Creatingautonomousrobotstoperformeverydaytasksinthehumanworldhaslongbeenafascinatinggoaland,
+atthesametime,asignificanttechnicalundertaking. Recentprogressinrobotichardware,artificialintelligence,
+andacceleratedcomputinghascollectivelypavedthegroundfordevelopinggeneral-purposerobotautonomy.
+Tomarchtowardhuman-levelphysicalintelligence,weadvocateforafull-stacksolutionthatintegratesthe
+threekeyingredients: hardware,models,anddata. Firstandforemost,robotsareembodiedphysicalagents,
+andtheirhardwaredeterminestheircapabilityenvelope. Itmakeshumanoidrobotsacompellingformfactor
+tobuildrobotintelligenceduetotheirhuman-likephysiqueandversatility. Second,thediversityandvariability
+oftherealworlddemandsthattherobotsoperateonopen-endedobjectivesandperformawiderangeoftasks.
+Achievingthisrequiresageneralistrobotmodelsufficientlyexpressiveandcapableofhandlingvarioustasks.
+Third,real-worldhumanoiddataarecostlyandtime-consumingtoacquireatscale. Weneedaneffectivedata
+strategytotrainlarge-scaleroboticmodels.
+Inrecentyears,foundationmodels havebroughtforthdramaticbreakthroughsinunderstandingandgenerating
+visualandtextdata. Theydemonstratetheeffectivenessoftraininggeneralistmodelsonweb-scaledatato
+enablestronggeneralizationandfastadaptationtodownstreamtasks. Thesuccessesoffoundationmodelsin
+neighboringfieldsofAIhavedepictedapromisingroadmapforbuildingthe“backbone”ofintelligencefor
+generalist robots, endowing them with a set of core competencies and enabling them to rapidly learn and
+adaptintherealworld. However,unlikethedigitalrealmsofwordsandpixels,noInternetofhumanoidrobot
+datasetsexistforlarge-scalepre-training. Thedataavailableforanysinglehumanoidhardwarewouldbeorders
+ofmagnitudetoosmall. Recenteffortsintherobotlearningcommunity(OpenX-EmbodimentCollaboration
+etal.,2024)haveexploredcross-embodiedlearningtoenlargethedatasetbypoolingtrainingdatafrommany
+differentrobots. However,thegreatvariabilityinrobotembodiments,sensors,actuatordegreesoffreedom,
+1AdetailedlistofcontributorsandacknowledgmentscanbefoundinApp.Aofthispaper.
+© 2025NVIDIA.Allrightsreserved.
+5202
+raM
+72
+]OR.sc[
+2v43741.3052:viXra
+=== Page 2 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+controlmodes,andotherfactorsresultinanarchipelagoof“dataislands”ratherthanacoherent,Internet-scale
+datasetneededfortrainingatruegeneralistmodel.
+WeintroduceGR00TN1,anopenfoundationmodel
+for generalist humanoid robots. The GR00T N1 Real-World Data
+model is a Vision-Language-Action (VLA) model,
+whichgeneratesactionsfromimageandlanguage
+instructioninput. Ithascross-embodimentsupport
+Synthetic Data
+from tabletop robot arms to dexterous humanoid
+robots. Itadoptsadual-systemcompositionalar-
+chitecture, inspired by human cognitive process-
+ing (Kahneman, 2011). The System 2 reasoning Web Data &
+module is a pre-trained Vision-Language Model Human Videos
+(VLM)thatrunsat10HzonanNVIDIAL40GPU.It
+processestherobot’svisualperceptionandlanguage Figure1:DataPyramidforRobotFoundationModel
+instructiontointerprettheenvironmentandunder- Training. GR00TN1’sheterogeneoustrainingcorpora
+standthetaskgoal. Subsequently,aDiffusionTrans- can be represented as a pyramid: data quantity de-
+former, trained with action flow-matching, serves creases,andembodiment-specificityincreases,moving
+fromthebottomtothetop.
+astheSystem1actionmodule. Itcross-attendsto
+theVLMoutputtokensandemploysembodiment-
+specific encoders and decoders to handle variable state and action dimensions for motion generation. It
+generatesclosed-loopmotoractionsatahigherfrequency(120Hz). BoththeSystem1andSystem2modules
+areimplementedasTransformer-basedneuralnetworks,tightlycoupledandjointlyoptimizedduringtraining
+tofacilitatecoordinationbetweenreasoningandactuation.
+To mitigate the “data island” problem mentioned earlier, we structure the VLA training corpora as a data
+pyramid,illustratedinFig.1. Ratherthantreatingthetrainingdatasetsasahomogeneouspool,weorganize
+heterogeneoussourcesbyscale: largequantitiesofwebdataandhumanvideoslaythebaseofthepyramid;
+synthetic data generated with physics simulations and/or augmented by off-the-shelf neural models form
+themiddlelayer,andreal-worlddatacollectedonthephysicalrobothardwarecompletethetop. Thelower
+layersofthepyramidprovidebroadvisualandbehavioralpriors,whiletheupperlayersensuregroundingin
+embodied,real-robotexecution.
+Wedevelopaneffectiveco-training strategytolearnacrosstheentiredatapyramidinbothpre-andpost-
+trainingphases. Totrainourmodelwithaction-lessdatasources,suchashumanvideosandneural-generated
+videos, we learn a latent-action codebook (Ye et al., 2025) and also use a trained inverse dynamics model
+(IDM) to infer pseudo-actions. These techniques enable us to annotate actions on action-less videos so we
+caneffectivelytreatthemasadditionalrobotembodimentsformodeltraining. Byunifyingalldatasources
+acrossthedatapyramid,weconstructaconsistentdatasetwheretheinputconsistsoftherobotstate,visual
+observations,andlanguageinstruction,andtheoutputisthecorrespondingmotoraction. Wepre-trainour
+modelend-to-endacrossthethreedatalayers,spanning(annotated)videodatasets,syntheticallygenerated
+datasets,andreal-robottrajectories—bysamplingtrainingbatchesacrossthisheterogeneousdatamixture.
+With a unified model and single set of weights, GR00T N1 can generate diverse manipulation behaviors
+using single-arm, bimanual, and humanoid embodiments. Evaluated on standard simulation benchmark
+environments,GR00TN1achievessuperiorresultscomparedtostate-of-the-artimitationlearningbaselines.
+WealsodemonstrateGR00TN1’sstrongperformanceinreal-worldexperimentswithGR-1humanoidrobots.
+OurGR00T-N1-2Bmodelcheckpoint,trainingdata,andsimulationbenchmarksarepubliclyavailablehere:
+GitHubandHuggingFaceDatasets.
+2
+=== Page 3 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Image
+Image Observation Tokens
+Encode
+Vision-Language
+Model
+Diffusion
+Language Instruction
+Transformer
+“Pick up the industry Tokenize System 2
+object and place in
+yellow bin.”
+Text System 1 Motor Action
+Tokens
+Joint Joint
+Positions Velocities Encode
+Base
+Position EEF Poses …
+Robot State
+Action Tokens
+Denoising
+Figure2:GR00T N1 Model Overview. OurmodelisaVision-Language-Action(VLA)modelthatadoptsa
+dual-systemdesign. Weconverttheimageobservationandlanguageinstructionintoasequenceoftokensto
+beprocessedbytheVision-LanguageModel(VLM)backbone. TheVLMoutputs,togetherwithrobotstateand
+actionencodings,arepassedtotheDiffusionTransformermoduletogeneratemotoractions.
+2. GR00T N1 Foundation Model
+GR00T N1 is a Vision-Language-Action (VLA) model for humanoid robots trained on diverse data sources.
+The model contains a vision-language backbone that encodes language and image input and a DiT-based
+flow-matchingpolicythatoutputshigh-frequencyactions. WeusetheNVIDIAEagle-2VLM(Lietal.,2025)as
+thevision-languagebackbone. Specifically,ourpubliclyreleasedGR00T-N1-2Bmodelhas2.2Bparameters
+intotal,with1.34BintheVLM.Theinferencetimeforsamplingachunkof16actionsis63.9msonanL40
+GPUusingbf16. Fig.2providesahigh-leveloverviewofourmodeldesign. Wehighlightthreekeyfeaturesof
+GR00TN1:
+• WedesignacompositionalmodelthatintegratesVision-LanguageModel(VLM)-basedreasoningmodule
+(System 2) and Diffusion Transformer (DiT)-based action module (System 1) in a unified learning
+framework;
+• Wedevelopaneffectivepre-trainingstrategyusingamixtureofhumanvideos,simulationandneural-
+generateddata,andrealrobotdemonstrations(seeFig.1)forgeneralizationandrobustness;
+• Wetrainamassivelymulti-task,language-conditionedpolicythatsupportsawiderangeofrobotembodi-
+mentsandenablesrapidadaptationtonewtasksthroughdata-efficientpost-training.
+2.1. Model Architecture
+In this section, we describe the GR00T N1 model architecture, illustrated in Fig. 3. GR00T N1 uses flow-
+matching (Lipman et al.) to learn action generation. A diffusion transformer (DiT) processes the robot’s
+proprioceptivestateandaction,whicharethencross-attendedwithimageandtexttokensfromtheEagle-2
+VLMbackbonetooutputthedenoisedmotoractions. Below,weelaborateoneachmoduleindetail.
+StateandActionEncoders
+Toprocessstatesandactionsofvaryingdimensionsacrossdifferentrobotembodiments,weuseanMLPper
+embodimenttoprojectthemtoasharedembeddingdimensionasinputtotheDiT.AsinBlacketal.(2024),
+3
+=== Page 4 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Eagle-2
+VLM
+Robot State
+Cross-Attention
+Self-Attention
+Cross-Attention
+Self-Attention
+Vision
+Encoder Embodiment-Specific Module
+Pre-trained and Frozen
+“Pick up the apple
+Text
+and place it into
+the bottom shelf” Tokenizer
+State
+𝑞 ! Encoder
+Action
+Decoder
+Action Noised Action
+Encoder
+Motor
+Action
+x N
+DiTBlocks
+K iterations
+. . .
+𝑎 !
+𝑎 !"#
+𝑎
+!"$%#
+.
+. .
+𝑎
+!
+𝑎 !"#
+𝑎 !"$%#
+Figure3:GR00TN1ModelArchitecture. GR00TN1istrainedonadiversesetofembodimentsrangingfrom
+single-armrobotarmstobimanualhumanoiddexteroushands. Todealwithdifferentrobotembodiment’s
+stateobservationandaction,weuseDiTblockswithanembodiment-awarestateandactionencodertoembed
+therobot’sstateandactioninputs. GR00TN1modelleverageslatentembeddingsoftheEagle-2modelto
+incorporatetherobot’svisualobservationandlanguageinstructions. Thevisionlanguagetokenswillthenbe
+fedintotheDiTblocksthroughcross-attentionlayers.
+theActionEncoderMLPalsoencodesthediffusiontimesteptogetherwiththenoisedactionvector.
+Weuseactionflowmatching,whichsamplesactionsthroughiterativedenoising. Themodeltakesasinput
+noisedactionsinadditiontoencodingsoftherobot’sproprioceptivestate,imagetokens,andtexttokens. The
+actions are processed in chunks as in Zhao et al. (2023), meaning that at any given time 𝑡 the model uses
+𝐴 =[𝑎 ,𝑎 ,...,𝑎 ]whichcontainstheactionvectorsoftimesteps𝑡through𝑡+𝐻 −1. Weset𝐻 =16
+𝑡 𝑡 𝑡+1 𝑡+𝐻−1
+inourimplementation.
+Vision-LanguageModule(System2)
+Forencodingvisionandlanguageinputs,GR00TN1usestheEagle-2(Lietal.,2025)vision-languagemodel
+(VLM)pretrainedonInternet-scaledata. Eagle-2isfinetunedfromaSmolLM2(Allaletal.,2025)LLMand
+aSigLIP-2(Tschannenetal.,2025)imageencoder. Imagesareencodedatresolution224×224followedby
+pixelshuffle(Shietal.,2016),resultingin64imagetokenembeddingsperframe. Theseembeddingsarethen
+furtherencodedtogetherwithtextbytheLLMcomponentoftheEagle-2VLM.TheLLMandimageencoder
+arealignedoverabroadsetofvision-languagetasksfollowingthegeneralrecipeofLietal.(2025).
+Duringpolicytraining,atextdescriptionofthetask,aswellas(possiblymultiple)images,arepassedtothe
+VLM in the chat format used during vision-language training. We then extract vision-language features of
+shape(batchsize×sequencelength×hiddendimension)fromtheLLM.Wefoundthatusingmiddle-layer
+insteadoffinal-layerLLMembeddingsresultedinbothfasterinferencespeedandhigherdownstreampolicy
+successrate. ForGR00T-N1-2B,weusetherepresentationsfromthe12thlayer.
+DiffusionTransformerModule(System1)
+Formodelingactions,GR00TN1usesavariantofDiT(PeeblesandXie,2023),whichisatransformerwith
+denoisingstepconditioningviaadaptivelayernormalization,denotedas𝑉 . AsshowninFig.3,𝑉 consistsof
+𝜃 𝜃
+4
+=== Page 5 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+alternatingcross-attentionandself-attentionblocks,similartoFlamingo(Alayracetal.,2022)andVIMA(Jiang
+et al., 2023). The self-attention blocks operate on noised action token embeddings 𝐴𝜏 together with state
+𝑡
+embeddings𝑞 ,whilecross-attentionblocksallowconditioningonthevision-languagetokenembeddings𝜑
+𝑡 𝑡
+outputbyVLM.AfterthefinalDiTblock,weapplyanembodiment-specificActionDecoder,anotherMLP,to
+thefinal𝐻 tokenstopredicttheactions.
+Given a ground-truth action chunk 𝐴 , a flow-matching timestep 𝜏 ∈ [0,1] and sampled noise 𝜖 ∼ 𝒩(0,I),
+𝑡
+thenoisedactionchunk𝐴𝜏 iscomputedas𝐴𝜏 =𝜏𝐴 +(1−𝜏)𝜖. Themodelprediction𝑉 (𝜑 ,𝐴𝜏,𝑞 )aimsto
+𝑡 𝑡 𝑡 𝜃 𝑡 𝑡 𝑡
+approximatethedenoisingvectorfield𝜖−𝐴 byminimizingthefollowingloss:
+𝑡
+ℒ (𝜃)=E [︀ ‖𝑉 (𝜑 ,𝐴𝜏,𝑞 )−(𝜖−𝐴 )‖2]︀ . (1)
+fm 𝜏 𝜃 𝑡 𝑡 𝑡 𝑡
+As in Black et al. (2024), we use 𝑝(𝜏) = Beta(𝑠−𝜏;1.5,1), 𝑠 = 0.999. During inference, we generate action
+𝑠
+chunkswith𝐾-stepdenoising. First,randomlysample𝐴0 ∼𝒩(0,I)andthenuseforwardEulerintegrationto
+𝑡
+iterativelygeneratetheactionchunk,updatingasfollows:
+1
+𝐴𝜏+1/𝐾 =𝐴𝜏 + 𝑉 (𝜑 ,𝐴𝜏,𝑞 ).
+𝑡 𝑡 𝐾 𝜃 𝑡 𝑡 𝑡
+Inpractice,wefound𝐾 =4inferencestepstoworkwellacrossallembodiments.
+2.2. Training Data Generation
+TotrainGR00TN1,weuseadiversesetofdatasourcesandobjectivestoconstructthedatapyramid(Fig.1).
+Wefirstsourcediversehumanegocentricvideodatafromopendatasets,whichformsthebase,togetherwith
+thewebdatausedinVLMpretraining. Next,wegeneratesyntheticneuraltrajectoriesusingpre-trainedvideo
+generationmodels. Inthisway,we∼10×ourin-housecollectedteleoperationtrajectories—the“peak”of
+thedatapyramid—from88hoursto827hours,usingdiversecounterfactualrobottrajectorieswithnovel
+languageinstructions(seeFig.5forexamples). Weadditionallygeneratediversesimulationtrajectories,which
+alsoexpandthemiddlepartofthedatapyramid.
+Inthenextparagraph,wefirstdescribehowweextractlatentactionsfromvideos,whichweusetoextract
+labelsforweb-scaledhumanegocentricdatasets. Next,wedescribehowwegenerateneuralandsimulated
+robottrajectories,andhowweobtainactionsforeachofthesedatasources.
+LatentActions
+Forhumanegocentricvideosandneuraltrajectories,wedonothaveanyactionsthatwecandirectlyuseto
+trainGR00TN1. For thesedata, weinsteadgenerate latentactionsbytraining aVQ-VAEmodeltoextract
+featuresfromconsecutiveimageframesfromvideos(Yeetal.,2025). Theencodertakesthecurrentframe
+𝑥 and the future frame 𝑥 of a video with a fixed window size 𝐻 and outputs the latent action 𝑧 . The
+𝑡 𝑡+𝐻 𝑡
+decoder is trained to take the latent action 𝑧 and 𝑥 and reconstruct 𝑥 . This model is trained with a
+𝑡 𝑡 𝑡+𝐻
+VQ-VAEobjective,wherethecontinuousembeddingfromtheencoderismappedtothenearestembedding
+fromthecodebook. Aftertraining,wetaketheencoderanduseitasaninversedynamicsmodel; givenan
+𝑥 and𝑥 pair,weextractthecontinuouspre-quantizedembeddingandusethisasthelatentactionlabel
+𝑡 𝑡+𝐻
+duringpre-training,withthesameflow-matchingloss,buttreatitasadistinct“LAPA”embodiment. Training
+the VQ-VAE model on all heterogeneous data together allows us to unify all of the data to share the same
+learnedlatentactionspace,potentiallyimprovingcross-embodimentgeneralization. Fig.4shows𝑥 and𝑥
+𝑡 𝑡+𝐻
+pairsfrom8distinctembodimentsincludingbothrobotandhumanembodiment,allretrievedfromsimilar
+latentactions;thefirstlatentactionshowsallembodimentsmovingrightarmtotheleftandthesecondlatent
+actionshowsmovingrightarmtotheright.
+5
+=== Page 6 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Latent action 1: Move the right arm to the left Latent action 2: Move the right arm to the right
+Figure4:LatentActions. Weretrievesimilarlatentembeddingsacrossvariousembodiments. Theleftimages
+illustratethelatentactionthatcorrespondstomovingtherightarm(orhand)totheleft,whiletherightimages
+illustrate the latent action that corresponds to moving the right arm (or hand) to the right. Note that this
+generallatentactionisnotonlyconsistentindifferentrobotembodiments,butalsoinhumanembodiment.
+NeuralTrajectories
+Robotdatascaleslinearlywithhumanlabor,sinceittypicallyrequiresahumanoperatortoteleoperatethe
+robottoproduceeachtrajectory. Recently,videogenerationmodelshavedemonstratedsignificantpotential
+forhigh-qualitycontrollablevideogeneration(Brooksetal.,2024;Linetal.,2024;Renetal.,2025;WanTeam,
+2025;Xiangetal.,2024;Yangetal.,2024), whichpavesthewayforbuildingworldmodelsintherobotic
+domain. Toharnessthesemodels,wefine-tuneimage-to-videogenerationmodels(Agarwaletal.,2025;Wan
+Team,2025;Yangetal.,2024)onallofour88hoursofin-housecollectedteleoperationdataandgenerate827
+hoursofvideodatagiventheexistinginitialframeswithnovellanguageprompts,augmentingitbyaround
+10×. Thisenablesgeneratingtrainingdatathatcapturesmanymorecounterfactualscenariosintherealworld
+withoutactuallycollectingteleoperationdataforeachofthesecases(examplesshowninFig.5;moreexamples
+ofdreamgenerationsinFig.13).
+Toincreasethediversityofourneuraltrajectories,wefirstuseacommercial-grademultimodalLLMtodetect
+the objects given initial frames and generate many more possible combinations of “pick up {object} from
+{locationA}to{locationB}",whileinstructingthemodeltoonlyconsiderthephysicallyfeasiblecombinations.
+Wealsoapplypost-processingmechanisms,includingfilteringandre-captioning,tothegeneratedvideos. For
+this,wealsouseacommercial-grademultimodalLLMasajudgeandfeedthedownsampled8framestofilter
+outneuraltrajectoriesthatdonotfollowthelanguageinstructionprecisely. Wethencaptionthefiltered-out
+videos. (MoredetailscanbefoundinAppendixF).
+SimulationTrajectories
+Scalingupreal-worlddatacollectionforhumanoidrobotsishighlyexpensiveduetothechallengeofsimul-
+taneouslycontrollingbotharmsanddexteroushands. Recentresearch(Jiangetal.,2024;Mandlekaretal.,
+2023;Wangetal.,2024)hasdemonstratedthatgeneratingtrainingdatainsimulationisapracticalalternative.
+WeuseDexMimicGen(Jiangetal.,2024)tosynthesizelarge-scalerobotmanipulationtrajectories.
+Startingwithasmallsetofhumandemonstrations,DexMimicGenappliesdemonstrationtransformationand
+replayinsimulationtoexpandthedatasetautomatically. Eachtaskisdecomposedintoasequenceofobject-
+centricsubtasks. Theinitialhumandemonstrationsaresegmentedintosmallermanipulationsequences,each
+correspondingtoasubtaskinvolvingasingleobject. Thesesegmentsarethenadaptedtonewenvironmentsby
+aligningthemwiththeobject’sposition,preservingtherelativeposesbetweentherobot’sendeffectorandthe
+object. Toensuresmoothexecution,thesysteminterpolatesmovementsbetweentherobot’scurrentstateand
+thetransformedsegment. Therobotthenfollowsthefullsequencestepbystep,verifyingtasksuccessatthe
+6
+=== Page 7 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Prompt: use the right hand to pick up cucumber to basket
+Prompt: use the left hand to pick up spray bottle to basket
+Prompt: use the left hand to pick up spray bottle to beige bowl
+Prompt: pick up can from cutting board to pan
+Prompt: pick up apple from cutting board to pan
+Prompt: pick up tools from mesh cup to clear bin
+Prompt: pick up the potato, place it into the microwave and close the microwave
+Figure5:SyntheticallyGeneratedVideos. Weleverageoff-the-shelfvideogenerationmodelstocreateneural
+trajectoriestoincreasethequantityanddiversityofourtrainingdatasets. Thesegenerateddatacanbeused
+forbothpre-andpost-trainingofourGR00TN1. (1)Thefirstthreerowsaregeneratedfromthesameinitial
+framesbutwithdifferentprompts(changeleftorright,thelocationtoplacetheobject),(2)thefollowingtwo
+arefromthesameinitialframesbutreplacetheobjecttopickup,(3)thenextrowshowcasesthevideomodel
+generatingarobottrajectorywhichisverychallengingtogenerateinsimulation(spillingcontentsinsidea
+meshcupintoabin),and(4)thelastrowisgeneratedfromaninitialframefromsimulationdata. Weusethe
+redrectanglestoindicatetheinitialframes.
+end. Onlysuccessfuldemonstrationsareretained,ensuringhigh-qualitydata. UsingDexMimicGen,wescalea
+limitedsetofhumandemonstrationsintoalarge-scalehumanoidmanipulationdataset. Consideringthepre-
+andpost-trainingdatasets,wehavegenerated780,000simulationtrajectories—equivalentto6,500hours,or
+ninecontinuousmonths,ofhumandemonstrationdata—injust11hours. Thesesimulationdatasignificantly
+supplementthereal-robotdatawithminimalhumancosts.
+7
+=== Page 8 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+2.3. Training Details
+Pre-training
+Duringthepre-trainingphase,GR00TN1istrainedviaflow-matchingloss(Equation1)onadiversecollection
+ofembodimentsanddatasources,encompassingvariousrealandsyntheticrobotdatasetsaswellashuman
+motiondata. WereferreaderstoSec.3foradetaileddescriptionofthedatasets.
+Forhumanvideos,intheabsenceofground-truthactions,weextractlearnedlatentactionsandusethemas
+flow-matchingtargets(seeSec.2.2).ForrobotdatasetssuchasourGR-1humanoiddataorOpenX-Embodiment
+data,weusebothground-truthrobotactionsaswellaslearnedlatentactionsasflow-matchingtargets. Inthe
+caseofneuraltrajectories(Sec.2.2)usedtoaugmentourrobotdatasets,weusebothlatentactionsaswellas
+predictedactionsfromaninverse-dynamicsmodeltrainedontherealrobotdata. Pre-traininghyper-parameters
+arelistedinTable6intheAppendix.
+Post-training
+In the post-training phase, we fine-tune our pre-trained model on datasets corresponding to each single
+embodiment. Asinpretraining,wekeepthelanguagecomponentoftheVLbackbonefrozenandfine-tunethe
+restofthemodel. Post-traininghyperparametersaregiveninTable6intheAppendix.
+Post-trainingwithNeuralTrajectories
+Toovercomethechallengeofdatascarcityduringpost-training,weexploreaugmentingthedataforeachdown-
+streamtaskbygeneratingneuraltrajectories,similartotheproceduredescribedinSec.2.2. Fordownstream
+tasksthatareconditionedonmultipleviews,wefinetunethevideomodeltogeneratemultiplesubimagesina
+grid(Fig.13). Forsimulationtasks,wecollectdiverseinitialframesfromtherandomlyinitializedenvironment.
+Forrealrobottasks,werandomlyinitializeobjectposesmanuallyandrecordtherobot’sinitialobservation.
+Novelinitialframescouldalsobecreatedautomaticallyusingimg2imgdiffusion(exampleshowninFig.13),
+but we leave further exploration for future work. We also demonstrate examples of (1) multi-round video
+generationforgeneratinglong-horizontrajectoriescomposedofatomictasksand(2)neuraltrajectoriesof
+liquidsandarticulatedobjects,knowntobeextremelychallengingtosimulate,thoughweleavequantitative
+evaluationofdownstreamtasksforfuturework.
+Forourpost-trainingpipelinewithneuraltrajectories,werestrictourselvestofine-tuningthevideogeneration
+modelonlyonthehuman-collectedtrajectoriesforsimulationtasksandonly10%ofthedatafromthereal-
+worldbenchmarkcollectedforpost-training,tomatchtherealisticscenariothatweonlyhaveaccesstolimited
+numberofteleoperationdata. Sincethegeneratedvideosdonothaveactionlabels,weuseeitherlatentor
+inversedynamicsmodels(IDM)labeledactions(Bakeretal.,2022)andtrainthepolicymodeltotreatthese
+pseudo-actions as action labels for a different embodiment. In low-data regime scenarios, we also restrict
+ourselvesontrainingtheIDMmodelsonlyonthelow-data,tofacilitaterealisticscenarios. Detailsofhowwe
+traintheIDMmodelsareprovidedinAppendixF.SomeempiricalcomparisonsbetweenlatentandIDM-labeled
+actionsaremadeinSec. 4.4. Duringpost-training,weco-trainthepolicywithreal-worldtrajectorieswith
+neuraltrajectorieswitha1:1samplingratio.
+TrainingInfrastructure
+WetrainGR00TN1onaclustermanagedviaNVIDIAOSMO(NVIDIA,2025),anorchestrationplatformfor
+scalingcomplexroboticsworkloads. ThetrainingclusterisequippedwithH100NVIDIAGPUsconnectedvia
+NVIDIAQuantum-2InfiniBandinafat-treetopology. Wefacilitatefault-tolerantmulti-nodetraininganddata
+ingestionviaacustomlibrarybuiltontopoftheRaydistributedcomputinglibrary(Moritzetal.,2018). We
+useupto1024GPUsforasinglemodel. GR00T-N1-2Busedroughly50,000H100GPUhoursforpretraining.
+Compute-constrainedfinetuningwastestedinthecontextofasingleA6000GPU.Ifonlytuningtheadapter
+layers(actionandstateencoders+actiondecoder)andDiT,abatchsizeupto200canbeused. Whentuning
+thevisionencoder,abatchsizeofupto16canbeused.
+8
+=== Page 9 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+3. Pre-Training Datasets
+We structure our pre-training corpus into three main categories: real-robot datasets (Sec. 3.1), synthetic
+datasets(Sec.3.2),andhumanvideodatasets(Sec.3.3). Theseroughlycorrespondtothepeak,middle,and
+baseofthedatapyramid(Fig.1),respectively. Thesyntheticdatasetsconsistofbothsimulationtrajectoriesand
+neuraltrajectories. Table1summarizesourtrainingdatagenerationstrategiesinSec.2.2andtheirapplicable
+data sources correspondingly. We provide the full statistics (# of frames, hours, and camera views) of our
+pretrainingdatasetsinTable7.
+Table1:TrainingDataGeneration. Ourdatagenerationstrategiesleveragedifferentdatasources. Thelatent-
+actionlearningtechniqueisbroadlyappliedtodiversevideodatasets. Neuraltrajectoriescanbegenerated
+fromdatasetscontainingrobotactions,whilesimulationtrajectoriesrelyonaphysicssimulatorandutilizeour
+DexMimicGen-basedautomateddatagenerationsystem.
+LatentActions NeuralTrajectories SimulationTrajectories
+Real-RobotDatasets ✓ ✓ ✓
+SimulatedRobotDatasets ✓ ✓
+HumanVideoDatasets ✓
+3.1. Real-World Datasets
+Weusethefollowingreal-worldrobotdatasets:
+1. GR00T N1 Humanoid Pre-Training Dataset. Our internally collected dataset covers a broad range
+of general manipulation tasks, focused on Fourier GR1 through teleoperation. We leverage the VIVE
+UltimateTrackertocapturetheteleoperator’swristposeswhileXsensMetaglovestrackfingermovements.
+Wealsoexploredotherteleoperationhardwareoptions,includingAppleVisionProandLeapMotion(see
+Fig.6). Therecordedhumanmovementsarethenretargetedtohumanoidactionsviainversekinematics.
+Thereal-timeteleoperationoperatesatacontrolfrequencyof20Hz. Alongsidetherobot’sactions,we
+capture images from a head-mounted camera at each step, as well as the human’s low-dimensional
+proprioceptionandactions. Thedatasetincludesfine-grainedannotations,whichdetailatomicactions
+suchasgrasping,moving,andplacing,andcoarse-grainedannotations,whichaggregatesequencesof
+fine-grainedactionsintohigher-leveltaskrepresentations. Thishierarchicalstructuresupportslearning
+bothprecisemotioncontrolandhigh-leveltaskreasoning.
+2. OpenX-Embodiment.OpenX-EmbodimentCollaborationetal.(2024)isawidelyusedcross-embodiment
+dataset for robot manipulation. We include the RT-1 (Brohan et al., 2022), Bridge-v2 (Walke et al.,
+2023),LanguageTable(Lynchetal.,2022),DROID(Khazatskyetal.,2024),MUTEX(Shahetal.,2023),
+RoboSet(Bharadhwajetal.,2024)andPlex(Thomasetal.,2023),providingdiversedatasetscovering
+variousmanipulationtasks,language-conditionedcontrol,androbot-environmentinteractions.
+3. AgiBot-Alpha. AgiBot-World-Contributorsetal.(2025)isalarge-scaledatasetoftrajectoriesfrom100
+robots. Weusedthe140,000trajectoriesavailableatthetimeoflaunchingourtrainingrun. Thedataset
+coversfine-grainedmanipulation,toolusage,andmulti-robotcollaboration.
+3.2. Synthetic Datasets
+Our synthetic datasets include 1) simulation trajectories automatically multiplied from a small number of
+humandemonstrationswithinphysicssimulatorsand2)neuraltrajectoriesderivedfromvideosproducedby
+off-the-shelfneuralgenerationmodels.
+SimulationTrajectories
+Inadditiontoreal-worlddatasets,wefeaturelarge-scalesyntheticdatasetsgeneratedinsimulationasdescribed
+inSec.2.2.Oursimulationtaskscomprisehumanoidrobotsperformingabroadrangeoftabletoprearrangement
+9
+=== Page 10 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Real
+Option 1: Manus Glove + VIve Ultimate Tracker
+Sim
+Option 2: Apple Vision Pro Option 3: Leap Motion Human Motion Capture Robot Action Retargeting
+Teleoperation Hardware Robot Action Execution
+Figure6:DataCollectionviaTeleoperation. Ourteleoperationinfrastructuresupportsmultipledevicesto
+capturehumanhandmotion,including6-DoFwristposesandhandskeletons. Robotactionsareproduced
+throughretargetingandexecutedonrobotsinrealandsimulationenvironments.
+tasks and feature a large array of realistic 3D assets. We build these tasks under the RoboCasa simulation
+framework(Nasirianyetal.,2024). Broadly,ourtasksfollowthebehavior“rearrangeAfromBtoC”,where
+Acorrespondstoanobject,andBandCrepresentthesourceandtargetlocationsintheenvironment. The
+sourceandtargetlocationsarereceptaclessuchasplates,baskets,placemats,andshelves,andtherobotmust
+rearrange objects across different combinations of source and target receptacles. Overall, our pre-training
+simulationdatasetsfeature54uniquecombinationsofsourceandtargetreceptaclecategories. Weplacethe
+objectsandreceptaclesinrandomizedlocationsthroughoutthetableandadditionallyincorporatedistractor
+objectsandreceptaclesinthescene. Thedistractorsrequirethemodeltopayattentiontothetasklanguageto
+performthedesiredbehavior.
+Wegeneratediverse,high-qualitytrainingdatasetsatamassivescaleusingDexMimicGen. Ourdatasetsfeature
+theGR-1humanoidrobot,butwecanadoptthesystemforawiderangeofrobots. Webeginbycollectingafew
+dozensourcedemonstrationsviateleoperationusingtheLeapMotiondevice. TheLeapMotiondevicetracksthe
+6-DoFwristposesandfingerposes,andweretargetthesevaluesandsendthemtothewhole-bodyIKcontroller
+basedonmink(Zakka,2024). Givenhumandemonstrations,DexMimicGenprocessesthedemonstrationsinto
+object-centricsegmentsandthentransformsandcombinesthesesegmentstogeneratenewdemonstrations.
+Usingthissystem,wegenerate10,000newdemonstrationsforeach(source,target)receptaclepairinour
+pre-trainingtaskregime,resultingin540ktotaldemonstrations.
+NeuralTrajectories
+Togenerateneuraltrajectories, wefine-tuneopen-sourceimage-to-videomodelsonourreal-worldGR00T
+N1 Humanoid Pre-Training dataset, as described in Sec. 2.2. We trained the models for 100 epochs on
+a dataset comprising 3,000 real-world robot data samples with language annotations, each recorded at
+480P resolution and consisting of 81 frames. As illustrated in Fig. 5, our model can generate high-quality
+counterfactualtrajectoriesgivennovellanguageprompts. Moreover,themodel,trainedonInternet-scalevideo
+data,demonstratesstronggeneralizationcapabilitiesinhandlingunseeninitialframes,novelobjects,andnew
+motionpatterns. ThesevideosarefurtherlabeledwithlatentactionsandIDM-basedpseudo-actionsformodel
+training. Wegenerateatotalofaround827hoursofvideos;ittakes2minutestogenerateaone-secondvideo
+onanL40GPU,andrequiredapproximately105kL40GPUhours(∼1.5days)on3,600L40GPUs.
+3.3. Human Video Datasets
+We include a diverse set of human video datasets. These do not include explicit action labels but contain
+extensivesequencesofhuman-objectinteractions,capturingaffordances,tasksemantics,andnaturalmotion
+patterns. These datasets cover a wide range of real-world human behaviors, including grasping, tool use,
+cooking,assembly,andothertask-orientedactivitiesperformedinnaturalenvironments,andprovidedetailed
+10
+=== Page 11 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Pick and Place Turn Off Stove Setup Mug Turn On Water Turn On Microwave
+Piece Assembly Transport Pouring Coffee Tray Lift
+Move To Pan Move To Box Move To Shelf Bottle To Cabinet Cup To Drawer
+Figure7:SimulationTasks. Oursimulationexperimentsusetasksfromtwoopen-sourcebenchmarks(Robo-
+Casa(Nasirianyetal.,2024)inthetoprowandDexMimicGen(Jiangetal.,2024)inthemiddlerow)anda
+newlydevelopedsuiteoftabletopmanipulationtasksthatcloselyresembleourreal-worldtasks(bottomrow).
+WeprovideOmniverserenderingsofthetasksabove.
+first-personperspectivesofhand-objectinteractions(examplesshowninFigure14). Ourvideodatasetsinclude
+thefollowing:
+• Ego4D is a large-scale egocentric video dataset that includes diverse recordings of everyday activi-
+ties(Graumanetal.,2022);
+• Ego-Exo4Daddscomplementaryexocentric(third-person)viewsalongsidefirst-personrecordings(Grau-
+manetal.,2024);
+• Assembly-101focusesoncomplexassemblytasksbyprovidingdetailedvideosofstep-by-stepobject
+assembly(Seneretal.,2022);
+• EPIC-KITCHENSincludesfirst-personfootageofculinaryactivities(Damenetal.,2018);
+• HOI4Dcaptureshuman-objectinteractionswithframe-wiseannotationsforsegmentation,handand
+objectposes,andactions(Liuetal.,2022);
+• HoloAssist captures collaborative and assistive tasks within augmented reality environments (Wang
+etal.,2023);
+• RH20T-Human includes recordings of fine-grained manipulation tasks with an emphasis on natural
+hand-objectinteractionsacrossdiversereal-worldscenarios(Fangetal.,2023).
+4. Evaluation
+WeevaluateourGR00TN1modelsinadiversesetofsimulatedandreal-worldbenchmarks. Oursimulation
+experimentsareconductedonthreedistinctbenchmarksdesignedtosystematicallyassesstheeffectiveness
+ofourmodelacrossvariousrobotembodimentsandmanipulationtasks. Inourreal-worldexperiments,we
+investigatethemodel’scapabilityonasuiteoftabletopmanipulationtaskswiththeGR-1humanoidrobot.
+These experiments aim to demonstrate GR00T N1’s ability to acquire new skills from a limited number of
+humandemonstrations.
+4.1. Simulation Benchmarks
+Our simulation experiments comprise two open-source benchmarks from prior work (Jiang et al., 2024;
+Nasirianyetal.,2024),aswellasanewlydevelopedsuiteoftabletopmanipulationtasksdesignedtoclosely
+mirror our real-world task settings. We meticulously choose these benchmarks for evaluating our models
+acrossdifferentrobotembodimentsanddiversemanipulationtasks. Ourmodelcheckpoints,togetherwiththe
+publiclyavailablesimulationenvironmentsanddatasets,ensurethereproducibilityofourkeyresults. Fig.7
+11
+=== Page 12 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+illustratessomeexampletasksfromthesethreebenchmarks.
+• RoboCasaKitchen(24tasks,RoboCasa)
+RoboCasa(Nasirianyetal.,2024)featuresacollectionoftasksinsimulatedkitchenenvironments. We
+focus on 24 “atomic” tasks that involve foundational sensorimotor skills such as pick-and-place, door
+opening and closing, pressing buttons, turning faucets, and more. For each task, we use the publicly
+available dataset of 3000 demonstrations featuring the Franka Emika Panda arm, all generated with
+MimicGen(Mandlekaretal.,2023). TheobservationspaceincludesthreeRGBimagescapturedfrom
+cameraspositionedontheleft,right,andatthewrist. Thestaterepresentationcomprisestheposition
+androtationofboththeend-effectorandtherobotbase,aswellasthegripper’sstate. Theactionspace
+isdefinedbytherelativepositionandrotationoftheend-effectoralongwiththegripperstate. Wefollow
+thesametrainingandevaluationprotocoloutlinedbyNasirianyetal.(2024).
+• DexMimicGenCross-EmbodimentSuite(9tasks,DexMG)
+DexMimicGen (Jiang et al., 2024) includes an array of nine bimanual dexterous manipulation tasks
+requiringprecisetwo-armcoordination. Together,thesetaskscoverthreebi-manualrobotembodiments:
+(1) Bimanual Panda Arms with Parallel-Jaw Grippers: tasks include threading, piece assembly, and
+transport. Thestate/actionspaceconsistsoftheend-effectorpositionandrotationofbotharms,aswell
+asthegripperstates;(2)BimanualPandaArmswithDexterousHands: tasksincludeboxcleanup,drawer
+cleanup,andtraylifting. Thestate/actionspaceconsistsoftheend-effectorpositionandrotationofboth
+armsandhands;(3)GR-1HumanoidwithDexterousHands: tasksincludepouring,coffeepreparation,
+andcansorting. Thestate/actionspaceconsistsofthejointpositionandrotationofbotharmsandhands,
+alongwiththewaistandneck. Wegenerate1000demonstrationsforeachtaskusingtheDexMimicGen
+datagenerationsystemandevaluatethemodel’sabilitytogeneralizetonovelobjectconfigurations.
+• GR-1TabletopTasks(24tasks,GR-1)
+Thisdatasetservesasadigitalcounterparttoreal-worldhumanoiddatasets,enablingsystematicevalua-
+tionsthatinformtheperformanceofreal-robotdeployment. Thisbenchmarkfocusesondexteroushand
+controlusingtheGR-1humanoidrobotequippedwithFourierdexteroushands. ComparedtoDexMG,
+thisbenchmarkfeaturesasignificantlylargervarietyofobjectswithdiverseplacements. Wemodelatotal
+of18rearrangementtasks,whichhaveasimilarstructuretothepre-trainingtasksoutlinedinSec.3.2,
+i.e.,rearrangingobjectsfromasourcetoatargetreceptacle. Eachtaskinvolvesauniquecombination
+ofreceptacles,andthesecombinationsareunseeninourpre-trainingdata. Likethepre-trainingtasks,
+mosttasksinvolvedistractorobjectsandreceptaclesthatrequirethemodeltopayattentiontothetask
+language. We additionally feature six tasks that involve placing objects into articulated objects (i.e.,
+cabinets,drawers,andmicrowaves)andclosingthem. TheobservationspaceincludesoneRGBimage
+capturedfromanegocentriccamerapositionedontherobot’shead. Thestate/actionspaceconsistsof
+thejointpositionandrotationofbotharmsandhands,alongwiththewaistandneck. Weoptionally
+includeinourdatasetstheendeffector-basedactionsforcontrollingthearms,asthenativeactionspace
+forcontrollingthewhole-bodyIKcontrollerisendeffector-based. Wegenerate1000demonstrationsfor
+eachtaskusingtheDexMimicGensystem.
+4.2. Real-World Benchmarks
+We introduce a diverse and meticulously designed set of tabletop manipulation tasks, aimed at evaluating
+andpost-trainingourmodelsonhumandemonstrations. Thesetasksemphasizecriticalaspectsofreal-world
+dexterity,includingpreciseobjectmanipulation,spatialreasoning,bimanualcoordination,andmulti-agent
+collaboration. Wecarefullycategorizeourbenchmarksintofourdistincttypes,ensuringarigorousevaluation
+ofmodelperformance. Weshowsomeexampletasksfromourreal-worldbenchmarksinFig.8.
+• Object-to-ContainerPick-and-Place(5tasks,Pick-and-Place)
+Thiscategoryevaluatesthemodel’sabilitytograspobjectsandplacethemintodesignatedcontainers,a
+fundamentalcapabilityforroboticmanipulation. Tasksincludetransferringobjectsbetweencommon
+12
+=== Page 13 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Pre-Training Evaluations
+Prompt: Prompt:
+pick up pick up
+green bell peach to
+pepper to yellow bin
+bottom shelf
+Pick-and-Place with Left-to-Right Handover Pick up Novel Object to Novel Container
+Post-Training Evaluations
+Pick-and-Place: Tray to Plate Pick-and-Place: Placemat to Basket Pick-and-Place: Cutting Board toPan
+Articulated: White Drawer Articulated: Wooden Chest Articulated: Dark Cabinet
+Industrial: Machinery Packing Industrial: Mesh Cup Pouring Industrial : CylinderHandover
+Coordination Part 1: Cylinder to Mesh Cup and Mesh Cup Handover to Another Robot
+Coordination Part 2: Cylinder to Yellow Bin and Mesh Cup Pouring to Another Yellow Bin
+Figure8:Real-WorldTasks. AllimagesarecapturedfrompolicyrolloutsofGR00T-N1-2Bandmodelspost-
+trained from GR00T-N1-2B. (Top) Pre-training evaluations. We design two manipulation tasks to assess
+our pretrained models. The left image shows a left-to-right handover, while the right image illustrates the
+placementofnovelobjectsintoanunseentargetcontainer. (Bottom)Post-trainingevaluations. Weintroduce
+fourdistincttaskcategories. Fromtoptobottom,wepresentexamplesofobject-to-containerpick-and-place,
+articulatedobjectmanipulation,industrialobjectmanipulation,andmulti-agentcoordination.
+householdcontainerssuchastrays,plates,cuttingboards,baskets,placemats,bowls,andpans. These
+scenarios test fine motor skills, spatial alignment, and adaptability to different object geometries. To
+rigorouslyassessgeneralization,weevaluatemodelsonbothseenandunseenobjects.
+• ArticulatedObjectManipulation(3tasks,Articulated)
+Thesetasksassessthemodel’sabilitytomanipulatearticulatedstoragecompartments. Themodelmust
+graspanobject,placeitintoastorageunitsuchasawoodenchest,darkcabinet,orwhitedrawer,and
+thenclosethecompartment. Thesetasksintroducechallengesinconstrainedmotioncontrolandprecise
+placementwithinlimitedspaces. Generalizationistestedwithbothseenandunseenobjects.
+• IndustrialObjectManipulation(3tasks,Industrial)
+13
+=== Page 14 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Wedesignthiscategoryforindustrialscenarios,whichinvolvethreestructuredworkflowsandtool-based
+interactions: 1)MachineryPacking: Pickupvariousmachinerypartsandtoolsandplacethemintoa
+designatedyellowbin;2)MeshCupPouring: Graspameshcupcontainingsmallindustrialcomponents
+(e.g., screws and bolts) and pour its contents into a plastic bin; and 3) Cylinder Handover: Pick up a
+cylindrical object, transfer it from one hand to the other, and place it into a yellow bin. These tasks
+closelymirrorreal-worldindustrialapplications,makingthemhighlyrelevantbenchmarksforassessing
+dexterityinstructuredenvironments.
+• Multi-AgentCoordination(2tasks,Coordination)
+Collaborativetasksrequiresynchronizationbetweenmultipleagents,emphasizingrolecoordinationand
+adaptivedecision-making: 1)CoordinationPart1: Pickupacylinder,placeitintoameshcup,andhand
+itovertoanotherrobot;and2)CoordinationPart2: Thereceivingrobotplacesthecylinderintoone
+yellowbin,thenpourstheremainingcontentsofthemeshcupintoanotheryellowbin.
+Thesecarefullydesignedbenchmarksintroducestructured,goal-driveninteractionstotestwhetheramodel
+canseamlesslyadapttoreal-worldapplications. Tobuildahigh-qualitypost-trainingdataset,welethuman
+operators collect task-specific data for durations ranging from 15 minutes to 3 hours, depending on task
+complexity. Wethenfilteroutlow-qualitytrajectoriestomaintaindataintegrity. Byincorporatingadiverseset
+oftaskrequirements—spanningprecisesingle-agentmanipulationtocomplexmulti-agentcoordination—our
+benchmarkprovidesarigoroustestbedforevaluatinggeneralization,adaptability,andfine-tunedcontrolin
+human-likemanipulationtasks.
+4.3. Experiment Setup
+Ourevaluationexperimentconsistsofpost-trainingGR00TN1andbaselinemodelsasdescribedinSec.2.3in
+adata-limitedsettingandevaluatingthepolicysuccessrateinoursimulatedandrealbenchmarksdescribedin
+Sections4.1and4.2,respectively. Bydefaultweuseaglobalbatchsizeof1024andtrainfor60ksteps. Forthe
+DexMimicGenCross-EmbodimentSuite,whereeachembodimentcontainsrelativelyfewtasksandtheoverall
+trainingdataislimited,weusedasmallerbatchsizeof128forGR00T-N1-2B.
+Baselines
+TodemonstratetheeffectivenessofdiversepretrainingofGR00TN1,wecomparewithtwoestablishedbaselines,
+BC-Transformer(Mandlekaretal.,2021)andDiffusionPolicy(Chietal.,2024). Wedescribethedetailsof
+thesetwomethodsbelow:
+• BC-TransformerisaTransformer-basedbehaviorcloningpolicyinRoboMimic(Mandlekaretal.,2021).
+ItconsistsofaTransformerarchitectureforprocessingobservationsequencesandaGaussianMixture
+Model(GMM)moduleformodelingactiondistributions. Thepolicytakes10observationframesasinput
+andpredictsthenext10actions.
+• Diffusion Policy (Chi et al., 2024) models action distributions through a diffusion-based generative
+process.ItemploysaU-Netarchitecturethatprogressivelyremovesnoisefromrandomsamplestogenerate
+preciserobotactionsconditionedonobservationsequences. Ittakesasingleframeofobservationsas
+inputandproduces16actionstepsinoneinferencepass.
+EvaluationProtocol
+Forsimulatedbenchmarkevaluation,wereporttheaveragesuccessrateover100trials,takingthemaximum
+scoreofthelast5checkpoints,wherecheckpointsarewrittenevery500trainingsteps,followingtheprotocol
+fromRoboCasa(Nasirianyetal.,2024).
+For real robot evaluation, we employ a partial scoring system to capture model behavior across different
+executionphases,ensuringafine-grainedassessmentofperformance. Wereporttheaveragesuccessrateover
+10trialsforeachtask,exceptforthetaskofPackMachinery;forthistask,wereportthesuccessrateofhow
+manyobjectsoutofthe5machinerypartsandtoolsareplacedintothebin,givenatime-limitof30seconds.
+14
+=== Page 15 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Weconductonly5trialsduetothetimeconstraint. Additionally,toassessthemodel’sefficiencyinalow-data
+regime,wesubsample10%ofthefulldatasetforeachtaskandevaluatewhetherthemodelcanstilllearn
+effectivebehaviors.
+4.4. Quantitative Results
+Pre-trainingEvaluations
+Toevaluatethegeneralizationcapabilitiesofourpretrainedcheckpoint,wedesigntwotasksontherealGR-1
+humanoidrobot(Fig.8). Inthefirsttask,therobotisinstructedtoplaceanobjectonthebottomshelf. However,
+theobjectisintentionallypositionedtotheleftofitslefthand,requiringacoordinatedbimanualstrategy. The
+robotmustfirstgrasptheobjectwithitslefthand,transferitwithinreachoftherighthand,andthencomplete
+theplacementontotheshelf. Inthesecondtask,therobotisinstructedtoplaceanovelobjectintoanunseen
+targetcontainer. Foreachtask,weevaluatethepretrainedGR00T-N1-2Bmodelusingfivedifferentobjects,
+withthreetrialsperobject. GR00T-N1-2Bachievesasuccessrateof76.6%(11.5/15)inthefirstcoordinated
+settingand73.3%(11/15)inthesecondsettinginvolvingnovelobjectmanipulation. 0.5standsforgrasping
+theobjectcorrectlybutfailingtoplacetheobjectintothecontainer. Thehighperformanceunderthesetwo
+evaluationsettingsillustratestheeffectivenessoflarge-scalepre-training.
+Post-trainingEvaluations
+Insimulation,wecomparethequantitativeresultsforourpost-trainedGR00TN1modelsagainstfrom-scratch
+baselinesinthethreesimulationbenchmarks(Table2). Foreachbenchmark,wepost-trainusing30,100,and
+300demonstrationspertask(24tasksforRoboCasa,9tasksforDexMG,and24tasksforGR-1). Weobserve
+thatGR00TN1consistentlyoutperformsthebaselinemodelsacrossbenchmarktasksanddatasetsizes. In
+AppendixB,weincludethefullresultsandabarplot(Fig.10)forcomparison.
+Table2:SimulationResults. Averagesuccessrateacrossthreesimulationbenchmarks,using100demonstra-
+tionspertask. GR00TN1outperformsbothbaselines,especiallyontheGR-1taskwhereitoutperformsby
+morethan17%.
+RoboCasa DexMG GR-1 Average
+BCTransformer 26.3% 53.9% 16.1% 26.4%
+DiffusionPolicy 25.6% 56.1% 32.7% 33.4%
+GR00T-N1-2B 32.1% 66.5% 50.0% 45.0%
+Ontherealrobot,wecompareGR00T-N1-2BagainstDiffusionPolicy,trainingon10%ofthehumanteleopera-
+tiondatasetandthefulldataset(Table3andFig.9). GR00T-N1-2B,achievesasignificantlyhighersuccessrate
+acrossalltasks,outperformingDiffusionPolicyby32.4%inthe10%Datasettingandby30.4%intheFull
+Datasetting. Notably,GR00T-N1-2Btrainedonjust10%ofthedataperformsonly3.8%lowerthanDiffusion
+Policytrainedonthefulldataset,highlightingitsdataefficiency.
+Table3:Real-WorldResults. Averagepolicysuccessrateonreal-worldtaskswiththeGR-1humanoidrobots.
+GR00TN1beatsthediffusionpolicybaselineandshowsstrongresultsevenwithverylittledata.
+Pick-and-Place Articulated Industrial Coordination Average
+DiffusionPolicy(10%Data) 3.0% 14.3% 6.7% 27.5% 10.2%
+DiffusionPolicy(FullData) 36.0% 38.6% 61.0% 62.5% 46.4%
+GR00T-N1-2B(10%Data) 35.0% 62.0% 31.0% 50.0% 42.6%
+GR00T-N1-2B(FullData) 82.0% 70.9% 70.0% 82.5% 76.8%
+15
+=== Page 16 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Figure9:NeuralTrajectoriesAblations. IntheRoboCasasimulation,weshowusingneuraltrajectoriesfor
+post-trainingacross3dataregimes(30,100,and300pertask). Intherealworld,weshowresultsonlyonthe
+low-dataregime(10%ofthedemonstrations). Weco-trainwith3kneuraltrajectoriespertaskforRoboCasa
+and100neuraltrajectoriespertaskforreal-worldtasks. WeexploreusingbothlatentandIDM-labeledactions
+insimulationandonlyIDM-labeledactionsfortherealrobot.
+Post-trainingw/NeuralTrajectoriesEvaluations
+Weshowsomepreliminaryresultsofusingneuraltrajectoriesduringpost-trainingfortheRoboCasabenchmark
+forsimulationevaluationandPick-and-Place(seen)andIndustrialforthereal-worldevaluationinFigure9. We
+observethatGR00TN1co-trainedwithneuraltrajectoriesconsistentlyresultsinsubstantialgainscomparedto
+GR00TN1onlytrainedonreal-worldtrajectories: +4.2%,+8.8%,+6.8%onaveragefor30,100,and300
+data-regimes,respectively,forRoboCasaand+5.8%onaverageacrossthe8taskswiththeGR-1Humanoid.
+WhencomparingLAPAandIDMlabelsinRoboCasa,aninterestingpatternemerges: LAPAslightlyoutperforms
+IDMintherelativelylow-dataregime(30),butasmoredatabecomesavailable(100and300),theperformance
+gapbetweenLAPAandIDMwidens. Thistrendisintuitive—withmoredataforIDMtraining,thepseudo-action
+labelsbecomeincreasinglyalignedwithreal-worldactions,leadingtostrongerpositivetransfer. SinceGR-1
+Humanoidisarelatively“high-data”regimeforus,weonlyutilizeIDMactionsforneuraltrajectoryco-training
+intherealworld.
+4.5. Qualitative Results
+Howdoesthisbehaviorlookqualitatively? Toanswerthis,weconsiderthetask“TurnSinkSpout”inRoboCasa
+—inthe100sampleregime,theDPbaselinegets11.8%successratewhereasGR00TN1gets42.2%. The
+DPbaselineoftengetsconfusedaboutthesemanticsofthetasks. FromTable2,weseethatGR00TN1has
+strongresultsinthelow-dataregime. Itisnatural,inthelimitoflargefine-tuningdatasets,thattheeffectof
+pre-trainingdwindles.
+Whenpromptingthepre-trainedGR00TN1modelwiththetaskinstruction“Pickuptheredappleandplaceit
+inthebasket,”oneofthetasksinourpost-trainingbenchmark,weobserveinterestingbehavioralpatterns. In
+thisscenario,weintentionallypositiontheappletotheleftofthehumanoidhand. Despiteseeingfewsimilar
+tasksduringpretrainingandexhibitingjerkiermotions,thepretrainedcheckpointusesitslefthandtograspthe
+apple,handsitovertotherighthand,andthenplacesitintothebasket. Weprovidethevisualizationofthis
+behaviorinFig.11. Incontrast,thepost-trainedcheckpointfailsinthisscenario. Sinceallpost-trainingdata
+exclusivelyinvolvetherighthandwithoutanyinter-handtransfer,thepost-trainedpolicylosesthecapability
+toperformthisbehavior.
+Forpost-trainedGR00TN1,weobservedthat,comparedtothebaselineDiffusionPolicy,itsmotionisgenerally
+much smoother, and its grasping accuracy is significantly higher. In contrast, the Diffusion Policy baseline
+16
+=== Page 17 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+suffersfromimmobilityduringtheinitialframesandfrequentlyexhibitsinaccurategrasping,resultinginalow
+successrateinourreal-worldbenchmarks. WeprovidevisualizationsoftwopolicyrolloutexamplesinFig.12.
+4.6. Limitations
+Currently,ourGR00TN1modelfocusesprimarilyonshort-horizontabletopmanipulationtasks. Infuturework,
+weaimtoextenditscapabilitiestotacklelong-horizonloco-manipulation,whichwillrequireadvancements
+inhumanoidhardware,modelarchitecture,andtrainingcorpora. Weanticipateastrongervision-language
+backbonewillenhancethemodel’sspatialreasoning,languageunderstanding,andadaptability. Oursynthetic
+datagenerationtechniques—leveragingvideogenerationmodelsandautomatedtrajectorysynthesissystems
+— have shown great promise. However, existing methods still face challenges in generating diverse and
+counterfactual data, while adhering to the laws of physics, limiting the quality and variability of synthetic
+datasets. We aim to enhance our synthetic data generation techniques to further enrich our data pyramid
+formodeltraining. Furthermore,weplantoexplorenovelmodelarchitecturesandpre-trainingstrategiesto
+improvetherobustnessandgeneralizationcapabilitiesofourgeneralistrobotmodels.
+5. Related Work
+Foundation Models in Robotics. Developing and using foundation models (Bommasani et al., 2021) for
+roboticshasbeenofgreatinterestrecently. Onecommonapproachistoleverageexistingpre-trainedfoundation
+modelsashigh-levelblack-boxreasoningmodulesinconjunctionwithlow-levelrobot-specificpolicies(Brohan
+etal.,2023;Driessetal.,2023;Huangetal.,2023;Liangetal.,2023;Linetal.,2023;Singhetal.,2023).
+Thisapproachallowstherobottoplansequencesoflow-levelskillsormotionsusingthepre-trainedfoundation
+model. However,itassumestheavailabilityoftheselow-levelpoliciesandasufficientinterfacetoconnectthem
+totheblack-boxfoundationmodels. Analternativeapproachistofinetunepre-trainedfoundationmodelson
+roboticsdatatobuildVision-Language-Action(VLA)models(Blacketal.,2024;Brohanetal.,2022,2023;
+Cheangetal.,2024;Huangetal.,2024;Kimetal.,2024;Lietal.,2023;Wenetal.,2024;Yangetal.,2025;Ye
+etal.,2025;Zhenetal.,2024;Zhengetal.,2025).Insteadofenforcingarigidhierarchybetweenhigh-levelVLM
+planningandlow-levelcontrol,theseVLAmodelsallowforend-to-endoptimizationtowardthedownstream
+deploymenttasks. WetakeasimilarapproachtotrainGR00TN1andusetheEagle-2model(Lietal.,2025)as
+ourbaseVisionLanguageModel(VLM).Wefine-tuneourVLMtogetherwithaflow-matching(Huetal.,2024;
+Lipmanetal.;Liuetal.,2022)actiongenerationmodelwithactionchunking(Zhaoetal.,2023). Incontrast
+topriorVLAmodels(Blacketal.,2024)thatuseamixture-of-expertsarchitecturetobridgethebaseVLM
+modelwiththeactiongenerationmodel,weuseasimplecross-attentionmechanism. Thisapproachprovides
+flexibility regarding the exact architecture of the VLM model and the action generation model we can use.
+Furthermore,weuseembodiment-specificstateandactionprojectormodules,whichsupportdifferentrobot
+embodiments,includinglatent(Yeetal.,2025)andIDM-based(Bakeretal.,2022)actions. Theuseofthese
+projectorsissimilartothoseinOctoModelTeametal.(2024),thoughthatworkdidnotfine-tunetheVLM
+models.
+DatasetsforRobotLearning. Acorechallengeinrobotlearningisthescarcityoflarge-scale,diverse,and
+embodieddatasetsnecessarytotraingeneralistrobots. Onecommonapproachistouserobotteleoperation(Al-
+dacoetal.,2024;Dassetal.,2024;Fuetal.,2024;Iyeretal.;Mandlekaretal.,2018,2019,2020;Wuetal.,
+2023;Zhangetal.,2018;Zhaoetal.,2023),whereahumanusesadevicesuchasasmartphoneorVirtual
+Reality(VR)controller,tocontrolarobottoperformtasksofinterest. Therobotsensorstreamsandrobot
+controlsduringoperationareloggedtoadataset,allowingforhigh-qualitytaskdemonstrationstobecollected.
+Recently, this approach has been scaled by utilizing large teams of human operators and robot fleets over
+extendedperiodsoftime(e.g.,months),resultinginlarge-scalerobotmanipulationdatasetswiththousands
+ofhoursofdemonstrations(AgiBot-World-Contributorsetal.,2025;Blacketal.,2024;Brohanetal.,2022,
+2023;Ebertetal.,2022;Lynchetal.,2023;O’Neilletal.,2024). However,collectingdatathiswayrequires
+extensive cost and human effort. Another line of work, instrumented human demonstrations, uses special
+17
+=== Page 18 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+hardware tocapturerobot-relevantobservation andactiondata withoutexplicitlyteleoperating the target
+robot. Forexample,Chietal.(2024);Seoetal.(2025)usehand-heldrobotgrippers,Fangetal.(2024)usesa
+robot-likeexoskeleton,andKareeretal.(2024)usesspecialglassestocapturehumanhandmotions,which
+are retargeted to robot action data. These approaches tend to result in faster data collection, though they
+haveamismatchwiththedownstreamrobotcomparedtodirectrobotteleoperation. Aseparatelineofwork
+makesuseofhumanvideodatasets(Damenetal.,2018;Goyaletal.,2017;Graumanetal.,2022,2024;Miech
+etal.,2019),whichareplentifulandsubstantiallyeasiertocollectthanon-robotdata,asasourceoftraining
+dataforrobots. Someworks(Karamchetietal.,2023;Nairetal.,2022;Wuetal.,2023)usehumanvideo
+datasetstopre-trainrepresentationsthatarethenusedasafeaturespacefortrainingpoliciesondownstream
+robotdatasets. OtherworksBharadhwajetal.(2024,);Renetal.(2025)trytojointlyusehumanvideodata
+and robot data through intermediate representations for the motions in the video. Ye et al. (2025) shows
+thatpretrainingVLAswithlatentactionsonlyonhumanvideosyieldspositivetransfertodownstreamrobotic
+tasks. Ratherthanrelyingonasingletypeoftrainingdata,wedevelopedtechniquestoeffectivelylearnfroma
+diverseassortmentofreal-worldrobotdata,humanvideodata,andsyntheticdata.
+Synthetic Data Generation in Robotics. Real-world robot data collection requires large amounts of time
+andconsiderablehumancost. Bycontrast,datacollectioninsimulationcanbesubstantiallymoreefficient
+and less painful, making it a compelling alternative. Recently, several works (Dalal et al., 2023; Garrett
+etal.,2024;Guetal.,2023;Haetal.,2023;Jamesetal.,2020;Jiangetal.,2024;Mandlekaretal.,2023;
+Nasirianyetal.,2024;Wangetal.,2024;Yangetal.,2025)haveproposedautomateddatagenerationpipelines
+thatcanleveragesimulationtoproducethousandsoftaskdemonstrationswithminimalhumaneffort. This
+makesiteasytogeneratelarge-scaledatasets;however,utilizingthesedatasetscanbechallengingduetothe
+simulation-to-realitygap.
+Anotherpromisingavenuehasbeenusingneuralgenerativemodelstoaugmentexistingsetsofrobotdemon-
+strations(Chenetal.,2023;Mandietal.,2022;Yuetal.,2023). However,previousworkhavebeenlimitedto
+utilizingin-paintingortext-to-imagediffusionmodelstoaugmentthetrainingdata. Inourwork,weleverage
+therecentadvancementsinvideogenerativemodels(Agarwaletal.,2025;WanTeam,2025)tocreateentire
+neuraltrajectories,atascalethathasneverbeenexploredbefore: ∼300kneuraltrajectorieswhichamountsto
+827hoursofrobottrajectories.
+Inourmodel,wemakeuseoflargesyntheticsimulationdatasetsgeneratedbyMimicGen(Mandlekaretal.,
+2023)andDexMimicGen(Jiangetal.,2024),aswellasneural-generatedvideodatasetswithstate-of-the-art
+videogenerationmodels. Ourwayofco-trainingwithsyntheticallygeneratedandreal-worlddatasetsusfrom
+otherlarge-scaleVLAefforts.
+6. Conclusions
+WehavepresentedGR00TN1,anopenfoundationmodelforgeneralisthumanoidrobots. GR00TN1features
+adual-systemmodeldesign,leveragesheterogeneoustrainingdata,andsupportsmultiplerobotembodiments.
+WesystematicallyevaluateitasageneralistpolicyacrosssimulationbenchmarksandontherealGR-1humanoid
+robot. Ourexperimentsdemonstrateitsstronggeneralizationcapabilities, enablingrobotstolearndiverse
+manipulationskillswithhighdataefficiency. WehopethatouropenGR00T-N1-2Bmodel,alongsideitstraining
+datasetsandsimulationenvironments,willacceleratethecommunity’sprogresstowardbuildinganddeploying
+generallycapablehumanoidrobotsinthewild.
+18
+=== Page 19 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+A. Contributors and Acknowledgments
+A.1. Core Contributors
+ModelTraining
+ScottReed,RuijieZheng,GuanzhiWang,JohanBjorck,JoelJang,AoZhang,JingWang,YinzhenXu,Fengyuan
+Hu,SeonghyeonYe,ZongyuLin,JiannanXiang,LoicMagne,ZhidingYu,ZhiqiLi
+Real-RobotandTeleoperationInfrastructure
+ZhenjiaXu,ZuWang,Xinye(Dennis)Da,FernandoCastañeda,YizhouZhao
+Real-RobotExperiments
+GuanzhiWang,YinzhenXu,JoelJang,YouLiangTan,RuijieZheng
+SimulationInfrastructure
+YuFang,NikitaCherniadev,RunyuDing,SoroushNasiriany,ZhenyuJiang,KevinLin,YuqiXie
+SimulationExperiments
+SoroushNasiriany,ZhenyuJiang,YuqiXie,KevinLin,YuFang,RunyuDing,NikitaCherniadev,JohanBjorck,
+JingWang
+VideoGenerationModelsandLatentActions
+JoelJang,SeonghyeonYe,ZongyuLin,JiannanXiang
+DataInfrastructureandCuration
+FengyuanHu,YinzhenXu,AvnishNarayan,LoicMagne
+ComputeInfrastructureandOpen-Sourcing
+AvnishNarayan,YouLiangTan,KaushilKundalia,FengyuanHu
+ProgramManagementandOperations
+QiWang,LawrenceLao
+ProductLead
+SpencerHuang
+ResearchLeads
+Linxi“Jim”Fan,YukeZhu
+A.2. Contributors
+AjayMandlekar,JanKautz,DieterFox,EdithLlontop,HaoZhang,GuilinLiu
+A.3. Acknowledgments
+Wethankthe1Xteam,includingBerntBørnich,EricJang,JorgeMilburn,DarienSleeper,RalfMayet,Mohi
+Khansari, Austin Wang, Vlad Lialin, George Joseph, and Turing Zelsnack for providing support with their
+humanoid robot hardware and technical support. We thank the Fourier team, including Jie Gu, Roger Cai,
+YuxiangGao,VictorSuen,HengxinChen,andFangzhouShi,forthehardwaresupportandmaintenanceofthe
+FourierGR-1robots.
+WethankMaxFu,ZhengyiLuo,AnnikaBrundyn,AasthaJhunjhunwala,JeffSmith,YunzeMan,GuoChen,
+De-An Huang and Xin Dong for their technical discussion and assistance, and Marco Pavone, Soha Pouya,
+ShiweiSheng,DiZeng,YanChang,ChiragMajithia,JohnWelsh,StephanPleines,JoydeepBiswasfortheir
+feedbackonourpaperdraft.
+19
+=== Page 20 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+We thank Erwin Coumans, Billy Okal, John Welsh, Pulkit Goyal, Stephan Pleines, Vishal Kulkarni, Chirag
+Majithia,DiZeng,YanChang,SohaPouya,WeiLiu,RushaneHua,BenjaminButin,LionelGulich,Lakshmi
+Ramesh,PeterMcaughan,PiyushMedikeriforinternalcodebasereviewandtesting.
+WethankKyleYumen,JeremyChimienti,GiannaCalderon,IsabelZuluaga,JuanZuluaga,IvyTam,Jazmin
+Sanchez,JesseYang,LeileeNaderi,PatrickLee,TriCao,JennaDiamond,AndrewMathau,MarinaDavila,and
+SarahStoddardforworkingwithusonrobotteleoperationdatacollectionandannotation.
+WethankAndrewTao,PadmavathySubramanian,BryanCatanzaroandKariBriskiforthesupportandguidance
+oncommercialVLMtraining,andYaoLu,SeanCha,ZaidPervaizBhat,SubhashreeRadhakrishnan,YilinZhao,
+ParisZhang,RatneshKumar,VidyaMurali,YaoXu,OsvaldNitski,DmitryChichkov,QingMiao,ElenaLantz,
+andJanePolakScowcroftfortheircontributionstothecommercialVLMdatacuration.
+WethankArunShamannaLakshmi,EricColter,RyanLi,TrashaDewan,EthanYu,XutongRen,FernandoLuo,
+fortheOSMOcomputeinfrastructuresupport,ZheZhangfortraininginfrastructuresupport,AlexisBjorlinfor
+computeresourcesupport,AmitGoel,Amit,Sandra,LeelaKarumbunathanforhumanoidrobotecosystem
+support. WethankMing-YuLiu,Yen-ChenLin,JinweiGu,LyneTchapmi,QinshengZhangforCosmostechnical
+support, Madison Huang, Douglas Chang, Kalyan Vadrevu, Oyindamola Omotuyi for marketing support,
+SangeetaSubramanian,ShriSundaram,VishalKulkarniforIsaacproductsupport,andBillDallyandJensen
+Huangfortheirleadership,vision,andguidance.
+B. Detailed Experiment Results
+Table 4 and Table 5 present a detailed per-task comparison of our GR00T-N1-2B and the Diffusion Policy
+baselineacrossoursimulationbenchmarksandreal-worldbenchmarks,respectively. Wetrainbothmodelson
+datasetsofvaryingsizes—30,100,and300demonstrationsforsimulationbenchmarks,and10%andfull
+dataforreal-worldbenchmarks. Asexpected,performanceimprovessteadilyforbothmodelswithincreasing
+datasetsizes. Meanwhile,ourmodelconsistentlyoutperformsthebaselineacrossallbenchmarksanddataset
+sizes,indicatingbettergeneralizationandsampleefficiency.
+100
+80
+60
+40
+20
+0
+30 100 300 30 100 300 30 100 300
+Number of Demos Per Task
+)%(
+etaR
+sseccuS
+Simulation Post-training Performance
+Diffusion Policy
+GR00T-N1-2B
+RoboCasa DexMG 74.2 GR-1
+68.4
+58.5
+49.6 50.0 49.3
+46.9
+43.2 43.2
+40.4
+32.1 32.7
+29.6
+25.6 23.7
+21.3
+17.4 14.7
+Figure10:Averagepolicysuccessrateonsimulatedmanipulationtaskswithvaryingnumbersofdemonstrations.
+C. Additional Qualitative Results
+Weprovidequalitativerolloutexamplesofourpre-trainedandpost-trainedGR00T-N1-2BmodelinFig.11and
+Fig.12. Ourmodeldemonstratesstronglanguagefollowingabilitiesandgeneralizationtounseensituationsin
+bimanualmanipulationtasks.
+20
+=== Page 21 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Task: Pick up red apple and place it into the basket
+Figure11:Pre-trainingQualitativeExample. WhilepromptingthepretrainedGR00T-N1-2Bmodelwitha
+post-trainingtaskinstruction,weevenincreasethedifficultybyplacingtheappletotheleftofbothhands.
+Despitenothavingencounteredthissetupduringtraining,themodelsuccessfullyplacestheredappleintothe
+basketviaatwo-handedhandover,albeitwithjerkiermotion.
+Task: Pick up lemon from cutting board to the basket
+GR00T-N1-2B
+Diffusion Policy
+Task: Pick up cucumber from placemat to the basket
+GR00T-N1-2B
+Diffusion Policy
+Figure 12: Post-training Qualitative Example. (Top) Post-trained GR00T-N1-2B successfully places the
+cucumberintothebasket,whereastheDiffusionPolicyfailsduetoaninaccurategrasp. (Bottom)Thepost-
+trainedmodelsuccessfullypicksthelemonfromthecuttingboardandputsitintothepanwhiletheDiffusion
+Policyremainsstuck.
+D. Hyperparameters
+Wereportimportanthyperparametersusedforthepre-andpost-trainingphasesinTable6. Overall,thesetwo
+phasessharethesamevaluesformostofthehyperparameters. Forpost-training,weusesmallerbatchsizesto
+avoidoverfittingwhenfine-tuningindata-limitedsettings.
+E. System Design
+E.1. Dataset Formats
+OurtrainingcorporabuildupontheLeRobotdatasetformat(Cadeneetal.,2024),awidelyadoptedstandard
+intheopen-sourceroboticscommunity. DevelopedbyHuggingFace,LeRobotaimstolowerthebarriertoentry
+forroboticsresearchbyprovidingastandardizedformatforstoring,sharing,andutilizingrobotdemonstration
+data. Theformathasgainedsignificanttractionduetoitsflexibilityandtheextensivecollectionofpretrained
+modelsanddatasetsavailablethroughtheHuggingFacehub.
+21
+=== Page 22 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Prompt:pick the mug from the counter and place it under the coffee
+machine dispenser, from left, right and wrist view
+Prompt(round 1):pick up the green pepper
+Prompt(round 2): move the green pepper to the bag
+Prompt:pick up eggplant from desk to microwave and close the microwave
+Prompt:pour water into the blue bowl
+Prompt(inpaintedfirstframe):pick up the dog bowl and put the hot glue gun
+inside the dog bowl
+Figure 13: More Examples of Neural Generated Trajectories. We highlight 4 key capabilities of neural
+trajectories: (1)Thefirstthreerowsshowsanexampleofamulti-viewtrajectorygeneratedforthepost-training
+inRoboCasa;weachievethisbyconcatenatingtheviewsasa4-gridvideoduringtraining. (2)Thefollowing
+tworowsshowtwoconsecutivesequences,wheretheinitialframeofthelatterisfromtheendoftheformer,
+highlightingthepossibilityofgeneratingtrajectoriesoftasksrequiringcompositionofatomictasks. (3)The
+followingtworowsillustratethecapabilityofourmodelstogeneratetrajectorieswitharticulatedobjectsand
+liquids,whichareknowntobeverychallenginginsimulation. (4)Thelastrowisgeneratedfromanin-painted
+initial frame, showcasing that we can generate more diverse videos without having to collect novel initial
+framesinthereal-worldandbeboundbyhumanlabor. Weusetheredrectanglestoindicatetheinitialframes.
+22
+=== Page 23 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Atitscore,theLeRobotdatasetformatemploysacombinationofestablishedfileformatsforefficientstorage
+andaccess:
+1. Tabular Data: Robot states, actions, and metadata are stored in parquet files, which offer efficient
+columnar storage and fast data retrieval. This format enables quick filtering and slicing operations
+essentialfortrainingdeeplearningmodels.
+2. Image and Video Data: Visual observations are encoded as MP4 video files (or alternatively as PNG
+imagesequences),withreferencesstoredintheparquetfiles. Thisapproachsignificantlyreducesstorage
+requirementswhilemaintainingdataaccessibility.
+3. Metadata: Datasetstatistics,episodeindices,andothermetadataarestoredinstructuredJSONfiles,
+providingmachine-readableinformationaboutthedataset’scharacteristics.
+Theformatorganizesdemonstrationdataintoepisodes,witheachframecontainingsynchronizedobservation
+and action pairs. Each observation typically includes camera imagery (observation.images.*) and robot
+stateinformation(observation.state),whileactionsrepresentthecontrolcommandssenttotherobot. This
+organizationfacilitatesbothimitationlearning,wheremodelslearntopredictactionsfromobservations,and
+reinforcementlearning,wheremodelslearntooptimizeforspecificoutcomes.
+While the LeRobot format provides a solid foundation, our work with cross-embodiment data necessitated
+additionalstructuretosupportrichermodalityinformationandmoresophisticatedtrainingregimes. Wehave
+extendedtheLeRobotformatwiththefollowingconstraints:
+1. Modalityconfigurationfile: Werequireamodality.jsonconfigurationfileinthemetadirectorythat
+explicitlydefinesthestructureofstateandactionvectors,mappingeachdimensiontoasemanticmeaning
+andprovidesadditionalmodality-specificinformation.
+2. Fine-grained modality specification: Unlike the standard LeRobot format, which treats state and
+actionasmonolithicvectors,ourextensionsplitsthesevectorsintosemanticallymeaningfulfields(e.g.,
+end-effectorposition,orientation,gripperstate),eachwiththeirownmetadataincludingdatatypes,
+ranges,andtransformationspecifications.
+3. Multipleannotationsupport: Weextendtheformattosupportmultipleannotationtypes(e.g.,task
+descriptions,validityflags,successindicators)withinasingledataset,followingtheLeRobotconvention
+ofstoringindicesintheparquetfilewiththeactualcontentinseparateJSONfiles.
+4. Rotationtypespecification: Ourformatexplicitlyspecifiestherepresentationusedforrotationaldata
+(e.g., quaternions, Euler angles, axis-angle), enabling proper handling of rotational transformations
+duringtraining.
+OurextendedformatoffersseveralkeybenefitsfortrainingVLAmodels:
+1. Semanticclarity: Byexplicitlydefiningthestructureandmeaningofeachdimensioninstateandaction
+vectors,ourformatenhancesinterpretabilityandreduceserrorsduringdatapreprocessingandmodel
+training.
+2. Flexibletransformations:Thefine-grainedmodalityspecificationenablessophisticated,field-specificnor-
+malizationandtransformationduringtraining. Forexample,rotationaldatacanbeproperlynormalized
+andaugmentedaccordingtoitsspecificrepresentation.
+3. Multi-modallearningsupport: Theextendedformatnaturallyaccommodatesthediversedatatypes
+requiredforVLAmodels,includingvisualobservations,stateinformation,actioncommands,andlanguage
+annotations,whilemaintainingclearrelationshipsbetweenthesemodalities.
+4. Improveddatavalidation: Theexplicitstructureenablesmorethoroughvalidationofdatasets,reducing
+theriskoftrainingwithmalformedorinconsistentdata.
+5. Enhancedinteroperability: Whileaddingconstraints,ourformatmaintainsbackwardcompatibility
+withtheLeRobotecosystem, allowingustoleverageexistingtoolsanddatasetswhileenablingmore
+sophisticatedmodelingapproaches.
+23
+=== Page 24 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+The extended format strikes a balance between standardization and flexibility, providing a clear structure
+forcommonroboticsdatawhileaccommodatingthespecificneedsofVLAmodels. Thisapproachhasproven
+valuableinourwork,enablingmoreefficienttrainingandimprovedmodelperformancewhilemaintaining
+compatibilitywiththebroaderroboticsresearchcommunity.
+E.2. Standardized Action Spaces
+Fortheabovedatasets,wemakeabest-effortunificationofactionandstatespacestoensureconsistencyacross
+differentembodimentsandcontrolmodalities. Severalkeypracticesareappliedtoachievethisstandardization:
+1. End-effectorrotationstatenormalization: Stateend-effectorrotationsareconvertedtoa6Drotation
+representationtoavoidsingularitiesanddiscontinuitiesintraditionalEulerangles.
+2. End-effectorrotationactionstandardization: End-effectorrotationactionsareexpressedinaxis-angle
+representation,providingacompactandsmoothparameterizationforrotationcontrol.
+3. Stateandactionscaling: Min-maxnormalizationisappliedtojointstates,jointactions,end-effector
+statepositions,andend-effectoractionpositionsandrotations,ensuringuniformvaluerangesacross
+differentrobots.
+4. Consistent ordering: The arrangement of state and action vectors follows a standardized sequence:
+end-effectorrotation,end-effectorposition,andgrippercloseness,orderedfromtheleftarmtotherightarm
+(ifapplicable).
+F. Additional Training Details
+AuxiliaryObjectDetectionLoss
+Toenhancethemodel’sspatialunderstanding,weintroduceanauxiliaryobjectdetectionlossduringtraining.
+Inadditiontopredictingactions,themodelmustalsolocalizetheobjectofinterestbasedonthegivenlanguage
+instruction. Specifically,foreachframeinatrajectorysegment,weannotatetheboundingboxofthetarget
+object using the OWL-v2 object detector (Minderer et al., 2023). We then compute the normalized center
+coordinates of the bounding box, 𝑥 , by dividing its 𝑥 and 𝑦 coordinates by the image width and height,
+𝑔𝑡
+respectively. Topredictthe2Dcoordinates,weappendalinearlayeratopthefinalvision-languageembedding
+tokensandoptimizeusingasquaredloss:𝐿 =‖x −x ‖2. Thus,thefinallossisgivenby:𝐿=𝐿 +𝐿 .
+𝑑𝑒𝑡 𝑝𝑟𝑒𝑑 𝑔𝑡 𝑓𝑚 𝑑𝑒𝑡
+NeuralTrajectoryGeneration
+We finetune WAN2.1-I2V-14B (Wan Team, 2025) using LoRA (Hu et al., 2022) on collected teleoperation
+trajectories. Thetrajectoriesareuniformlydownsampledto81framesat480Presolutionforfinetuning. The
+resultingimage-to-videomodelgeneratesneuraltrajectoriesthatcaptureallpossible“counterfactualscenarios”
+in the real world. To ensure quality, we filter out generated videos that do not accurately follow the given
+language instructions. Specifically, we sample 8 frames from each video and prompt a commercial-grade
+multimodal LLM to assess whether it adheres to the instructions. Videos that fail this criterion undergo
+re-captioning,withthevideosdownsampledto16framesat256Presolutionforthisprocess.
+IDMModelTraining
+We train an inverse dynamics model (IDM) by conditioning on two images (current and the future frame)
+within a trajectory and train to generate action chunks between the two image frames. From preliminary
+experiments,weobservedthataddingstateinformationormoreimageframesdidnotsignificantlyimprove
+theactionpredictionperformanceonthevalidationset. FortheIDMmodelarchitecture,weusetheDiffusion
+Transformermodule(System1)withSigLIP-2visionembeddingsandtrainwithaflow-matchingobjective. We
+traintheIDMmodelforeachembodimentfor30Kor60K,dependingonthesizeofthetrainingset. After
+training,wepseudo-labeltheactionsgiventhetwoimages(withthesameactionhorizonastraining)foreach
+stepoftheneuraltrajectories.
+24
+=== Page 25 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+(Ego4D) Language Annotation: drops the hand dryer in the cabinet with her right hand.
+(EgoeXO-4D) Language Annotation: pours the garlic into the bowl with her right hand.
+(HOI4D) Language Annotation: pick and place stapler.
+(EPIC-KITCHENS) Language Annotation: turn on tap
+(Assembly-101) Language Annotation: attach wheel
+(HoloAssist) Language Annotation: The student inspects the GoPro.
+(RH20T-Human) Language Annotation: Turn the knob to increase the volume of the speaker
+Figure14:HumanEgocentricVideoDatasetSamples. Weusesevenhumanvideodatasetsforpre-training.
+Theimagesaboveshowexamplesfromeachofthesevendatasetswiththeircorrespondinglanguageannotations.
+25
+=== Page 26 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Table4:SimulationEvaluationResultswithModelsTrainedwithDifferentDatasetSizes.
+DiffusionPolicy GR00T-N1-2B
+Task
+30demos 100demos 300demos 30demos 100demos 300demos
+RoboCasaKitchen(24tasks,PnP=Pick-and-Place)
+CloseDoubleDoor 1.7 26.5 60.8 0.0 43.1 74.5
+CloseDrawer 57.5 88.2 94.1 76.9 96.1 99.0
+CloseSingleDoor 21.7 46.1 72.6 49.1 67.7 83.3
+CoffeePressButton 32.5 46.1 91.2 27.8 56.9 85.3
+CoffeeServeMug 6.7 28.4 66.7 3.7 34.3 72.6
+CoffeeSetupMug 0.0 19.6 32.4 0.0 2.0 22.6
+OpenDoubleDoor 0.0 9.8 18.6 0.0 12.8 14.7
+OpenDrawer 15.8 42.2 61.8 9.3 42.2 79.4
+OpenSingleDoor 36.7 42.2 57.8 20.4 54.9 58.8
+PnPfromCabtoCounter 2.5 4.9 9.8 0.9 3.9 19.6
+PnPfromCountertoCab 0.0 2.9 10.8 1.9 6.9 36.3
+PnPfromCountertoMicrowave 0.0 2.0 8.8 0.0 0.0 12.8
+PnPfromCountertoSink 0.0 0.0 13.7 0.0 1.0 9.8
+PnPfromCountertoStove 0.0 1.0 17.7 0.0 0.0 23.5
+PnPfromMicrowavetoCounter 0.0 2.0 11.8 0.0 0.0 15.7
+PnPfromSinktoCounter 4.2 8.8 42.2 0.0 5.9 33.3
+PnPfromStovetoCounter 1.7 2.9 23.5 0.0 0.0 29.4
+TurnOffMicrowave 63.3 53.9 52.0 47.2 57.8 70.6
+TurnOffSinkFaucet 21.7 63.7 72.6 49.1 67.7 72.6
+TurnOffStove 5.0 10.8 19.6 4.6 15.7 26.5
+TurnOnMicrowave 30.0 51.0 75.5 55.6 73.5 78.4
+TurnOnSinkFaucet 31.7 27.5 63.7 33.3 59.8 62.8
+TurnOnStove 12.5 22.6 36.3 14.8 25.5 55.9
+TurnSinkSpout 8.3 11.8 23.5 24.1 42.2 52.9
+RoboCasaAverage 14.7 25.6 43.2 17.4 32.1 49.6
+DexMimicGenCross-EmbodimentSuite(9tasks)
+CanSort 82.8 93.1 99.4 94.8 98.0 98.0
+Coffee 35.5 68.1 79.7 44.9 79.4 73.5
+Pouring 37.0 62.3 68.8 54.4 71.6 87.3
+Threading 4.2 18.3 27.5 3.9 37.3 60.8
+ThreePieceAssembly 10.0 32.5 63.3 10.8 43.1 69.6
+Transport 7.5 25.0 53.3 7.8 48.0 61.8
+BoxCleanup 30.0 80.8 97.5 33.3 29.4 95.1
+DrawerCleanup 1.7 16.7 52.5 10.8 42.2 55.9
+LiftTray 5.0 25.0 73.3 5.8 77.5 65.7
+DexMGAverage 23.7 46.9 68.4 29.6 58.5 74.2
+GR-1Tabletop(24Tasks)
+CuttingBoardtoPot 22.6 37.3 48.0 58.8 57.8 57.8
+CuttingBoardtoBasket 19.6 42.2 29.4 43.1 61.8 56.9
+CuttingBoardtoTieredBasket 13.7 13.7 18.6 13.7 23.5 34.3
+CuttingBoardtoPan 28.4 48.0 57.8 67.7 65.7 68.6
+CuttingBoardtoCardboardBox 11.8 15.7 22.6 31.4 30.4 33.3
+PlacemattoBowl 14.7 18.6 23.5 31.4 39.2 39.2
+PlacemattoPlate 15.7 23.5 37.3 33.3 37.3 49.0
+PlacemattoBasket 15.7 25.5 41.2 50.0 46.1 55.9
+PlacemattoTieredShelf 6.9 5.9 11.8 11.8 21.6 19.6
+PlatetoPan 13.7 17.7 35.3 35.3 48.0 52.9
+PlatetoCardboardBox 12.8 13.7 27.5 34.3 38.2 32.4
+PlatetoBowl 15.7 18.6 31.4 41.2 42.2 34.3
+PlatetoPlate 25.5 39.2 61.8 72.6 85.3 68.6
+TraytoTieredShelf 2.0 6.9 15.7 17.7 27.5 14.7
+TraytoTieredBasket 12.8 34.3 39.2 33.3 49.0 45.1
+TraytoPlate 26.5 41.2 49.0 53.9 68.6 62.8
+TraytoCardboardBox 21.6 37.3 40.2 51.0 55.9 54.9
+TraytoPot 21.6 48.0 52.9 52.0 59.8 65.7
+WinetoCabinet 43.1 55.9 60.8 57.8 53.9 62.8
+PlaceBottletoCabinet 40.2 62.8 60.8 60.8 81.4 74.5
+PlaceMilktoMicrowave 37.3 41.2 51.0 42.2 58.8 49.0
+PotatotoMicrowave 17.7 30.4 41.2 30.4 26.5 34.3
+CuptoDrawer 24.5 32.4 36.3 36.3 44.1 40.2
+CantoDrawer 48.0 74.5 75.5 77.5 76.5 75.5
+GR-1Average 21.3 32.7 40.4 43.2 50.0 49.3
+26
+=== Page 27 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Table5:Successrateonreal-worldtaskswiththeGR-1humanoidrobot.
+DiffusionPolicy GR00T-N1-2B
+Task
+10%Data FullData 10%Data FullData
+TraytoPlate 0.0% 20.0% 40.0% 100.0%
+CuttingBoardtoBasket 0.0% 30.0% 10.0% 100.0%
+CuttingBoardtoPan 0.0% 60.0% 60.0% 80.0%
+PlatetoBowl 0.0% 40.0% 30.0% 100.0%
+PlacemattoBasket 10.0% 60.0% 40.0% 80.0%
+Pick-and-PlaceSeenObjectAverage 2.0% 42.0% 36.0% 92.0%
+TraytoPlate 0.0% 20.0% 30.0% 80.0%
+CuttingBoardtoBasket 10.0% 20.0% 60.0% 60.0%
+CuttingBoardtoPan 0.0% 40.0% 40.0% 80.0%
+PlatetoBowl 0.0% 20.0% 10.0% 40.0%
+PlacemattoBasket 10.0% 50.0% 30.0% 100.0%
+Pick-and-PlaceUnseenObjectAverage 4.0% 30.0% 34.0% 72.0%
+Pick-and-PlaceAverage 3.0% 36.0% 35.0% 82.0%
+WhiteDrawer 6.6% 36.4% 26.4% 79.9%
+DarkCabinet 0.0% 46.2% 86.6% 69.7%
+WoodenChest 36.4% 33.2% 72.9% 63.2%
+ArticulatedAverage 14.3% 38.6% 62.0% 70.9%
+MachineryPacking 20.0% 44.0% 8.0% 56.0%
+MeshCupPouring 0.0% 62.5% 65.0% 67.5%
+CylinderHandover 0.0% 76.5% 20.0% 86.6%
+IndustrialAverage 6.7% 61.0% 31.0% 70.0%
+CoordinationPart1 45.0% 65.0% 70.0% 80.0%
+CoordinationPart2 10.0% 60.0% 30.0% 85.0%
+CoordinationAverage 27.5% 62.5% 50.0% 82.5%
+Average 10.2% 46.4% 42.6% 76.8%
+Table6:Traininghyperparameters. Pre-andpost-trainingusethesamehyperparametersunlessspecified.
+Hyperparameter Pre-trainingValue Post-trainingValue
+Learningrate 1e-4
+Optimizer AdamW
+Adambeta1 0.95
+Adambeta2 0.999
+Adamepsilon 1e-8
+Weightdecay 1e-5
+LRscheduler cosine
+Warmupratio 0.05
+Batchsize 16,384 128or1024
+Gradientsteps 200,000 20,000–60,000
+Backbone’svisionencoder unfrozen
+Backbone’stexttokenizer frozen
+DiT unfrozen
+27
+=== Page 28 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Table7:Pre-trainingDatasetStatistics
+Dataset Length(Frames) Duration(hr) FPS CameraView Category
+GR-1TeleopPre-Training 6.4M 88.4 20 Egocentric Realrobot
+DROID(OXE) 23.1M 428.3 15 Left,Right,Wrist Realrobot
+RT-1(OXE) 3.7M 338.4 3 Egocentric Realrobot
+LanguageTable(OXE) 7.0M 195.7 10 Front-facing Realrobot
+Bridge-v2(OXE) 2.0M 111.1 5 Shoulder,left,right,wrist Realrobot
+MUTEX(OXE) 362K 5.0 20 Wrist Realrobot
+Plex(OXE) 77K 1.1 20 Wrist Realrobot
+RoboSet(OXE) 1.4M 78.9 5 Left,Right,Wrist Realrobot
+Agibot-Alpha 213.8M 1,979.4 30 Egocentric,left,right Realrobot
+RH20T-Robot 4.5M 62.5 20 Wrist Realrobot
+Ego4D 154.4M 2,144.7 20 Egocentric Human
+Ego-Exo4D 8.9M 123.0 30 Egocentric Human
+Assembly-101 1.4M 19.3 20 Egocentric Human
+HOI4D 892K 12.4 20 Egocentric Human
+HoloAssist 12.2M 169.6 20 Egocentric Human
+RH20T-Human 1.2M 16.3 20 Egocentric Human
+EPIC-KITCHENS 2.3M 31.7 20 Egocentric Human
+GR-1SimulationPre-Training 125.5M 1,742.6 20 Egocentric Simulation
+GR-1NeuralVideos 23.8M 827.3 8 Egocentric Neural-generated
+Totalrobotdata 262.3M 3,288.8 – – –
+Totalhumandata 181.3M 2,517.0 – – –
+Totalsimulationdata 125.5M 1,742.6 – – –
+Totalneuraldata 23.8M 827.3 – – –
+Total 592.9M 8,375.7 – – –
+28
+=== Page 29 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+References
+[1] NiketAgarwal,ArslanAli,MaciejBala,YogeshBalaji,ErikBarker,TiffanyCai,PrithvijitChattopadhyay,
+YongxinChen,YinCui,YifanDing,etal. Cosmosworldfoundationmodelplatformforphysicalai. arXiv
+preprintarXiv:2501.03575,2025. 6,18
+[2] AgiBot-World-Contributors et al. AgiBot World Colosseo: A Large-scale Manipulation Platform for
+ScalableandIntelligentEmbodiedSystems. arXivpreprintarXiv:2503.06669,2025. 9,17
+[3] Jean-BaptisteAlayrac,JeffDonahue,PaulineLuc,AntoineMiech,IainBarr,YanaHasson,KarelLenc,
+Arthur Mensch, Katherine Millican, Malcolm Reynolds, Roman Ring, Eliza Rutherford, Serkan Cabi,
+TengdaHan,ZhitaoGong,SinaSamangooei,MarianneMonteiro,JacobLMenick,SebastianBorgeaud,
+AndyBrock,AidaNematzadeh,SahandSharifzadeh,MikołajBińkowski,RicardoBarreira,OriolVinyals,
+AndrewZisserman,andKarénSimonyan. Flamingo: avisuallanguagemodelforfew-shotlearning.
+In S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave, K. Cho, and A. Oh, editors, Advances in Neural
+InformationProcessingSystems,2022. 5
+[4] JorgeAldaco,TravisArmstrong,RobertBaruch,JeffBingham,SankyChan,KennethDraper,Debidatta
+Dwibedi,ChelseaFinn,PeteFlorence,SpencerGoodrich,etal. Aloha2: Anenhancedlow-costhardware
+forbimanualteleoperation. arXivpreprintarXiv:2405.02292,2024. 17
+[5] LoubnaBenAllal,AntonLozhkov,ElieBakouch,GabrielMartínBlázquez,GuilhermePenedo,Lewis
+Tunstall,AndrésMarafioti,HynekKydlíček,AgustínPiqueresLajarín,VaibhavSrivastav,etal. Smollm2:
+Whensmolgoesbig–data-centrictrainingofasmalllanguagemodel. arXivpreprintarXiv:2502.02737,
+2025. 4
+[6] BowenBaker,IlgeAkkaya,PeterZhokov,JoostHuizinga,JieTang,AdrienEcoffet,BrandonHoughton,
+RaulSampedro,andJeffClune. Videopretraining(vpt): Learningtoactbywatchingunlabeledonline
+videos. AdvancesinNeuralInformationProcessingSystems,35:24639–24654,2022. 8,17
+[7] HomangaBharadhwaj,DebidattaDwibedi,AbhinavGupta,ShubhamTulsiani,CarlDoersch,TedXiao,
+Dhruv Shah, Fei Xia, Dorsa Sadigh, and Sean Kirmani. Gen2act: Human video generation in novel
+scenariosenablesgeneralizablerobotmanipulation. arXivpreprintarXiv:2409.16283,2024. 18
+[8] HomangaBharadhwaj,RoozbehMottaghi,AbhinavGupta,andShubhamTulsiani.Track2act:Predicting
+pointtracksfrominternetvideosenablesdiversezero-shotrobotmanipulation. arXive-prints,pages
+arXiv–2405,2024. 18
+[9] HomangaBharadhwaj,JayVakil,MohitSharma,AbhinavGupta,ShubhamTulsiani,andVikashKumar.
+Roboagent: Generalizationandefficiencyinrobotmanipulationviasemanticaugmentationsandaction
+chunking. In2024IEEEInternationalConferenceonRoboticsandAutomation(ICRA),2024. 9
+[10] Kevin Black, Noah Brown, Danny Driess, Adnan Esmail, Michael Equi, Chelsea Finn, Niccolo Fusai,
+LachyGroom,KarolHausman,BrianIchter,etal. 𝜋 : Avision-language-actionflowmodelforgeneral
+0
+robotcontrol. arXivpreprintarXiv:2410.24164,2024. 3,5,17
+[11] RishiBommasani,DrewAHudson,EhsanAdeli,RussAltman,SimranArora,SydneyvonArx,MichaelS
+Bernstein,JeannetteBohg,AntoineBosselut,EmmaBrunskill,etal. Ontheopportunitiesandrisksof
+foundationmodels. arXivpreprintarXiv:2108.07258,2021. 17
+[12] AnthonyBrohan,NoahBrown,JusticeCarbajal,YevgenChebotar,JosephDabis,ChelseaFinn,Keerthana
+Gopalakrishnan, Karol Hausman, Alex Herzog, Jasmine Hsu, Julian Ibarz, Brian Ichter, Alex Irpan,
+TomasJackson,SallyJesmonth,NikhilJoshi,RyanJulian,DmitryKalashnikov,YuhengKuang,Isabel
+Leal,Kuang-HueiLee,SergeyLevine,YaoLu,UtsavMalla,DeekshaManjunath,IgorMordatch,Ofir
+29
+=== Page 30 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Nachum,CarolinaParada,JodilynPeralta,EmilyPerez,KarlPertsch,JornellQuiambao,KanishkaRao,
+MichaelRyoo,GreciaSalazar,PannagSanketi,KevinSayed,JaspiarSingh,SumedhSontakke,Austin
+Stone,ClaytonTan,HuongTran,VincentVanhoucke,SteveVega,QuanVuong,FeiXia,TedXiao,Peng
+Xu,SichunXu,TianheYu,andBriannaZitkovich. Rt-1: Roboticstransformerforreal-worldcontrolat
+scale. InarXivpreprintarXiv:2212.06817,2022. 9,17
+[13] AnthonyBrohan,NoahBrown,JusticeCarbajal,YevgenChebotar,JosephDabis,ChelseaFinn,Keerthana
+Gopalakrishnan,KarolHausman,AlexHerzog,JasmineHsu,etal. Rt-1: Roboticstransformerforreal-
+worldcontrolatscale. arXivpreprintarXiv:2212.06817,2022. 17
+[14] Anthony Brohan, Noah Brown, Justice Carbajal, Yevgen Chebotar, Xi Chen, Krzysztof Choromanski,
+TianliDing,DannyDriess,AvinavaDubey,ChelseaFinn,PeteFlorence,ChuyuanFu,MontseGonzalez
+Arenas, Keerthana Gopalakrishnan, Kehang Han, Karol Hausman, Alex Herzog, Jasmine Hsu, Brian
+Ichter, Alex Irpan, Nikhil Joshi, Ryan Julian, Dmitry Kalashnikov, Yuheng Kuang, Isabel Leal, Lisa
+Lee,Tsang-WeiEdwardLee,SergeyLevine,YaoLu,HenrykMichalewski,IgorMordatch,KarlPertsch,
+KanishkaRao,KristaReymann,MichaelRyoo,GreciaSalazar,PannagSanketi,PierreSermanet,Jaspiar
+Singh, Anikait Singh, Radu Soricut, Huong Tran, Vincent Vanhoucke, Quan Vuong, Ayzaan Wahid,
+StefanWelker,PaulWohlhart,JialinWu,FeiXia,TedXiao,PengXu,SichunXu,TianheYu,andBrianna
+Zitkovich. Rt-2: Vision-language-action models transfer web knowledge to robotic control. In arXiv
+preprintarXiv:2307.15818,2023. 17
+[15] AnthonyBrohan,YevgenChebotar,ChelseaFinn,KarolHausman,AlexanderHerzog,DanielHo,Julian
+Ibarz,AlexIrpan,EricJang,RyanJulian,etal. Doasican,notasisay: Groundinglanguageinrobotic
+affordances. InConferenceonRobotLearning,pages287–318.PMLR,2023. 17
+[16] AnthonyBrohan,YevgenChebotar,ChelseaFinn,KarolHausman,AlexanderHerzog,DanielHo,Julian
+Ibarz,AlexIrpan,EricJang,RyanJulian,etal. Doasican,notasisay: Groundinglanguageinrobotic
+affordances. InConferenceonrobotlearning,pages287–318.PMLR,2023. 17
+[17] TimBrooks,BillPeebles,ConnorHolmes,WillDePue,YufeiGuo,LiJing,DavidSchnurr,JoeTaylor,Troy
+Luhman,EricLuhman,etal. Videogenerationmodelsasworldsimulators.2024. URLhttps://openai.
+com/research/video-generation-models-as-world-simulators,3:1,2024. 6
+[18] RemiCadene,SimonAlibert,AlexanderSoare,QuentinGallouedec,AdilZouitine,andThomasWolf.
+Lerobot: State-of-the-artmachinelearningforreal-worldroboticsinpytorch. https://github.com/
+huggingface/lerobot,2024. 21
+[19] Chi-LamCheang,GuangzengChen,YaJing,TaoKong,HangLi,YifengLi,YuxiaoLiu,HongtaoWu,
+JiafengXu,YichuYang,HanboZhang,andMinzhaoZhu. Gr-2: Agenerativevideo-language-action
+modelwithweb-scaleknowledgeforrobotmanipulation. arXivpreprintarXiv:2410.06158,2024. 17
+[20] ZoeyChen,ShoKiami,AbhishekGupta,andVikashKumar. Genaug: Retargetingbehaviorstounseen
+situationsviagenerativeaugmentation. arXivpreprintarXiv:2302.06671,2023. 18
+[21] ChengChi,ZhenjiaXu,SiyuanFeng,EricCousineau,YilunDu,BenjaminBurchfiel,RussTedrake,and
+ShuranSong. Diffusionpolicy: Visuomotorpolicylearningviaactiondiffusion. TheInternationalJournal
+ofRoboticsResearch,2024. 14
+[22] ChengChi,ZhenjiaXu,ChuerPan,EricCousineau,BenjaminBurchfiel,SiyuanFeng,RussTedrake,and
+ShuranSong. Universalmanipulationinterface: In-the-wildrobotteachingwithoutin-the-wildrobots.
+InProceedingsofRobotics: ScienceandSystems(RSS),2024. 18
+[23] MurtazaDalal,AjayMandlekar,CaelanReedGarrett,AnkurHanda,RuslanSalakhutdinov,andDieter
+Fox. Imitatingtaskandmotionplanningwithvisuomotortransformers. InConferenceonRobotLearning,
+pages2565–2593.PMLR,2023. 18
+30
+=== Page 31 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+[24] Dima Damen, Hazel Doughty, Giovanni Maria Farinella, Sanja Fidler, Antonino Furnari, Evangelos
+Kazakos,DavideMoltisanti,JonathanMunro,TobyPerrett,WillPrice,etal. Scalingegocentricvision:
+Theepic-kitchensdataset. InProceedingsoftheEuropeanconferenceoncomputervision(ECCV),pages
+720–736,2018. 11,18
+[25] Shivin Dass, Wensi Ai, Yuqian Jiang, Samik Singh, Jiaheng Hu, Ruohan Zhang, Peter Stone, Ben
+Abbatematteo,andRobertoMartín-Martín. Telemoma: Amodularandversatileteleoperationsystem
+formobilemanipulation. In2ndWorkshoponMobileManipulationandEmbodiedIntelligenceatICRA
+2024,2024. 17
+[26] Danny Driess, Fei Xia, Mehdi SM Sajjadi, Corey Lynch, Aakanksha Chowdhery, Brian Ichter, Ayzaan
+Wahid,JonathanTompson,QuanVuong,TianheYu,etal. Palm-e: Anembodiedmultimodallanguage
+model. arXivpreprintarXiv:2303.03378,2023. 17
+[27] FrederikEbert,YanlaiYang,KarlSchmeckpeper,BernadetteBucher,GeorgiosGeorgakis,KostasDani-
+ilidis,ChelseaFinn,andSergeyLevine. BridgeData: BoostingGeneralizationofRoboticSkillswith
+Cross-DomainDatasets. InProceedingsofRobotics: ScienceandSystems,NewYorkCity,NY,USA,June
+2022. doi: 10.15607/RSS.2022.XVIII.063. 17
+[28] Hao-ShuFang,HongjieFang,ZhenyuTang,JirongLiu,JunboWang,HaoyiZhu,andCewuLu. Rh20t:
+Aroboticdatasetforlearningdiverseskillsinone-shot. InRSS2023WorkshoponLearningforTaskand
+MotionPlanning,2023. 11
+[29] HongjieFang,Hao-ShuFang,YimingWang,JiejiRen,JingjingChen,RuoZhang,WeimingWang,and
+CewuLu. Airexo: Low-costexoskeletonsforlearningwhole-armmanipulationinthewild. In2024
+IEEEInternationalConferenceonRoboticsandAutomation(ICRA),pages15031–15038.IEEE,2024. 18
+[30] ZipengFu,TonyZZhao,andChelseaFinn. Mobilealoha: Learningbimanualmobilemanipulationwith
+low-costwhole-bodyteleoperation. In2024IEEEInternationalConferenceonRoboticsandAutomation
+(ICRA),2024. 17
+[31] CaelanGarrett,AjayMandlekar,BowenWen,andDieterFox. Skillmimicgen: Automateddemonstration
+generationforefficientskilllearninganddeployment. arXivpreprintarXiv:2410.18907,2024. 18
+[32] RaghavGoyal, SamiraEbrahimiKahou, VincentMichalski, JoannaMaterzynska, SusanneWestphal,
+HeunaKim,ValentinHaenel,IngoFruend,PeterYianilos,MoritzMueller-Freitag,etal. The"something
+something"videodatabaseforlearningandevaluatingvisualcommonsense. InProceedingsoftheIEEE
+internationalconferenceoncomputervision,pages5842–5850,2017. 18
+[33] KristenGrauman,AndrewWestbury,EugeneByrne,ZacharyChavis,AntoninoFurnari,RohitGirdhar,
+JacksonHamburger,HaoJiang,MiaoLiu,XingyuLiu,etal. Ego4d: Aroundtheworldin3,000hoursof
+egocentricvideo. InProceedingsoftheIEEE/CVFconferenceoncomputervisionandpatternrecognition,
+pages18995–19012,2022. 11,18
+[34] KristenGrauman,AndrewWestbury,LorenzoTorresani,KrisKitani,JitendraMalik,TriantafyllosAfouras,
+KumarAshutosh,VijayBaiyya,SiddhantBansal,BikramBoote,etal. Ego-exo4d: Understandingskilled
+humanactivityfromfirst-andthird-personperspectives. InProceedingsoftheIEEE/CVFConferenceon
+ComputerVisionandPatternRecognition,pages19383–19400,2024. 11,18
+[35] Jiayuan Gu, Fanbo Xiang, Xuanlin Li, Zhan Ling, Xiqiang Liu, Tongzhou Mu, Yihe Tang, Stone Tao,
+XinyueWei,YunchaoYao,etal. Maniskill2: Aunifiedbenchmarkforgeneralizablemanipulationskills.
+InTheEleventhInternationalConferenceonLearningRepresentations,2023. 18
+[36] HuyHa,PeteFlorence,andShuranSong. Scalingupanddistillingdown: Language-guidedrobotskill
+acquisition. InConferenceonRobotLearning,pages3766–3777.PMLR,2023. 18
+31
+=== Page 32 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+[37] EdwardJHu,YelongShen,PhillipWallis,ZeyuanAllen-Zhu,YuanzhiLi,SheanWang,LuWang,and
+WeizhuChen. LoRA:Low-rankadaptationoflargelanguagemodels. InInternationalConferenceon
+LearningRepresentations,2022. 24
+[38] Xixi Hu, Bo Liu, Xingchao Liu, and Qiang Liu. Adaflow: Imitation learning with variance-adaptive
+flow-basedpolicies. arXivpreprintarXiv:2402.04292,2024. 17
+[39] JiangyongHuang,SilongYong,XiaojianMa,XiongkunLinghu,PuhaoLi,YanWang,QingLi,Song-Chun
+Zhu,BaoxiongJia,andSiyuanHuang. Anembodiedgeneralistagentin3dworld. InProceedingsofthe
+InternationalConferenceonMachineLearning(ICML),2024. 17
+[40] Wenlong Huang, Fei Xia, Ted Xiao, Harris Chan, Jacky Liang, Pete Florence, Andy Zeng, Jonathan
+Tompson, Igor Mordatch, Yevgen Chebotar, et al. Inner monologue: Embodied reasoning through
+planningwithlanguagemodels. In6thAnnualConferenceonRobotLearning. 17
+[41] WenlongHuang,FeiXia,DhruvShah,DannyDriess,AndyZeng,YaoLu,PeteFlorence,IgorMordatch,
+Sergey Levine, Karol Hausman, et al. Grounded decoding: Guiding text generation with grounded
+modelsforembodiedagents. AdvancesinNeuralInformationProcessingSystems,36:59636–59661,2023.
+17
+[42] AadhithyaIyer,ZhuoranPeng,YinlongDai,IrmakGuzey,SiddhantHaldar,SoumithChintala,andLerrel
+Pinto. Openteach: Aversatileteleoperationsystemforroboticmanipulation. InCoRL2024Workshop
+onMasteringRobotManipulationinaWorldofAbundantData. 17
+[43] StephenJames,ZicongMa,DavidRovickArrojo,andAndrewJDavison. Rlbench: Therobotlearning
+benchmark&learningenvironment. IEEERoboticsandAutomationLetters,5(2):3019–3026,2020. 18
+[44] YunfanJiang, AgrimGupta, ZichenZhang, GuanzhiWang, YongqiangDou,YanjunChen,LiFei-Fei,
+AnimaAnandkumar,YukeZhu,andLinxiFan. Vima: robotmanipulationwithmultimodalprompts. In
+Proceedingsofthe40thInternationalConferenceonMachineLearning,pages14975–15022,2023. 5
+[45] ZhenyuJiang,YuqiXie,KevinLin,ZhenjiaXu,WeikangWan,AjayMandlekar,LinxiFan,andYukeZhu.
+Dexmimicgen: Automateddatagenerationforbimanualdexterousmanipulationviaimitationlearning.
+2024. 6,11,12,18
+[46] DanielKahneman. Thinking,fastandslow. 2011. 2
+[47] SiddharthKaramcheti,SurajNair,AnnieSChen,ThomasKollar,ChelseaFinn,DorsaSadigh,andPercy
+Liang. Language-drivenrepresentationlearningforrobotics. arXivpreprintarXiv:2302.12766,2023. 18
+[48] SimarKareer,DhruvPatel,RyanPunamiya,PranayMathur,ShuoCheng,ChenWang,JudyHoffman,
+andDanfeiXu. EgoMimic: Scalingimitationlearningviaegocentricvideo,2024. 18
+[49] AlexanderKhazatsky,KarlPertsch,SurajNair,AshwinBalakrishna,SudeepDasari,SiddharthKaramcheti,
+SoroushNasiriany,MohanKumarSrirama,LawrenceYunliangChen,KirstyEllis,PeterDavidFagan,
+JoeyHejna,MashaItkina,MarionLepert,YechengJasonMa,PatrickTreeMiller,JimmyWu,Suneel
+Belkhale,ShivinDass,HuyHa,ArhanJain,AbrahamLee,YoungwoonLee,MariusMemmel,Sungjae
+Park,IlijaRadosavovic,KaiyuanWang,AlbertZhan,KevinBlack,ChengChi,KyleBeltranHatch,Shan
+Lin,JingpeiLu,JeanMercat,AbdulRehman,PannagRSanketi,ArchitSharma,CodySimpson,Quan
+Vuong,HomerRichWalke,BlakeWulfe,TedXiao,JonathanHeewonYang,ArefehYavary,TonyZ.Zhao,
+Christopher Agia, Rohan Baijal, Mateo Guaman Castro, Daphne Chen, Qiuyu Chen, Trinity Chung,
+JaimynDrake,EthanPaulFoster,JensenGao,DavidAntonioHerrera,MinhoHeo,KyleHsu,Jiaheng
+Hu,DonovonJackson,CharlotteLe,YunshuangLi,KevinLin,RoyLin,ZehanMa,AbhiramMaddukuri,
+SuvirMirchandani,DanielMorton,TonyNguyen,AbigailO’Neill,RosarioScalise,DerickSeale,Victor
+32
+=== Page 33 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+Son,StephenTian,EmiTran,AndrewE.Wang,YilinWu,AnnieXie,JingyunYang,PatrickYin,Yunchu
+Zhang,OsbertBastani,GlenBerseth,JeannetteBohg,KenGoldberg,AbhinavGupta,AbhishekGupta,
+DineshJayaraman,JosephJLim,JitendraMalik,RobertoMartín-Martín,SubramanianRamamoorthy,
+DorsaSadigh,ShuranSong,JiajunWu,MichaelC.Yip,YukeZhu,ThomasKollar,SergeyLevine,and
+ChelseaFinn. Droid: Alarge-scalein-the-wildrobotmanipulationdataset. 2024. 9
+[50] Moo Jin Kim, Karl Pertsch, Siddharth Karamcheti, Ted Xiao, Ashwin Balakrishna, Suraj Nair, Rafael
+Rafailov,EthanFoster,GraceLam,PannagSanketi,QuanVuong,ThomasKollar,BenjaminBurchfiel,
+RussTedrake,DorsaSadigh,SergeyLevine,PercyLiang,andChelseaFinn. Openvla: Anopen-source
+vision-language-actionmodel. arXivpreprintarXiv:2406.09246,2024. 17
+[51] XinghangLi,MinghuanLiu,HanboZhang,CunjunYu,JieXu,HongtaoWu,ChilamCheang,YaJing,
+WeinanZhang,HuapingLiu,etal. Vision-languagefoundationmodelsaseffectiverobotimitators. arXiv
+preprintarXiv:2311.01378,2023. 17
+[52] Zhiqi Li, Guo Chen, Shilong Liu, Shihao Wang, Vibashan VS, Yishen Ji, Shiyi Lan, Hao Zhang, Yilin
+Zhao,SubhashreeRadhakrishnan,etal. Eagle2: Buildingpost-trainingdatastrategiesfromscratchfor
+frontiervision-languagemodels. arXivpreprintarXiv:2501.14818,2025. 3,4,17
+[53] JackyLiang,WenlongHuang,FeiXia,PengXu,KarolHausman,BrianIchter,PeteFlorence,andAndy
+Zeng. Codeaspolicies: Languagemodelprogramsforembodiedcontrol. In2023IEEEInternational
+ConferenceonRoboticsandAutomation(ICRA),pages9493–9500.IEEE,2023. 17
+[54] KevinLin,ChristopherAgia,TokiMigimatsu,MarcoPavone,andJeannetteBohg. Text2motion: from
+naturallanguageinstructionstofeasibleplans. AutonomousRobots,2023. 17
+[55] Zongyu Lin, Wei Liu, Chen Chen, Jiasen Lu, Wenze Hu, Tsu-Jui Fu, Jesse Allardice, Zhengfeng Lai,
+LiangchenSong,BowenZhang,etal. Stiv: Scalabletextandimageconditionedvideogeneration. arXiv
+preprintarXiv:2412.07730,2024. 6
+[56] YaronLipman,RickyTQChen,HeliBen-Hamu,MaximilianNickel,andMatthewLe. Flowmatchingfor
+generativemodeling. InTheEleventhInternationalConferenceonLearningRepresentations. 3,17
+[57] XingchaoLiu,ChengyueGong,andQiangLiu. Flowstraightandfast: Learningtogenerateandtransfer
+datawithrectifiedflow. arXivpreprintarXiv:2209.03003,2022. 17
+[58] Yunze Liu, Yun Liu, Che Jiang, Kangbo Lyu, Weikang Wan, Hao Shen, Boqiang Liang, Zhoujie Fu,
+He Wang, and Li Yi. Hoi4d: A 4d egocentric dataset for category-level human-object interaction.
+InProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),pages
+21013–21022,June2022. 11
+[59] Corey Lynch, Ayzaan Wahid, Jonathan Tompson, Tianli Ding, James Betker, Robert Baruch, Travis
+Armstrong,andPeteFlorence. Interactivelanguage: Talkingtorobotsinrealtime,2022. 9
+[60] Corey Lynch, Ayzaan Wahid, Jonathan Tompson, Tianli Ding, James Betker, Robert Baruch, Travis
+Armstrong,andPeteFlorence. Interactivelanguage: Talkingtorobotsinrealtime. IEEERoboticsand
+AutomationLetters,2023. 17
+[61] ZhaoMandi,HomangaBharadhwaj,VincentMoens,ShuranSong,AravindRajeswaran,andVikash
+Kumar. Cacti: Aframeworkforscalablemulti-taskmulti-scenevisualimitationlearning. arXivpreprint
+arXiv:2212.05711,2022. 18
+[62] AjayMandlekar,YukeZhu,AnimeshGarg,JonathanBooher,MaxSpero,AlbertTung,JulianGao,John
+Emmons, Anchit Gupta, Emre Orbay, Silvio Savarese, and Li Fei-Fei. RoboTurk: A Crowdsourcing
+PlatformforRoboticSkillLearningthroughImitation. InConferenceonRobotLearning,2018. 17
+33
+=== Page 34 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+[63] AjayMandlekar,JonathanBooher,MaxSpero,AlbertTung,AnchitGupta,YukeZhu,AnimeshGarg,
+SilvioSavarese,andLiFei-Fei. Scalingrobotsupervisiontohundredsofhourswithroboturk: Robotic
+manipulationdatasetthroughhumanreasoninganddexterity.In2019IEEE/RSJInternationalConference
+onIntelligentRobotsandSystems(IROS),pages1048–1055.IEEE,2019. 17
+[64] AjayMandlekar,DanfeiXu,RobertoMartín-Martín,YukeZhu,LiFei-Fei,andSilvioSavarese. Human-
+in-the-loop imitation learning using remote teleoperation. arXiv preprint arXiv:2012.06733, 2020.
+17
+[65] AjayMandlekar,DanfeiXu,JosiahWong,SoroushNasiriany,ChenWang,RohunKulkarni,LiFei-Fei,
+SilvioSavarese,YukeZhu,andRobertoMartín-Martín. Whatmattersinlearningfromofflinehuman
+demonstrationsforrobotmanipulation. InConferenceonRobotLearning(CoRL),2021. 14
+[66] Ajay Mandlekar, Soroush Nasiriany, Bowen Wen, Iretiayo Akinola, Yashraj Narang, Linxi Fan, Yuke
+Zhu, and Dieter Fox. Mimicgen: A data generation system for scalable robot learning using human
+demonstrations. InConferenceonRobotLearning,2023. 6,12,18
+[67] AntoineMiech,DimitriZhukov,Jean-BaptisteAlayrac,MakarandTapaswi,IvanLaptev,andJosefSivic.
+Howto100m: Learningatext-videoembeddingbywatchinghundredmillionnarratedvideoclips. In
+ProceedingsoftheIEEE/CVFinternationalconferenceoncomputervision,pages2630–2640,2019. 18
+[68] MatthiasMinderer,AlexeyA.Gritsenko,andNeilHoulsby. Scalingopen-vocabularyobjectdetection. In
+Thirty-seventhConferenceonNeuralInformationProcessingSystems,2023. 24
+[69] PhilippMoritz,RobertNishihara,StephanieWang,AlexeyTumanov,RichardLiaw,EricLiang,Melih
+Elibol,ZonghengYang,WilliamPaul,MichaelIJordan,etal. Ray: Adistributedframeworkforemerging
+{AI}applications. In13thUSENIXsymposiumonoperatingsystemsdesignandimplementation(OSDI
+18),pages561–577,2018. 8
+[70] SurajNair,AravindRajeswaran,VikashKumar,ChelseaFinn,andAbhinavGupta. R3m: Auniversal
+visualrepresentationforrobotmanipulation. arXivpreprintarXiv:2203.12601,2022. 18
+[71] SoroushNasiriany,AbhiramMaddukuri,LanceZhang,AdeetParikh,AaronLo,AbhishekJoshi,Ajay
+Mandlekar,andYukeZhu. Robocasa: Large-scalesimulationofeverydaytasksforgeneralistrobots. In
+Robotics: ScienceandSystems(RSS),2024. 10,11,12,14,18
+[72] NVIDIA. Osmoplatform,2025. URLhttps://developer.nvidia.com/osmo. Accessed: 2025-03-12. 8
+[73] OctoModelTeam,DibyaGhosh,HomerWalke,KarlPertsch,KevinBlack,OierMees,SudeepDasari,
+JoeyHejna,CharlesXu,JianlanLuo,TobiasKreiman,YouLiangTan,LawrenceYunliangChen,Pannag
+Sanketi,QuanVuong,TedXiao,DorsaSadigh,ChelseaFinn,andSergeyLevine. Octo: Anopen-source
+generalistrobotpolicy. InProceedingsofRobotics: ScienceandSystems,Delft,Netherlands,2024. 17
+[74] Open X-Embodiment Collaboration et al. Open X-Embodiment: Robotic learning datasets and RT-X
+models. InternationalConferenceonRoboticsandAutomation,2024. 1,9
+[75] AbbyO’Neill,AbdulRehman,AbhiramMaddukuri,AbhishekGupta,AbhishekPadalkar,AbrahamLee,
+AcornPooley,AgrimGupta,AjayMandlekar,AjinkyaJain,etal. Openx-embodiment: Roboticlearning
+datasetsandrt-xmodels: Openx-embodimentcollaboration0. In2024IEEEInternationalConference
+onRoboticsandAutomation(ICRA),2024. 17
+[76] WilliamPeeblesandSainingXie. Scalablediffusionmodelswithtransformers. InProceedingsofthe
+IEEE/CVFinternationalconferenceoncomputervision,pages4195–4205,2023. 4
+34
+=== Page 35 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+[77] Juntao Ren, Priya Sundaresan, Dorsa Sadigh, Sanjiban Choudhury, and Jeannette Bohg. Motion
+tracks: Aunifiedrepresentationforhuman-robottransferinfew-shotimitationlearning. arXivpreprint
+arXiv:2501.06994,2025. 18
+[78] ZhongweiRen,YunchaoWei,XunGuo,YaoZhao,BingyiKang,JiashiFeng,andXiaojieJin. Videoworld:
+Exploringknowledgelearningfromunlabeledvideos. arXivpreprintarXiv:2501.09781,2025. 6
+[79] F. Sener, D. Chatterjee, D. Shelepov, K. He, D. Singhania, R. Wang, and A. Yao. Assembly101: A
+large-scalemulti-viewvideodatasetforunderstandingproceduralactivities. CVPR2022,2022. 11
+[80] Mingyo Seo, H. Andy Park, Shenli Yuan, Yuke Zhu, , and Luis Sentis. Legato: Cross-embodiment
+imitationusingagraspingtool. IEEERoboticsandAutomationLetters(RA-L),2025. 18
+[81] RutavShah,RobertoMartín-Martín,andYukeZhu. Mutex: Learningunifiedpoliciesfrommultimodal
+taskspecifications. In7thAnnualConferenceonRobotLearning,2023. 9
+[82] Wenzhe Shi, Jose Caballero, Ferenc Huszár, Johannes Totz, Andrew P Aitken, Rob Bishop, Daniel
+Rueckert,andZehanWang. Real-timesingleimageandvideosuper-resolutionusinganefficientsub-
+pixelconvolutionalneuralnetwork. InProceedingsoftheIEEEconferenceoncomputervisionandpattern
+recognition,2016. 4
+[83] IshikaSingh,ValtsBlukis,ArsalanMousavian,AnkitGoyal,DanfeiXu,JonathanTremblay,DieterFox,
+Jesse Thomason, and Animesh Garg. Progprompt: Generating situated robot task plans using large
+languagemodels. In2023IEEEInternationalConferenceonRoboticsandAutomation(ICRA),2023. 17
+[84] GarrettThomas,Ching-AnCheng,RickyLoynd,FelipeVieiraFrujeri,VibhavVineet,MihaiJalobeanu,
+andAndreyKolobov. Plex: Makingthemostoftheavailabledataforroboticmanipulationpretraining.
+InCoRL,2023. 9
+[85] MichaelTschannen,AlexeyGritsenko,XiaoWang,MuhammadFerjadNaeem,IbrahimAlabdulmohsin,
+Nikhil Parthasarathy, Talfan Evans, Lucas Beyer, Ye Xia, Basil Mustafa, et al. SigLIP 2: Multilingual
+vision-languageencoderswithimprovedsemanticunderstanding,localization,anddensefeatures. arXiv
+preprintarXiv:2502.14786,2025. 4
+[86] HomerWalke,KevinBlack,AbrahamLee,MooJinKim,MaxDu,ChongyiZheng,TonyZhao,Philippe
+Hansen-Estruch,QuanVuong,AndreHe,VivekMyers,KuanFang,ChelseaFinn,andSergeyLevine.
+Bridgedatav2: Adatasetforrobotlearningatscale. InConferenceonRobotLearning(CoRL),2023. 9
+[87] WanTeam. Wan: Openandadvancedlarge-scalevideogenerativemodels. 2025. 6,18,24
+[88] XinWang,TaeinKwon,MahdiRad,BowenPan,IshaniChakraborty,SeanAndrist,DanBohus,Ashley
+Feniello,BugraTekin,FelipeVieiraFrujeri,NeelJoshi,andMarcPollefeys. Holoassist: anegocentric
+humaninteractiondatasetforinteractiveaiassistantsintherealworld. InProceedingsoftheIEEE/CVF
+InternationalConferenceonComputerVision(ICCV),2023. 11
+[89] Yufei Wang, Zhou Xian, Feng Chen, Tsun-Hsuan Wang, Yian Wang, Katerina Fragkiadaki, Zackory
+Erickson,DavidHeld,andChuangGan. Robogen: Towardsunleashinginfinitedataforautomatedrobot
+learningviagenerativesimulation. InInternationalConferenceonMachineLearning,2024. 6,18
+[90] Junjie Wen, Yichen Zhu, Jinming Li, Minjie Zhu, Kun Wu, Zhiyuan Xu, Ran Cheng, Chaomin Shen,
+YaxinPeng,FeifeiFeng,etal. Tinyvla: Towardsfast,data-efficientvision-language-actionmodelsfor
+roboticmanipulation. arXivpreprintarXiv:2409.12514,2024. 17
+[91] HongtaoWu,YaJing,ChilamCheang,GuangzengChen,JiafengXu,XinghangLi,MinghuanLiu,Hang
+Li,andTaoKong. Unleashinglarge-scalevideogenerativepre-trainingforvisualrobotmanipulation.
+arXivpreprintarXiv:2312.13139,2023. 18
+35
+=== Page 36 ===
+GR00TN1:AnOpenFoundationModelforGeneralistHumanoidRobots
+[92] PhilippWu,YideShentu,ZhongkeYi,XingyuLin,andPieterAbbeel. Gello: Ageneral,low-cost,and
+intuitiveteleoperationframeworkforrobotmanipulators,2023. 17
+[93] Jiannan Xiang, Guangyi Liu, Yi Gu, Qiyue Gao, Yuting Ning, Yuheng Zha, Zeyu Feng, Tianhua Tao,
+ShiboHao,YeminShi,etal. Pandora: Towardsgeneralworldmodelwithnaturallanguageactionsand
+videostates. arXivpreprintarXiv:2406.09455,2024. 6
+[94] JianweiYang,ReubenTan,QianhuiWu,RuijieZheng,BaolinPeng,YongyuanLiang,YuGu,MuCai,
+SeonghyeonYe,JoelJang,YuquanDeng,LarsLiden,andJianfengGao. Magma: Afoundationmodel
+formultimodalAIagents,2025. 17
+[95] LujieYang,HJSuh,TongZhao,BernhardPausGraesdal,TarikKelestemur,JiuguangWang,TaoPang,and
+RussTedrake. Physics-drivendatagenerationforcontact-richmanipulationviatrajectoryoptimization.
+arXivpreprintarXiv:2502.20382,2025. 18
+[96] ZhuoyiYang,JiayanTeng,WendiZheng,MingDing,ShiyuHuang,JiazhengXu,YuanmingYang,Wenyi
+Hong,XiaohanZhang,GuanyuFeng,etal. Cogvideox: Text-to-videodiffusionmodelswithanexpert
+transformer. arXivpreprintarXiv:2408.06072,2024. 6
+[97] SeonghyeonYe,JoelJang,ByeonggukJeon,SeJuneJoo,JianweiYang,BaolinPeng,AjayMandlekar,
+Reuben Tan, Yu-Wei Chao, Bill Yuchen Lin, Lars Liden, Kimin Lee, Jianfeng Gao, Luke Zettlemoyer,
+DieterFox,andMinjoonSeo. Latentactionpretrainingfromvideos. InTheThirteenthInternational
+ConferenceonLearningRepresentations,2025. 2,5,17,18
+[98] Tianhe Yu, Ted Xiao, Austin Stone, Jonathan Tompson, Anthony Brohan, Su Wang, Jaspiar Singh,
+Clayton Tan, Jodilyn Peralta, Brian Ichter, et al. Scaling robot learning with semantically imagined
+experience. arXivpreprintarXiv:2302.11550,2023. 18
+[99] KevinZakka. Mink: PythoninversekinematicsbasedonMuJoCo,July2024. URLhttps://github.
+com/kevinzakka/mink. 10
+[100] TianhaoZhang,ZoeMcCarthy,OwenJow,DennisLee,KenGoldberg,andPieterAbbeel. Deepimitation
+learningforcomplexmanipulationtasksfromvirtualrealityteleoperation. In2018IEEEInternational
+ConferenceonRoboticsandAutomation(ICRA),2018. 17
+[101] Tony Z. Zhao, Vikash Kumar, Sergey Levine, and Chelsea Finn. Learning Fine-Grained Bimanual
+ManipulationwithLow-CostHardware. InProceedingsofRobotics: ScienceandSystems,2023. 4,17
+[102] HaoyuZhen,XiaowenQiu,PeihaoChen,JinchengYang,XinYan,YilunDu,YiningHong,andChuang
+Gan. 3d-vla: 3dvision-language-actiongenerativeworldmodel. arXivpreprintarXiv:2403.09631,2024.
+17
+[103] RuijieZheng,YongyuanLiang,ShuaiyiHuang,JianfengGao,HalDauméIII,AndreyKolobov,Furong
+Huang,andJianweiYang. TraceVLA:Visualtracepromptingenhancesspatial-temporalawarenessfor
+generalistroboticpolicies. InTheThirteenthInternationalConferenceonLearningRepresentations,2025.
+17
+36

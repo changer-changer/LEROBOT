@@ -1,0 +1,654 @@
+=== Page 1 ===
+ViViDex: Learning Vision-based Dexterous Manipulation
+from Human Videos
+Zerui Chen1, Shizhe Chen1, Etienne Arlaud1, Ivan Laptev2 and Cordelia Schmid1
+Abstract—Inthiswork,weaimtolearnaunifiedvision-based As human videos capturing hands manipulating ob-
+policy for multi-fingered robot hands to manipulate a variety of jects [22], [23] are abundant and easy to acquire, there is a
+objectsindiverseposes.Thoughpriorworkhasshownbenefitsof
+growing trend in robotics research to utilize human video
+usinghumanvideosforpolicylearning,performancegainshave
+demonstrationsforlearningdexterousmanipulationskills[24],
+been limited by the noise in estimated trajectories. Moreover,
+reliance on privileged object information such as ground-truth [25], [26], [27], [28]. For example, DexMV [24] proposes to
+objectstatesfurtherlimitstheapplicabilityinrealisticscenarios. extract robot and object poses from human videos, and then
+To address these limitations, we propose a new framework employs the data to accelerate RL training via demonstration
+ViViDex to improve vision-based policy learning from human
+augmented policy gradient [16]. However, since the extracted
+videos.Itfirstusesreinforcementlearningwithtrajectoryguided
+robot and object poses are noisy, the method needs hundreds
+rewards to train state-based policies for each video, obtaining
+both visually natural and physically plausible trajectories from of human videos to learn the manipulation of a single object
+the video. We then rollout successful episodes from state-based andrequiresrewardengineeringfordifferenttasks.Moreover,
+policies and train a unified visual policy without using any existing methods [24], [26], [29] often leverage privileged
+privileged information. We propose coordinate transformation informationofobjectsinpolicylearningsuchasground-truth
+to further enhance the visual point cloud representation, and
+object CAD models and object poses, which are non-trivial
+compare behavior cloning and diffusion policy for the visual
+policy training. Experiments both in simulation and on the to obtain from visual sensor data in real-world scenarios.
+real robot demonstrate that ViViDex outperforms state-of-the- In this work, we propose ViViDex, a new framework
+art approaches on three dexterous manipulation tasks. Project making use of human Videos for Vision-based Dexterous
+website: zerchen.github.io/projects/vividex.html
+manipulation.ViViDexconsistsofthreemodulesasillustrated
+inFigure1.Wefirstobtainhumanhandandobjecttrajectories
+from video demonstrations [24]. Though such trajectories are
+I. INTRODUCTION
+noisy and not directly usable for robot control, they provide
+People possess a remarkable ability to manipulate objects examples of natural hand-object interactions. Our second
+effortlessly with their hands, guided by visual perception. De- module then refines the reference trajectories to be physically
+spite significant progress, replicating the dexterity of human plausible. We train a state-based policy with RL for each
+handswithmulti-fingeredrobothandsremainschallenging[1], reference trajectory. A novel trajectory-guided reward is pro-
+[2], [3], [4], [5]. This is largely due to the complexity of posedtokeepposesimilarityinthereferencetrajectorywhile
+translating visual signals into the high-dimensional control solving the task. We also augment trajectories during training
+commands required for dexterous manipulation. to generalize to a broader range of object poses beyond the
+Recent developments in deep learning (DL) [6] and pose in the reference trajectory. Finally, we rollout episodes
+reinforcement learning (RL) [7], [8] have enabled signif- from optimized state-based policies and distill successful
+icant progress in learning-based algorithms for dexterous episodes to a unified vision-based policy using no privileged
+manipulation such as in-hand rotation [9], [10], [11], solv- object information. To this end, we propose to improve
+ing Rubik’s cube [12] and playing the piano [13], [14]. visual representation by transforming input 3D point clouds
+However, it proves challenging to train RL policies as RL into hand-centered coordinate systems. We evaluate ViViDex
+training heavily relies on intricate reward engineering [8] on three dexterous manipulation tasks relocation, pour and
+and extensive computational resources [12]. Furthermore, placing inside in simulation and demonstrate significant
+unnatural behaviors with high rewards can emerge from improvements over the state-of-the-art DexMV [24] while
+RL training [15]. To address the limitations of RL, some using significantly less human demonstrations. Our visual
+previous works [16], [17], [18], [19], [20], [21] have turned policy also achieves good performance both in simulation
+to imitation learning using robot demonstrations collected and on a real robot for both seen and unseen objects.
+by teleoperation. While these approaches enhance training To summarize, our contributions are three-fold:
+efficiency, they demand substantial human efforts to collect • We introduce a new framework ViViDex to learn vision-
+diverse robot demonstrations and are, hence, difficult to scale. based dexterous manipulation policy from human videos.
+• We improve the RL rewards for the state-based policy
+1Inria,E´colenormalesupe´rieure,CNRS,PSLResearchUniversity,75005,
+by imitating trajectories extracted from human videos and
+Paris,France.{firstname.lastname}@inria.fr
+proposeanovelmodelarchitectureforthevision-basedpolicy.
+2MohamedbinZayedUniversityofArtificialIntelligence,AbuDhabi,United
+ArabEmirates.{firstname.lastname}@mbzuai.ac.ae • Extensive simulation and real robot experiments demon-
+5202
+raM
+1
+]VC.sc[
+3v90751.4042:viXra
+=== Page 2 ===
+Reference trajectory extraction Trajectory guided state-based policy learning
+State-based
+policy
+Pose
+estimation State-based
+from policy human ...
+videos
+State-based
+policy
+Human videos Reference trajectories
+...
+Unified vision-based policy learning
+Motion
+retargeting
+& data
+Trajectory guided
+reward
+function
+Physically plausible trajectories
+...
+...
+Visual 22 dim.
+policy control ... preds.
+3D point clouds under
+different coordinate systems
+...
+Robot proprioceptive states
+...
+Fig. 1: The overall framework of our method for learning dexterous manipulation skills from human videos. It consists of
+three steps: extraction of reference trajectories from human videos, trajectory-guided state-based policy learning using RL,
+and vision-based policy learning using either the behavior cloning or the 3D diffusion policy.
+strate the effectiveness of our proposed ViViDex approach. line of works [66], [67], [68] focuses on learning reward
+functions from human videos. Chen et al. [66] introduce
+II. RELATEDWORK DVD, a domain-agnostic video discriminator, to learn multi-
+task reward functions. Alakuijala et al. [67] propose a task-
+Dexterousmanipulation.Multi-fingeredrobotichandsenable
+agnostic reward function by using unlabeled human videos.
+robotstoperformdelicatemanipulationoperationsonobjects.
+Some other works [24], [25], [26], [27], [69] explore how
+Previousworkaddresseddexterousmanipulationbytrajectory
+to explicitly leverage human videos to facilitate learning
+optimization [30], [31], [32], [33], [34], [35], [36] and data-
+dexterous manipulation skills. Mandikal et al. [25], [69]
+driven learning methods [16], [24], [25], [29], [37], [38],
+propose to utilize object affordances priors and human
+[39], [40], [41], [42], [43]. Trajectory optimization methods
+grasping priors to improve the dexterous grasping policy.
+usually require well-defined dynamic models for the robot
+DexMV [24] and DexRepNet [26] extract demonstrations
+and the manipulated object, which are sometimes hard to
+data from human videos and use DAPG algorithm [16] to
+obtain in practice. Data-driven methods instead directly train
+launch the RL training with demonstrations. PGDM [28]
+neuralpoliciesgivenrobotdata.Mostoftheworks[44],[45],
+proposes to initialize the robot hand configuration at the
+[16], [29], [38], [46], [47], [48] use RL algorithms to train
+given pre-grasp derived from human motions and enable
+policies.Nagabandietal.[47]andHansenetal.[48]propose
+efficient RL training. Compared to prior work [24], [26], our
+to improve the sample efficiency in RL by jointly learning
+method allows to solve more complex manipulation tasks
+the dynamic model and the control policy. To accelerate
+with fewer videos by using a unified trajectory guided reward
+the convergence of RL, Rajeswaran et al. [16] introduce
+learned from videos and automatic trajectory augmentation.
+demonstration augmented policy gradients (DAPG) and train
+RLwithexpertdemonstrations.Insteadofmanuallycollecting III. METHOD
+expert demonstrations, ILAD [29] derives demonstration data
+This work aims to train vision-based dexterous manipula-
+viaanaffordancemodel[49]andtrajectoryoptimization[50].
+tion policies. However, jointly learning the visual represen-
+Xu et al. [38] and Wan et al. [46] decompose the dexterous
+tation and the control policy is challenging. Therefore, we
+grasping into two sub-tasks: the grasp proposal generation
+first train the state-based policy and then distill the learned
+and the goal-conditioned policy training and largely improve
+policytoavision-basedpolicy.Totrainthestate-basedpolicy,
+the generalization of the learned policy. However, RL is data-
+as the pure RL training is ineffective [24], [26], [29], we
+inefficient, requires well-designed rewards, and often results
+extract reference trajectories from human videos and propose
+in unrealistic object manipulation. In this work, we leverage
+trajectory-guided RL to improve the performance. In the
+human videos to improve RL training of state-based policies
+following, we first present the reference trajectory generation
+and then train a unified visual policy that enables object
+in Section III-A. Then, we introduce our state-based policy
+manipulation given 3D point cloud inputs.
+learning algorithm in Section III-B. Finally, we describe the
+Learningroboticmanipulationfromhumanvideos.Human visual policy and its training in Section III-C.
+videos naturally provide rich human hands interactions with
+A. Reference Trajectory Extraction
+diverse objects [51], [52], [53], [54], [55]. Equipping robots
+with the capacity to acquire manipulation skills by simply To guide our policy training, we extract hand and object
+watching human videos has been an attractive direction [56], poses from video demonstrations. The poses and shapes
+[57],[58],[59],[60].Onelineofworks[37],[61],[62],[63], of hands are represented by MANO [70] and result in 3D
+[64] aims to learn generic visual representations from large- locations of joints ψ ∈R21×3. To account for differences
+h
+scale human video data [65] and then makes use of such in geometry, we retarget the human hand pose to the robot
+pre-trained representations to learn control policies. Another hand pose. Following [24], [71], [72], we formulate the hand
+=== Page 3 ===
+Mustard Bottle Tomato Soup Can Sugar Box Large Clamp Mug
+When the robot successfully reaches its pre-grasp con-
+figuration, the episode starts its manipulation stage. In this
+stage, the robot aims to manipulate the object and bring it to
+the desired target configuration. Here, we define the reward
+function to constrain the robot and object motions jointly:
+(cid:88)
+Tr
+R m = λ 1 R m h +λ 2 R m o +λ 3 1 cont +λ 4 1 lift , (3)
+t=Tp+1
+where T is the length of the reference trajectory. The first
+r
+term Rh constrains the hand motions similar to (2). The
+m
+(cid:13) (cid:13)2
+second term Ro =exp(−α ((cid:13)xt −xˆt(cid:13) +α ϕ(θt, θˆt)))
+Fig. 2: Motion retargeting results for the Allegro hand and m 1 (cid:13) o o(cid:13) 2 o o
+2
+objects under different poses for selected DexYCB videos. constrainstheobjectmotions,wherext o andxˆt o arethecurrent
+object position and its reference at timestep t. ϕ(·) computes
+motionretargetingfromavideooflengthT asanoptimization the angular distance between the current object orientation
+problem and define its objective function as: with its reference θˆt. The third term computes the number
+o
+(cid:88) T (cid:13) (cid:13)2 (cid:13) (cid:13)2 of finger tips in contact with the object. The forth term
+min (cid:13) (cid:13) xˆt rj (q r t)−ψt hj (cid:13) (cid:13) +α(cid:13) (cid:13) q r t −q r t−1(cid:13) (cid:13) , (1) assigns bonus points when the object is lifted off the table.
+qt 2 2
+r t=1 We empirically set λ =4,λ =10,λ =0.5,α =50 and
+1 2 3 1
+where qt represents robot joint rotation angles. ψt denotes α 2 = 0.1. Since our reward function is primarily derived
+r hj
+from trajectories in videos, it can be applied across various
+human hand tip and middle phalanx positions. We solve their
+robot counterparts xˆt via forward kinematics according to manipulationtasks,reducingtheneedfortask-specificreward
+rj
+given qt. The first term aims to minimize the difference engineering as in DexMV [24].
+r
+Reference trajectory augmentation. Though the state-based
+between the 3D locations of robot joints to those in the
+policy can successfully imitate the hand and object motions
+human hand. We also use a regularization term to avoid
+fromavideo,itremainschallengingtogeneralizetodifferent
+sudden changes in the robot pose, where we empirically set
+α to 4e-3 and q0 to the mean pose of its motion limits. We initial object positions, rotations and target positions. To
+r
+make our policy applicable to different initial and target
+use the NLopt solver [73] for the optimization and port robot
+object configurations, we introduce our reference trajectory
+and object motions into the simulator to generate reference
+augmentation strategies during RL training. Specifically, we
+trajectories, which are visually plausible but not physically
+randomly set initial object positions or rotations and then
+plausible.Figure2illustratesresultsofthemotionretargeting
+transformthewholereferencetrajectoryaccordingly.Inorder
+for the Allegro robot hand.
+to further increase the diversity of target object positions, we
+B. State-based Policy augment the original object trajectory through interpolations
+between the original last object pose and the target pose. We
+Wetrainastate-basedpolicywithRLtorecoverphysically
+similarly interpolate hand motions and use proposed reward
+plausible trajectories, where the above generated reference
+functions to train the state-based policy.
+trajectories are employed in the reward function to guide
+robot hand and object motions. The network architecture for C. The Vision-based Policy
+the state-based policy consists of actor and critic MLPs [74].
+Though our state-based policy can work well for different
+Ittakesbothrobotandobjectstatesasinputsandpredictsthe
+manipulation tasks, it requires robot proprioceptive states
+robot control commands. In the following, we will describe
+and object states as inputs. However, reliably estimating
+our reward functions and the trajectory augmentation for RL.
+object states is often not trivial in practice. To alleviate this
+Trajectory-guided reward functions. During RL training,
+issue, we propose a vision-based policy that only takes robot
+we propose to divide the reference trajectory into two stages:
+states and 3D scene point clouds as inputs. To generate
+the pre-grasp stage and the manipulation stage. However, at
+training data for the visual policy, we rollout the optimized
+test time, the policy executes without stage distinctions.
+state-based policy and generate diverse physically plausible
+During the pre-grasp stage, the robot hand needs to
+trajectories. During the rollout process, we compute the 3D
+approach the object without making physical contacts. We
+point clouds PC ∈RN×3 from the depth camera, where
+require that the robot approaches the object in a similar way w
+PC is represented under the world coordinate system (i.e.,
+as humans and define the following reward function as: w
+the center of the table) and N is the number of points.
+(cid:88)
+Tp
+(cid:13) (cid:13)2 Coordinate transformation. As shown in Figure 1, inspired
+R = 10·exp(−10·(cid:13)xt (qt)−xˆt (cid:13) ), (2)
+p (cid:13) rt r rt(cid:13) by [75], we propose to transform PC into the desired
+2 w
+t=1
+target coordinate system PC , which makes the model more
+t
+where T is the length of pre-grasp steps, and xˆt denotes aware of the target position for control predictions. To
+p rt
+therobotfingertippositionsatthetimesteptinthereference capture dense interaction features between the robot and the
+trajectory. xt is the current robot finger tip positions. object, we additionally transform PC into different robot
+rt w
+=== Page 4 ===
+R1 policy R2 policy R3 policy
+R1 policy R2 policy R3 policy
+joint coordinate systems (i.e., palm and finger tips). Finally,
+we combine point clouds representations under different
+coordinate systems PC ∈ RN×3(j+3) and feed them into
+PointNet [76], where j is the number of finger tips. Our
+visual policy predicts control commands based on extracted
+visual features and robot proprioceptive states.
+Training.Wetrainourvisualpolicyusingeitherthebehavior
+cloning (BC) or the recently proposed 3D diffusion pol-
+icy [77], [78] from generated physically plausible trajectories.
+The BC model directly takes transformed point clouds and
+robotstatesasinputsandpredictsrobotactions.Thediffusion
+policy employs the extracted 3D features from PointNet [76]
+as the global condition for the denoising model and recovers
+actions from Gaussian noise. We train both models with ℓ2
+Fig. 3: Qualitative comparison of state-based policies using
+loss between the predicted and ground-truth actions.
+different rewards for Protocol #1 and the Allegro hand. R1
+IV. EXPERIMENTS (w/o hand reward in pre-grasp) leads to unstable grasps. R2
+(w/o hand reward in manipulation) results in unnatural hand
+We conduct extensive experiments and evaluate state-
+actions.OurproposedapproachR3useshandrewardsatboth
+based and visual policies learned by our approach on three
+stages and achieves the best performance.
+manipulation tasks for five seen and ten unseen objects.
+TABLE I: Performance of our state-based policy using
+A. Experimental Setting differenthandrewards(Allegrohand,Protocol#1). Itfollows
+Video dataset. The DexYCB [51] dataset contains human the extracted human hand trajectory to manipulate objects
+demonstration videos of hand-object interactions. Follow- (R1),reachthepre-grasplocation(R2)orcombineboth(R3).
+ing [24], we focus on five objects including mustard bottle,
+HandReward
+tomato soup can, sugar box, large clamp and mug. Pre-grasp Manipulation Eo↓ E h ↓ SRo↑ SR h ↑ SR3↑
+For each object, we choose three videos which are R1 × ✓ 0.048 0.21 0.35 0.00 0.00
+most similar to those used in DexMV1 in our experiments. R2 ✓ × 0.0033 0.077 0.95 0.32 1.00
+Figure 2 presents motion retargeting results for these videos. R3 ✓ ✓ 0.0019 0.032 0.97 0.79 1.00
+Two evaluation protocols are used for benchmarking the
+the container. The place inside task aims to grasp a banana
+performance of policies. Protocol #1 trains the policy for
+and place it into a mug. The success rate is measured by the
+each object separately and uses initial object poses from the
+percentage of the banana mesh in the mug.
+first row of Figure 2. For Protocol #2, we train a unified
+Evaluationmetrics.Thesuccessrate(SR)isthemajormetric
+policyforallfiveobjectsandadoptthreeposesforeachobject
+for the above three tasks. For the relocate task, we adopt
+showninFigure2.Furthermore,weevaluatetheperformance
+the 10cm threshold (SR ) following [24], [29] to define
+on ten unseen objects, namely master chef can, tuna fish can, 10
+the success rate. To measure the accuracy more precisely,
+pudding box, gelatin box, potted meat can, banana, pitcher
+we add a more rigorous threshold of 3cm and compute the
+base, bleach cleanser, wood block and foam brick.
+success rate SR . For the state-based policy, we additionally
+Simulation environment. We follow previous works [16], 3
+evaluate how well the physically plausible trajectory matches
+[24],[34]byusingthetheAdroitrobothandandtheMuJoCo
+the reference trajectory using four metrics [28]: E computes
+simulator for fair comparison. However, this setup is less o
+the average object position error between the current object
+realistic,astherobotichandisnotattachedtoanarmandcan
+trajectory and its reference trajectory over time; E computes
+movefreely.Toaddressthis,weattachanAllegrorobothand h
+theaveragefingertipspositionerrorbetweenthecurrentrobot
+to a UR5 arm, mirroring our actual hardware configuration.
+hand trajectory and its counterpart over time; SR reports the
+We use the SAPIEN [79] simulator for this setup, which o
+fraction of timesteps where E is below 1cm; SR computes
+simplifies creating this more realistic environment and allows o h
+the fraction of timesteps where E is lower than 5cm.
+tospeedupsimulation.Unlessspecifiedotherwise,theAdroit h
+handinMuJoCoisusedforbenchmarkingagainststate-of-the- Implementation details. We use PPO [74] to optimize the
+art methods, while the Allegro hand in SAPIEN is employed state-basedpolicy.TheRLtrainingtakesaround2hoursona
+for training visual policies and performing ablation studies. single A100 GPU for each video. We rollout 100 successful
+Manipulation tasks. We follow [24] to evaluate on three trajectories from the state-based policy for each video, where
+tasks. The first relocate task requires the robot to move an trajectories differ in initial object positions, orientations and
+objecttoatargetposition.Thepourtaskaimstograspamug target positions. During rollouts, we render 3D scene point
+filled with particles and pour the particles into a container. clouds from the depth camera. These data are used to train
+Thesuccessrateismeasuredbythepercentageofparticlesin our visual policy, which takes robot joint positions and 3D
+point clouds as inputs. Training our visual policy on a single
+1ThevideosinDexMVarenotpubliclyreleased. A100 GPU takes around 10 hours using behavior cloning
+=== Page 5 ===
+TABLE II: Comparison with state-of-the-art methods on relocate task for state-based policies. We optimize a state-based
+policy using a single human video for each object (S6, S7, S8) (Protocol #1), while previous methods usually need about 100
+videos for each object (S2-S4). * indicates that we re-train the method from [24] with 20 DexYCB videos for each object.
+Training Num. Mustardbottle Tomatocan Sugarbox Largeclamp Mug Avg.
+Methods RobotHands
+algorithms videos SR10 SR3 SR10 SR3 SR10 SR3 SR10 SR3 SR10 SR3 SR10 SR3
+S1 DexMV[24] Adroit TRPO[80] 0 0.06 - 0.67 - 0.00 - 0.51 - 0.49 - 0.35 -
+S2 DexMV[24] Adroit SOIL[81] 97 0.33 - 0.98 - 0.67 - 0.89 - 0.71 - 0.72 -
+S3 DexMV[24] Adroit GAIL+[82] 97 0.06 - 0.66 - 0.00 - 0.52 - 0.53 - 0.50 -
+S4 DexMV[24] Adroit DAPG[16] 97 0.93 - 1.00 - 0.00 - 1.00 - 1.00 - 0.79 -
+S5 DexMV[24]∗ Adroit DAPG[16] 20 1.00 0.63 1.00 0.56 0.09 0.00 0.08 0.00 0.02 0.00 0.44 0.24
+S6 Ours Adroit PPO[74] 1 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00
+S7 Ours Allegro PPO[74] 1 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00 1.00
+S8 Oursw/orot. Allegro PPO[74] 1 0.85 0.85 1.00 0.99 0.99 0.97 0.98 0.95 0.97 0.94 0.96 0.94
+TABLE III: Performance of visual policies for each object on
+2) State-of-the-art comparison: Table II presents the
+relocate task with SR using Protocol #1 and Allegro hand.
+3 quantitative comparison of our state-based policy and state-
+Algorithms #Points Mb. Tc. Sb. Lc. Mug Avg. of-the-art models [24]. S1 to S4 denote four model variants
+reported in [24] for the Adroit hand. As their training data
+V1 BC 512 0.99 0.82 0.82 0.78 0.90 0.86
+V2 BC 2048 1.00 1.00 0.87 0.91 1.00 0.96 is not released, we re-train their best model DAPG [16]
+V3 Diffusion 2048 1.00 0.97 0.98 0.99 0.99 0.99 (S4) using 20 DexYCB videos and report the results in S5
+for fair comparison. We can see that the performance drops
+and about 20 hours using the diffusion policy, both based on
+significantly for some objects, i.e., large clamp and mug.
+data from 15 videos. For testing, we run 300 episodes with
+This suggests that their approach needs a large number of
+different initial configurations and report the average success
+videostoeffectivelylearnhowtohandleobjectswithcomplex
+rate. The length of a single episode is 60, 80 and 100 for the
+shapes. Our proposed policy in S6 significantly outperforms
+relocate task, place inside task and pour task, respectively.
+all previous methods despite only using one training video
+The real robot takes around 1 minute to execute an episode.
+per object. Though S4 also performs well for mustard bottle,
+tomatosoupcan,largeclampandmug,iteasilyknocksdown
+B. Evaluation of the State-based Policy on the Relocate Task thin objects (e.g., sugar box) when the robot approaches the
+We evaluate the state-based policy on the relocate task object and achieves poor performance. Our hand reward
+using both the Adroit and Allegro hands. We follow Protocol addressesthisproblembymimickingthehumanpre-grasping
+#1 to train the state-based policy then evaluate each policy trajectory.As shown inS7, we achievethe sameperformance
+on the same object with novel placement of the object. withtheAllegrohand.S8isavariantofourmodelS7without
+Specifically, we randomly change the initial object position rotation augmentation in the z-axis during training. The
+and rotation around z-axis for each testing episodes. performance only drops insignificantly when tested for such
+rotations. This demonstrates the robustness of our method.
+1) Ablation Studies: We first perform ablations to validate
+the importance of our hand rewards at the pre-grasp and the
+C. Evaluation of the Visual Policy on the Relocate Task
+manipulation stages in state-based policy learning. Table I
+presents the averaged performance over all objects for Here, we evaluate our proposed visual policy on the
+policies with different reward functions for the Allegro relocate task and present a detailed experimental analysis.
+hand. The policy in R1 uses the proposed hand reward Rh 1) Learning from a single video per object: We first
+m
+in the manipulation stage but follows the previous reward investigate whether replacing the ground-truth object state in
+function [24], [29], [16] in the pre-grasp stage which is to thestate-basedpolicywithvisualpointcloudinputscanaffect
+minimize the distance between the robot and the object. It the performance. For each video, we follow Protocol #1 to
+achieves poor performance due to the lack of guidance from train a separate visual policy using the rollout data obtained
+the human hand trajectory to approach the object. As shown fromthestate-basedpolicyS7inTableII,andevaluateunder
+in the first column of Figure 3, the policy has difficulties in novelobjectplacementsasintheevaluationofthestate-based
+arriving at a plausible pre-grasp configuration to stably lift policy. The results are presented in Table III. Compared with
+the object. The policy in R2 employs the proposed reward V1thatuses512points,V2samples2048pointsandimproves
+functionR inthepre-graspingstagebutfollowsPGDM[28] theoverallperformance,whichshowstheimportanceofpoint
+p
+(i.e., Ro and 1 ) in the manipulation stage. The reward clouds densities. By comparing V2 and V3, the 3D diffusion
+m lift
+function in PGDM constrains the object motions to be close policy [78] can achieve more robust performance than the
+tothereferencetrajectorybutdoesnotaddanyconstraintson plain behavior cloning algorithm. Our visual policies only
+the hand motions, which results in unnatural robot actions as perform slightly worse than our state-based policies.
+showninthesecondcolumnofFigure3.Ourproposedpolicy 2) Learning a unified multi-object visual policy from
+inR3utilizeshandrewardsinbothstages,whichoutperforms multiple videos: Finally, we adopt Protocol #2 and train a
+R1 and R2 on all the metrics and produces more robust and single policy for all objects with the Allegro hand and report
+realistic grasps as shown in the last column of Figure 3. its performance in Table IV. We test the policy under three
+=== Page 6 ===
+TABLEIV:Performanceofunifiedvisualpoliciesonrelocate TABLE VI: Success rate of visual policies on relocate task
+task under SR using Protocol #2 and Allegro hand. We using the real robot. We evaluate 10 episodes for each object.
+3
+compare the performance using different number of human
+Unified Seen Unseen
+Methods
+videos and point clouds under different coordinate systems. policy Avg.
+Mb. Tc. Sb. Lc. Mug Avg.
+Coor.sys. Seen Unseen
+Algo. Vid. R1 BC × 10/10 8/10 9/10 8/10 9/10 0.88 -
+target hand Mb. Tc. Sb. Lc. Mug Avg. avg. R2 BC ✓ 9/10 7/10 7/10 5/10 8/10 0.72 0.58
+R3 Diffusion ✓ 10/10 7/10 8/10 7/10 8/10 0.80 0.68
+V4 BC 1×5 × × 0.33 0.33 0.33 0.30 0.42 0.34 0.31
+V5 BC 2×5 × × 0.55 0.57 0.36 0.56 0.66 0.54 0.33
+V6 BC 3×5 × × 0.69 0.80 0.83 0.86 0.88 0.81 0.38
+V7 BC 3×5 ✓ × 0.93 0.92 0.99 0.93 0.99 0.95 0.37
+V8 BC 3×5 ✓ ✓ 0.93 0.97 0.97 0.98 1.00 0.97 0.41
+V9 Diff. 3×5 ✓ ✓ 0.97 0.99 1.00 0.99 0.99 0.99 0.50
+TABLE V: Comparison with state-of-the-art methods on the
+pour and the place inside tasks using the Adroit hand. Our
+approach uses a single human video for each task, while (a) Real-world experiments setup (b) Visual policy execution
+Fig.4:Illustrationsofourreal-worldrobotexperimentalsetup
+previous methods need more than 91 human videos.
+and the performance of our proposed ViViDex algorithm.
+Training Num. Pour Placeinside
+Methods
+algorithms videos successrate successrate 31% success rates corresponding to the best models of [24].
+By taking advantage of high-quality trajectories generated by
+L1 DexMV[24] TRPO[80] 0/0 0.01 0.03
+L2 DexMV[24] SOIL[81] 101/91 0.04 0.28 L5, our visual policy L6 also achieves high performance.
+L3 DexMV[24] GAIL+[82] 101/91 0.03 0.16
+L4 DexMV[24] DAPG[16] 101/91 0.27 0.31 E. Real world experiments
+L5 Ours PPO[74] 1/1 0.97 0.68 To further demonstrate the advantages of ViViDex, we
+L6 Ours Diffusion 1/1 0.97 0.68
+evaluateitsperformanceonreal-worlddexterousmanipulation.
+initialposesforeachobjectshowninFigure2.FromV4toV6, AsshowninFigure4(a),weuseaUR5roboticarmequipped
+we gradually increase the number of videos for each object with an Allegro hand and a single RealSense D435 RGB-D
+from one to three and observe a significant improvement camera.Sincepointcloudsforthereal-worldexperimentsare
+in performance. Then, V7 additionally transforms the 3D noisierthanthoseinsimulation,weusethestate-basedpolicy
+point clouds into the target coordinate system. As a result, tocollectdataintherealworldandthenlearnaunifiedvisual
+the model becomes more aware of its target and largely policy based on real data. We run state-based policies in the
+improves the average performance for seen objects from simulator for specific object locations and run them on the
+81% to 95%. To further incorporate fine-grained hand-object real robot by placing the object in the same locations. This
+interactionfeatures,wefurthertransform3Dpointsintohand allowsustocollect3Dscenepointcloudsandrobotstatesfor
+joint coordinate systems in V8. Benefiting from extracting each execution step and build the real-robot training dataset.
+rich hand-object interaction features, V8 achieves even better We collect five robot trajectories for each object and train the
+performancethanV7.DifferentfromV8,V9trainsthevisual visual policy using our collected real-robot data. As shown in
+model using 3D diffusion policy and achieves an average Figure 4(b), our visual policy can then manipulate the object.
+success rate of 99% under the challenging test scenario. We summarize the quantitative results on the real robot in
+To investigate the generalization of our visual policies, we Table VI. We adopt the initial pose for seen objects from
+evaluate their performance using three different initial poses the first row of Figure 2 and include five unseen objects for
+fortenunseenYCBobjects.InFigureIVfromV4toV6,our evaluation: cracker box, spray bottle, bleach cleanser, water
+model better generalizes to novel objects when using more bottle and pudding box. R1 trains five policies separately and
+videos. V8 incorporates fine-grained interaction features and achieve an average success rate of 88%. R2 and R3 learn
+enhancesgeneralization.Comparedwiththebehaviorcloning, unified policies for five objects and demonstrate the ability to
+V9 significantly improves the unseen success rate from 41% grasp unseen objects. The diffusion policy R3 also achieves
+to 50% by using the 3D diffusion policy, which demonstrates better performance than BC in real experiments.
+better robustness and generalization abilities.
+V. CONCLUSION
+D. Evaluation of our policy on Pour and Place inside Tasks
+We introduce ViViDex, a new framework for learning
+We further evaluate our approach on the pour and place vision-baseddexterousmanipulationfromhumanvideos.Our
+inside tasks and report results in Table V. Rows L1-L4 show approach extracts reference trajectories from human videos
+results for state-based policies [24] using the Adroit hand andusesthemasarewardintrainingstate-basedpolicieswith
+as well as 91 and 101 video demonstrations for pour and RL. This generates diverse physically plausible trajectories.
+place inside tasks respectively. While we use only single Werolloutthesetrajectoriesfortrainingavisualpolicy,which
+human video for training, our state-based policy L5 for the takesasinputsrobotproprioceptivestatesand3Dpointclouds.
+Adroit hand achieves 97% and 68% success rates on these To enhence visual policies, we further transforms 3D point
+two tasks respectively, significantly outperforming 27% and clouds into hand-centered coordinate systems. We conduct
+=== Page 7 ===
+extensiveablationexperimentstovalidatetheeffectivenessof [21] S.Yang,M.Liu,Y.Qin,D.Runyu,L.Jialong,X.Cheng,R.Yang,
+ViViDex on different simulators and a real robot. We show S.Yi,andX.Wang,“ACE:Across-platfromvisual-exoskeletonsfor
+low-costdexterousteleoperation,”inCoRL,2024.
+that our visual policies outperform state-of-the-art accuracy
+[22] L.Yang,K.Li,X.Zhan,F.Wu,A.Xu,L.Liu,andC.Lu,“OakInk:
+on different tasks by a significant margin and generalize to A large-scale knowledge repository for understanding hand-object
+unseenobjects.Futureworkaimsatleveraginginternetvideos interaction,”inCVPR,2022.
+[23] Y.Liu,Y.Liu,C.Jiang,K.Lyu,W.Wan,H.Shen,B.Liang,Z.Fu,
+for acquiring more general dexterous manipulation skills and
+H.Wang,andL.Yi,“HOI4D:A4Degocentricdatasetforcategory-
+investigating advanced 3D pose estimation algorithms. levelhuman-objectinteraction,”inCVPR,2022.
+Acknowledgement: We thank Ricardo Garcia Pinel for [24] Y. Qin, Y.-H. Wu, S. Liu, H. Jiang, R. Yang, Y. Fu, and X. Wang,
+“DexMV:Imitationlearningfordexterousmanipulationfromhuman
+help with the camera calibration, Yuzhe Qin for clarifications
+videos,”inECCV,2022.
+about DexMV and suggestions on the real robot depolyment. [25] P.MandikalandK.Grauman,“DexVIP:Learningdexterousgrasping
+ThisworkwasgrantedaccesstotheHPCresourcesofIDRIS withhumanhandposepriorsfromvideo,”inCoRL,2022.
+[26] Q. Liu, Y. Cui, Q. Ye, Z. Sun, H. Li, G. Li, L. Shao, and J. Chen,
+under the allocation AD011013147 made by GENCI. It was
+“DexRepNet:Learningdexterousroboticgraspingnetworkwithgeo-
+funded in part by the French government under management metricandspatialhand-objectrepresentations,”inIROS,2023.
+of Agence Nationale de la Recherche as part of the “France [27] K.Shaw,S.Bahl,andD.Pathak,“VideoDex:Learningdexterityfrom
+internetvideos,”inCoRL,2022.
+2030” program, reference ANR-23-IACL-0008 (PR[AI]RIE-
+[28] S.Dasari,A.Gupta,andV.Kumar,“Learningdexterousmanipulation
+PSAI projet), and the ANR project VideoPredict (ANR-21- fromexemplarobjecttrajectoriesandpre-grasps,”inICRA,2023.
+FAI1-0002-01). Cordelia Schmid would like to acknowledge [29] Y.-H.Wu,J.Wang,andX.Wang,“Learninggeneralizabledexterous
+manipulationfromhumangraspaffordance,”inCoRL,2022.
+the support by the Ko¨rber European Science Prize.
+[30] A.BicchiandV.Kumar,“Roboticgraspingandcontact:Areview,”in
+ICRA,2000.
+REFERENCES [31] L.HanandJ.C.Trinkle,“Dextrousmanipulationbyrollingandfinger
+gaiting,”inICRA,1998.
+[1] S.James,Z.Ma,D.R.Arrojo,andA.J.Davison,“RLBench:The [32] D. Rus, “In-hand dexterous manipulation of piecewise-smooth 3D
+robotlearningbenchmark&learningenvironment,”RAL,2020. objects,”IJRR,1999.
+[2] P.-L.Guhur,S.Chen,R.G.Pinel,M.Tapaswi,I.Laptev,andC.Schmid, [33] I.Mordatch,Z.Popovic´,andE.Todorov,“Contact-invariantoptimiza-
+“Instruction-drivenhistory-awarepoliciesforroboticmanipulations,”in tionforhandmanipulation,”inSIGGRAPH,2012.
+CoRL,2023. [34] A.Wu,M.Guo,andC.K.Liu,“Learningdiverseandphysicallyfea-
+[3] D.Driess,F.Xia,M.S.Sajjadi,C.Lynch,A.Chowdhery,B.Ichter, sibledexterousgraspswithgenerativemodelandbileveloptimization,”
+A.Wahid,J.Tompson,Q.Vuong,T.Yuetal.,“PaLM-E:Anembodied arXiv,2022.
+multimodallanguagemodel,”inICML,2023. [35] W.YangandW.Jin,“ContactSDF:Signeddistancefunctionsasmulti-
+[4] S. Chen, R. Garcia, C. Schmid, and I. Laptev, “PolarNet: 3D point contactmodelsfordexterousmanipulation,”arXiv,2024.
+cloudsforlanguage-guidedroboticmanipulation,”inCoRL,2023. [36] X.Zhu,J.Ke,Z.Xu,Z.Sun,B.Bai,J.Lv,Q.Liu,Y.Zeng,Q.Ye,
+[5] M.T.Mason,“Towardroboticmanipulation,”AnnualReviewofControl, C. Lu et al., “Diff-LfD: Contact-aware model-based learning from
+Robotics,andAutonomousSystems,2018. visualdemonstrationforroboticmanipulationviadifferentiablephysics-
+[6] Y.LeCun,Y.Bengio,andG.Hinton,“Deeplearning,”Nature,2015. basedsimulationandrendering,”inCoRL,2023.
+[7] L. P. Kaelbling, M. L. Littman, and A. W. Moore, “Reinforcement [37] S.Nair,A.Rajeswaran,V.Kumar,C.Finn,andA.Gupta,“R3M:A
+learning:Asurvey,”Journalofartificialintelligenceresearch,1996. universalvisualrepresentationforrobotmanipulation,”inCoRL,2022.
+[8] R.S.Sutton,“Reinforcementlearning:Anintroduction,”ABradford [38] Y.Xu,W.Wan,J.Zhang,H.Liu,Z.Shan,H.Shen,R.Wang,H.Geng,
+Book,2018. Y.Weng,J.Chenetal.,“UniDexGrasp:Universalroboticdexterous
+[9] H.Qi,A.Kumar,R.Calandra,Y.Ma,andJ.Malik,“In-handobject graspingvialearningdiverseproposalgenerationandgoal-conditioned
+rotationviarapidmotoradaptation,”inCoRL,2022. policy,”inCVPR,2023.
+[10] Z.-H.Yin,B.Huang,Y.Qin,Q.Chen,andX.Wang,“Rotatingwithout [39] T.Chen,J.Xu,andP.Agrawal,“Asystemforgeneralin-handobject
+seeing:Towardsin-handdexteritythroughtouch,”inRSS,2023. re-orientation,”inCoRL,2021.
+[11] H.Qi,B.Yi,S.Suresh,M.Lambeta,Y.Ma,R.Calandra,andJ.Malik, [40] C. Bao, H. Xu, Y. Qin, and X. Wang, “DexArt: Benchmarking
+“Generalin-handobjectrotationwithvisionandtouch,”inCoRL,2023. generalizabledexterousmanipulationwitharticulatedobjects,”inCVPR,
+[12] I. Akkaya, M. Andrychowicz, M. Chociej, M. Litwin, B. McGrew, 2023.
+A.Petron,A.Paino,M.Plappert,G.Powell,R.Ribasetal.,“Solving [41] T.Lin,Y.Zhang,Q.Li,H.Qi,B.Yi,S.Levine,andJ.Malik,“Learning
+rubik’scubewitharobothand,”arXiv,2019. visuotactileskillswithtwomultifingeredhands,”arXiv,2024.
+[13] H.Xu,Y.Luo,S.Wang,T.Darrell,andR.Calandra,“Towardslearning [42] Y. Han, M. Xie, Y. Zhao, and H. Ravichandar, “On the utility of
+toplaypianowithdexteroushandsandtouch,”inIROS,2022. koopmanoperatortheoryinlearningdexterousmanipulationskills,”in
+[14] K.Zakka,P.Wu,L.Smith,N.Gileadi,T.Howell,X.B.Peng,S.Singh, CoRL,2023.
+Y.Tassa,P.Florence,A.Zengetal.,“RoboPianist:Dexterouspiano [43] J.Wang,Y.Qin,K.Kuang,Y.Korkmaz,A.Gurumoorthy,H.Su,and
+playingwithdeepreinforcementlearning,”inCoRL,2023. X.Wang,“CyberDemo:Augmentingsimulatedhumandemonstration
+[15] J. Merel, Y. Tassa, D. TB, S. Srinivasan, J. Lemmon, Z. Wang, forreal-worlddexterousmanipulation,”inCVPR,2024.
+G. Wayne, and N. Heess, “Learning human behaviors from motion [44] Y. Yuan, H. Che, Y. Qin, B. Huang, Z.-H. Yin, K.-W. Lee, Y. Wu,
+capturebyadversarialimitation,”arXiv,2017. S.-C.Lim,andX.Wang,“Robotsynesthesia:In-handmanipulation
+[16] A. Rajeswaran, V. Kumar, A. Gupta, G. Vezzani, J. Schulman, withvisuotactilesensing,”inICRA,2024.
+E.Todorov,andS.Levine,“Learningcomplexdexterousmanipulation [45] T.Chen,M.Tippur,S.Wu,V.Kumar,E.Adelson,andP.Agrawal,
+withdeepreinforcementlearninganddemonstrations,”inRSS,2018. “Visualdexterity:In-handreorientationofnovelandcomplexobject
+[17] Y. Qin, W. Yang, B. Huang, K. Van Wyk, H. Su, X. Wang, Y.-W. shapes,”ScienceRobotics,2023.
+Chao, and D. Fox, “AnyTeleop: A general vision-based dexterous [46] W. Wan, H. Geng, Y. Liu, Z. Shan, Y. Yang, L. Yi, and H. Wang,
+robotarm-handteleoperationsystem,”inRSS,2023. “UniDexGrasp++:Improvingdexterousgraspingpolicylearningvia
+[18] S. P. Arunachalam, S. Silwal, B. Evans, and L. Pinto, “Dexterous geometry-awarecurriculumanditerativegeneralist-specialistlearning,”
+imitationmadeeasy:Alearning-basedframeworkforefficientdexterous inICCV,2023.
+manipulation,”inICRA,2023. [47] A.Nagabandi,K.Konolige,S.Levine,andV.Kumar,“Deepdynamics
+[19] S.P.Arunachalam,I.Gu¨zey,S.Chintala,andL.Pinto,“Holo-Dex: modelsforlearningdexterousmanipulation,”inCoRL,2020.
+Teachingdexteritywithimmersivemixedreality,”inICRA,2023. [48] N.Hansen,Y.Lin,H.Suetal.,“MoDem:Acceleratingvisualmodel-
+[20] C. Wang, H. Shi, W. Wang, R. Zhang, L. Fei-Fei, and C. K. Liu, basedreinforcementlearningwithdemonstrations,”inICLR,2023.
+“DexCap: Scalable and portable mocap data collection system for [49] H. Jiang, S. Liu, J. Wang, and X. Wang, “Hand-object contact
+dexterousmanipulation,”inRSS,2024. consistencyreasoningforhumangraspsgeneration,”inICCV,2021.
+=== Page 8 ===
+[50] R. Rubinstein, “The cross-entropy method for combinatorial and [78] Y. Ze, G. Zhang, K. Zhang, C. Hu, M. Wang, and H. Xu, “3D
+continuous optimization,” Methodology and computing in applied diffusionpolicy:Generalizablevisuomotorpolicylearningviasimple
+probability,1999. 3Drepresentations,”inRSS,2024.
+[51] Y.-W.Chao,W.Yang,Y.Xiang,P.Molchanov,A.Handa,J.Tremblay, [79] F.Xiang,Y.Qin,K.Mo,Y.Xia,H.Zhu,F.Liu,M.Liu,H.Jiang,
+Y.S.Narang,K.VanWyk,U.Iqbal,S.Birchfieldetal.,“DexYCB:A Y.Yuan,H.Wang,L.Yi,A.X.Chang,L.J.Guibasetal.,“SAPIEN:
+benchmarkforcapturinghandgraspingofobjects,”inCVPR,2021. Asimulatedpart-basedinteractiveenvironment,”inCVPR,2020.
+[52] Y.Hasson,G.Varol,D.Tzionas,I.Kalevatykh,M.J.Black,I.Laptev, [80] J.Schulmanetal.,“Trustregionpolicyoptimization,”inICML,2015.
+andC.Schmid,“Learningjointreconstructionofhandsandmanipulated [81] I.Radosavovic,X.Wang,L.Pinto,andJ.Malik,“State-onlyimitation
+objects,”inCVPR,2019. learningfordexterousmanipulation,”inIROS,2021.
+[53] Z. Chen, Y. Hasson, C. Schmid, and I. Laptev, “AlignSDF: Pose- [82] B.Kang,Z.Jie,andJ.Feng,“Policyoptimizationwithdemonstrations,”
+Alignedsigneddistancefieldsforhand-objectreconstruction,”inECCV, inICML,2018.
+2022.
+[54] Z.Chen,S.Chen,C.Schmid,andI.Laptev,“gSDF:Geometry-Driven
+signeddistancefunctionsfor3Dhand-objectreconstruction,”inCVPR,
+2023.
+[55] Y. Ye, A. Gupta, and S. Tulsiani, “What’s in your hands? 3D
+reconstructionofgenericobjectsinhands,”inCVPR,2022.
+[56] L.Smith,N.Dhawan,M.Zhang,P.Abbeel,andS.Levine,“AVID:
+Learningmulti-stagetasksviapixel-leveltranslationofhumanvideos,”
+inRSS,2020.
+[57] K.Zakka,A.Zeng,P.Florence,J.Tompson,J.Bohg,andD.Dwibedi,
+“XIRL:Cross-embodimentinversereinforcementlearning,”inCoRL,
+2021.
+[58] F.Ebert,Y.Yang,K.Schmeckpeper,B.Bucher,G.Georgakis,K.Dani-
+ilidis,C.Finn,andS.Levine,“Bridgedata:Boostinggeneralization
+ofroboticskillswithcross-domaindatasets,”inRSS,2022.
+[59] K.Schmeckpeper,O.Rybkin,K.Daniilidis,S.Levine,andC.Finn,
+“Reinforcementlearningwithvideos:Combiningofflineobservations
+withinteraction,”inCoRL,2020.
+[60] L. Shao, T. Migimatsu, Q. Zhang, K. Yang, and J. Bohg, “Con-
+cept2Robot: Learning manipulation concepts from instructions and
+humandemonstrations,”inRSS,2020.
+[61] T. Xiao, I. Radosavovic, T. Darrell, and J. Malik, “Masked visual
+pre-trainingformotorcontrol,”arXiv,2022.
+[62] I.Radosavovic,T.Xiao,S.James,P.Abbeel,J.Malik,andT.Darrell,
+“Real-worldrobotlearningwithmaskedvisualpre-training,”inCoRL,
+2023.
+[63] Y. Ze, Y. Liu, R. Shi, J. Qin, Z. Yuan, J. Wang, and H. Xu, “H-
+InDex:visualreinforcementlearningwithhand-informedrepresentations
+fordexterousmanipulation,”inNeurIPS,2023.
+[64] E.Chane-Sane,C.Schmid,andI.Laptev,“Learningvideo-conditioned
+policiesforunseenmanipulationtasks,”inICRA,2023.
+[65] K.Grauman,A.Westbury,E.Byrne,Z.Chavis,A.Furnari,R.Girdhar,
+J.Hamburger,H.Jiang,M.Liu,X.Liuetal.,“Ego4D:Aroundthe
+worldin3,000hoursofegocentricvideo,”inCVPR,2022.
+[66] A. S. Chen, S. Nair, and C. Finn, “Learning generalizable robotic
+rewardfunctionsfrom”in-the-wild”humanvideos,”inRSS,2021.
+[67] M.Alakuijala,G.Dulac-Arnold,J.Mairal,J.Ponce,andC.Schmid,
+“Learning reward functions for robotic manipulation by observing
+humans,”inICRA,2023.
+[68] H.Xiong,Q.Li,Y.-C.Chen,H.Bharadhwaj,S.Sinha,andA.Garg,
+“Learningbywatching:Physicalimitationofmanipulationskillsfrom
+humanvideos,”inIROS,2021.
+[69] P. Mandikal and K. Grauman, “Learning dexterous grasping with
+object-centricvisualaffordances,”inICRA,2021.
+[70] J.Romero,D.Tzionas,andM.J.Black,“EmbodiedHands:Modeling
+andcapturinghandsandbodiestogether,”TOG,2017.
+[71] A. Handa, K. Van Wyk, W. Yang, J. Liang, Y.-W. Chao, Q. Wan,
+S.Birchfield,N.Ratliff,andD.Fox,“DexPilot:Vision-basedteleoper-
+ationofdexterousrobotichand-armsystem,”inICRA,2020.
+[72] D.Antotsiou,G.Garcia-Hernando,andT.-K.Kim,“Task-orientedhand
+motion retargeting for dexterous manipulation imitation,” in ECCV,
+2018.
+[73] G.J.Steven,“Thenloptnonlinear-optimizationpackage,”2019.
+[74] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov,
+“Proximalpolicyoptimizationalgorithms,”arXiv,2017.
+[75] M.Liu,X.Li,Z.Ling,Y.Li,andH.Su,“FrameMining:afreelunch
+for learning robotic manipulation from 3D point clouds,” in CoRL,
+2022.
+[76] C.R.Qi,H.Su,K.Mo,andL.J.Guibas,“PointNet:Deeplearning
+onpointsetsfor3Dclassificationandsegmentation,”inCVPR,2017.
+[77] C.Chi,S.Feng,Y.Du,Z.Xu,E.Cousineau,B.Burchfiel,andS.Song,
+“Diffusionpolicy:Visuomotorpolicylearningviaactiondiffusion,”in
+RSS,2023.

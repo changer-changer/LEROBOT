@@ -1,0 +1,907 @@
+=== Page 1 ===
+ForceVLA: Enhancing VLA Models with a
+Force-aware MoE for Contact-rich Manipulation
+JiawenYu1∗,HairuoLiu2,3∗,QiaojunYu4,2†,JiejiRen2,CeHao5,HaitongDing6,
+GuangyuHuang7,GuofanHuang1,YanSong1,PanpanCai2,3,WenqiangZhang1,CewuLu2,3,8
+1FudanUniversity,2ShanghaiJiaoTongUniversity,3ShanghaiInnovationInstitute,
+4ShanghaiAILab,5NationalUniversityofSingapore,6ShanghaiUniversity,
+7Xi’anJiaotongUniversity,8NoematrixIntelligence
+∗Equalcontribution†Correspondingauthors: yqjllxs@alumni.sjtu.edu.cn
+Abstract
+Vision-Language-Action(VLA)modelshaveadvancedgeneral-purposerobotic
+manipulationbyleveragingpretrainedvisualandlinguisticrepresentations. How-
+ever,theystrugglewithcontact-richtasksthatrequirefine-grainedcontrolinvolving
+force,especiallyundervisualocclusionordynamicuncertainty. Toaddressthese
+limitations,weproposeForceVLA,anovelend-to-endmanipulationframework
+that treats external force sensing as a first-class modality within VLA systems.
+ForceVLAintroducesFVLMoE,aforce-awareMixture-of-Expertsfusionmodule
+thatdynamicallyintegratespretrainedvisual-languageembeddingswithreal-time
+6-axisforcefeedbackduringactiondecoding. Thisenablescontext-awarerouting
+acrossmodality-specificexperts,enhancingtherobot’sabilitytoadapttosubtle
+contactdynamics. WealsointroduceForceVLA-Data,anewdatasetcomprising
+synchronizedvision,proprioception,andforce-torquesignalsacrossfivecontact-
+richmanipulationtasks. ForceVLAimprovesaveragetasksuccessby23.2%over
+strong π -based baselines, achieving up to 80% success in tasks such as plug
+0
+insertion. Ourapproachhighlightstheimportanceofmultimodalintegrationfor
+dexterousmanipulationandsetsanewbenchmarkforphysicallyintelligentrobotic
+control. Codeanddatawillbereleasedatwebsite.
+1 Introduction
+RoboticlearninghasadvancedrapidlywiththeriseofembodiedAI,drivenbylarge-scalemanip-
+ulation datasets and the emergence of foundation models [1, 2, 3]. These models exhibit strong
+adaptability, enabling rapid generalization to novel tasks with minimal supervision [4, 5, 6]. In
+parallel,Vision-LanguageModels(VLMs)haveachievedremarkablegeneralizationthroughlarge-
+scalemultimodalalignment[7,8],learningtransferablerepresentationsthatsupportawiderangeof
+downstreamtasks.
+Buildingonthisprogress,OpenVLA[9]introducedVision-Language-Action(VLA)modelstobridge
+perceptionandcontrolforreal-worldroboticmanipulation. ByleveragingVLM-basedencoders,
+thesemodelsdemonstratestrongperformanceinsemanticgrounding,languagefollowing,andzero-
+shotgeneralization.π [10]furtherenhancesthisframeworkusingstrongerVLMbackbones[11]and
+0
+flow-basedactiongeneration,showingthatpretrainedmultimodalVLAmodelscanacquirerobust
+physical-worldpriorsandcanbefine-tunedefficientlywithonlyafewdemonstrations.
+However,contact-richmanipulationdemandsmorethansemanticgroundingandspatialplanning—it
+isfundamentallydrivenbyinteractionforces[12,13]. ExistingVLAmodelsrelyheavilyonvisual
+andlinguisticcues,oftenoverlookingforcesensing,amodalitycriticalforprecisephysicalinteraction.
+Incontrast,humansnaturallyintegratetactileandproprioceptivefeedbacktoadapttheirmanipulation
+strategies[14]. Asaresult,VLAmodelsfrequentlystrugglewithtaskssuchasinsertion,tooluse,
+Preprint.Underreview.
+5202
+peS
+81
+]OR.sc[
+3v95122.5052:viXra
+=== Page 2 ===
+Figure1: ComparisonbetweenForceVLAandbaselineswithoutforceinput. Withoutforcefeedback,
+thepolicyfailstocorrectposeerrorsandcompletesinsertionincorrectly. Incontrast,ForceVLA
+leverages external force signals to adjust insertion strategies dynamically, leading to successful
+executiondespiteinitialmisalignment.
+orassembly—especiallyunderocclusionorpoorvisualconditions—leadingtobrittlebehavioror
+taskfailure. Moreover,forcerequirementsevolveacrossdifferenttaskphases: delicategrasping,
+controlledinsertion,andcompliantsurfacecontact—eachrequiringdistinctformsofforcemodulation.
+Currentmethodslackmechanismstoperceiveandadapttothesedynamicvariations,limitingtheir
+abilitytoreasonovertimeaboutphysicalinteractions.
+To address these limitations, we introduce ForceVLA, a novel framework that augments VLA
+models with a force-aware Mixture-of-Experts (MoE) module, enabling effective reasoning and
+context-sensitive,force-informedactiongenerationincontact-richmanipulationtasks,asillustrated
+inFigure1. ForceVLAisgroundedinthekeyinsightthat6Dexternalforcesensedattherobot’s
+end-effector, should be treated as a first-class modality and formally integrated into the action
+expert module to enable phase-aware action generation based on force feedback during physical
+interaction. Torealizethisintegration,ForceVLAincorporatesaforce-awareMoEmodule,named
+FVLMoE,designedtoperformmodality-andphase-awarefusionofvisual-linguisticrepresentations
+withreal-timeforcefeedbackfromembodiedinteractionduringactionplanning. Throughagating
+mechanism,FVLMoEcomputesdynamicroutingweightsoverexpertsubnetworks,eachspecialized
+fordifferentmodalitiesacrosstaskexecutionphases. Byadaptivelyactivatingtheseexpertsbasedon
+high-leveltaskinstructionsandlow-levelinteractionfeedback,ForceVLAcapturessubtleyetcritical,
+phase-dependentvariationsduringphysicalinteractionandgeneratesprecise,phase-aligned,and
+force-awareactionchunking. Ourmaincontributionsare:
+• Wepresentanovelframeworkthatintegratesforce,vision,language,andactionforimproved
+precisionandstabilityoncontact-richmanipulationtasks. Keytoourapproachisaforce-aware
+Mixture-of-Experts-basedfusionmodule,whichenablesdynamicprocessinganddeepintegration
+offorce,visual,andlanguagefeaturesduringactiongeneration,significantlyenhancingphysical
+interactioncapabilitiesinVLAsystems.
+• We build a complete data collection pipeline—including teleoperation tools, data converters,
+andanewdataset—specificallyforcontact-richmanipulation,andcommittoopen-sourcingall
+resourcesforcommunityuse.
+• Throughexperimentsonfivechallengingtasks,ForceVLAachievesupto80%tasksuccessand
+improvesaverageperformanceby23.2%overbaselines,demonstratingstronggeneralizationto
+novelobjects,occlusions,andphysicalperturbations.
+2
+=== Page 3 ===
+2 RelatedWorks
+Robotic VLA domain. Recent research in Vision-Language-Action (VLA) models has focused
+on leveraging large-scale multimodal pretraining to generalize robotic policies across tasks and
+embodiments[4,6,9,15,16,17,18,19,20]. Thesemodelstypicallymapvisualandlanguageinputs
+tolow-levelcontrolsignalsviaend-to-endlearning. Flow-basedarchitecturessuchasπ [10,21]
+0
+integratepretrainedvision-languageencoderswithfastactiondecoderstoachievehigh-frequency
+outputs. Otherworksincorporatereasoningmechanisms[22,23,24,25],actionspacecompression,
+or3Dpointcloudinputs[26]toimproveinstructiongroundingandtaskexecution. Diffusion-based
+models[5,27,28,29,30]introducestochasticgenerationfordiverse,long-horizonbehaviors,though
+theyoftenincurhightrainingandinferencecosts. Despitetheseadvances,mostVLAapproaches
+remainlimitedtovisionandlanguageinputs,makingthemlesseffectiveincontact-richoroccluded
+manipulationscenarioswheretactilefeedbackiscritical.
+Contact-richmanipulationdomain. Traditionalvision-onlymethodsstrugglewithdynamicin-
+teractions requiring fine-grained feedback. To address this, recent works integrate force sens-
+ing[31,32,33,34],enablingimprovedmotionstabilityandaccuracy. Xieetal.[35,13]provide
+foundationalstudiesontheroleofforcefeedbackinroboticcontrol. Tactilesensinghasalsoemerged
+as a powerful modality: TLA [36] and Tac-Man [37] demonstrate enhanced performance in fine
+manipulationandarticulationtasks. Multimodalfusionmethods[38,39]showpromiseincomplex
+environments,thoughcurrentapproachesareoftenlimitedtostaticmodalityfusionandlackdynamic
+routing or unified modeling frameworks. Furthermore, few evaluate cross-task generalization in
+real-worldcontact-richsettings.
+MoEarchitecture-relatedwork. Mixture-of-Experts(MoE)architecturesimprovemodelscalability
+andefficiencybyactivatingsparseexpertsubnetworks[40,41,42,43,44]. Follow-upwork[45]
+improvesMoEtrainingstabilityandtasktransferability. Inthemultimodaldomain,LIMOE[46]
+integratessparseexpertlayersforjointvision-languagelearning. Recentapplicationsinrobotics[47,
+29]adoptMoElayerswithinVLAmodelstoenhancepolicygeneralizationandadaptability.However,
+thesemethodslargelyomitexplicitmodelingoftheforce/tactilemodalities,andlackmechanismsfor
+dynamicallyroutingacrossmultimodalsignalsincontact-intensivetasks.
+3 Preliminary
+ProblemFormulation. Figure2showstheset-
+ting of robot manipulation tasks. The robot’s
+observation at timestep t consists of base and
+hand visual inputs Vb and Vh, the proprio-
+t t
+ceptive state s ∈ R7, and external force-
+t
+torque readings f ∈ R6, which are col-
+t
+lectively denoted as O = {Vb,Vh,s ,f }.
+t t t t t
+Given a language instruction L, the objective
+is to learn an end-to-end policy π(A |O ,L)
+t t
+thatoutputslow-level,executableactionchunk
+A = {a ,a ,...,a }[10] maximizing
+t t t+1 t+H−1
+the likelihood of completing the contact-rich
+task, where s is a vector of TCP pose con-
+t
+catenatedwithgripperwidth. TCPpositionis
+represented by Cartesian coordinates (x,y,z)
+andorientationisrepresentedbyEulerangles
+(α,β,γ). f is the estimated external wrench
+t
+appliedonTCPandexpressedinworldframe,
+which consists of R3 force and R3 moment:
+f ={f ,f ,f ,m ,m ,m }.
+t tx ty tz tx ty tz Figure2: Robotmanipulationtaskssetting.
+MoE Architecture. We select Mixture-of-
+Experts (MoE)[44, 42] as our fusion layer. The core idea is to distribute different modalities to
+alargersetofsmaller,specialized“expert”subnetworks,onlyafractionofwhichareactivatedfor
+anygiveninputtoken. AnMoElayertypicallycomprisesasetofN expertnetworks,denotedas
+{E }N andagatingnetwork(alsoreferredtoasarouter),denotedasG. Thisnetworktakesan
+i i=1
+inputtokenxanddynamicallydetermineswhichoftheN expertsshouldprocessit. Inprevalent
+sparseMoEimplementations,foraninputtokenx,thegatingnetworkG(x)producesscoresorlogits
+3
+=== Page 4 ===
+“Pick up the USB and
+plug it into the socket.”
+ViT
+ViT
+Layer
+Pre-trained
+VLM
+Project
+V-L
+Fused
+Feature LayerNorm Router
+Expert
+1
+Expert 2 ➕
+Expert
+3
+Expert
+4
+F-V-L
+Fused
+Feature
+noise
+𝑠!
+Action
+Expert
+Perceive
+New
+Force
+𝑓!
+𝑓!"#
+Update
+LayerNorm Attention Self Linear
+Execute
+FVL
+feature
+FVLMoE
+Visual Tokens Language Tokens Force Tokens
+Figure3: OverviewofourForceVLAmodel. Visualandlanguageinputsareprocessedbyapre-
+trainedVLMtoformcontextualembeddings. Externalforcesignalsareprojectedandfusedwith
+VLMoutputsviatheFVLMoEmodule. Theresultingmultimodalfeaturesguideaflow-basedaction
+headtogeneratecontact-awarerobotactions.
+thatareusedtoselectasmallsubsetofk experts(typicallyk = 1ork = 2,wherek ≪ N)from
+thetotalpoolofN experts. Theinputtokenxisthenroutedonlytothesek activeexperts. The
+outputsoftheseactiveexperts,E (x),aresubsequentlyaggregated,commonlythroughaweighted
+i
+sumwheretheweightsg (x)arealsoderivedfromthegatingnetwork. Thefinaloutputy(x)ofthe
+i
+(cid:80)
+MoElayercanbeexpressedas: y(x)= g (x)E (x),whereTopK(G(x))denotesthe
+i∈TopK(G(x)) i i
+setofindicesofthetop-kexpertsselectedbythegatingnetworkforinputx.
+4 ForceVLA
+4.1 OverviewofForceVLA
+ForceVLAisanend-to-endmultimodalroboticpolicydesignedforcontact-richmanipulation. Its
+pipelineisillustratedinFigure3. Buildingupontheπ framework[10],itintegratesvision,language,
+0
+proprioception,and6-axisforcefeedbacktogenerateactionsthroughaconditionalflowmatching
+model[48,49]. VisualinputsfrommultipleRGBcamerasandtaskinstructionsareencodedbya
+SigLIP-based[50]vision-languagemodel(basedonPaliGemma[11])intocontextualembeddings.
+Theseembeddings,combinedwithproprioceptiveandforcecues,conditionaniterativedenoising
+processthatpredictstheactiontrajectory.
+FVLMoEisthecoremoduleenablingeffectiveforceintegration.Forcereadingsarelinearlyprojected
+intodedicatedtokensandfusedwithvision-languageembeddingsviaaMixture-of-Experts(MoE)
+module. InspiredbyMoE’sstrengthinmulti-taskandmodality-specificlearning[51,46],FVLMoE
+adaptivelyroutesandprocessesmultimodalinputs. Itsoutputservesasarichguidancesignalforthe
+flowmodel,allowingForceVLAtohandlesubtlecontactdynamicsandvisuallyambiguousscenarios
+withgreaterprecisionandrobustness.
+4.2 FVLMoEArchitecture
+The FVLMoE module is specifically designed for the fusion of multimodal sensory information.
+Itsdesignenablesthemodeltointegraterichcontextualunderstandingfromvisionandlanguage
+withtheimmediate,fine-graineddynamicscapturedbyforce-torquesensors. Thisfusioniscritical
+forenablingrobustandadaptivebehaviorincontact-richmanipulationtasks. Thearchitectureand
+operationoftheFVLMoEcanbedetailedinthefollowingstages:
+Input Mapping for Multiple Modalities. How to determine the optimal stage and method for
+a novel force modality incorporation poses a significant design challenge. Following extensive
+experimentation,weestablishedanapproachwheretheforcemodalityisintroducedaftertheprimary
+VLMhasprocessedvisualandlinguisticinputs. Specifically,forcefeaturesarefedasdistinctinputs
+intotheFVLMoEmodule,positioningittofunctionakintoahigher-levelcorticalassociationarea
+responsibleforintegratingtheVLM’spre-trainedvisual-linguisticrepresentationswiththenewly
+introduced force tokens. This strategy contrasts with introducing force prior to, or concurrently
+4
+=== Page 5 ===
+with,theVLM’sinitialfusionofvisualandlanguagemodalities. Theempiricaljustificationforthis
+architecturaldecisioniselaboratedintheAblationStudiessection(Section5.4).
+The FVLMoE module, in line with this design choice, ingests a sequence of token embeddings
+E formed by the concatenation of visual-linguistic features and a dedicated force token. The
+in
+VL features, denoted as E
+VL
+∈ RNVL×Dmodel, are outputs from the primary Vision-Language
+Model,encapsulatingcontextualunderstandingderivedfromprocessedimagestreamsandtextual
+instructions. Concurrently,theraw6-axisforce-torquesensordata,f ∈R6,istransformedbya
+raw
+linearprojectionϕ
+F
+intoaforcetokenembeddingE
+F
+=ϕ
+F
+(f
+raw
+)∈RDmodel. Thefinalinputto
+theFVLMoEisthustheconcatenatedsequenceE
+in
+=[E
+VL
+;E
+F
+]∈R(NVL+1)×Dmodel,wherethe
+forcetokenisappendedtothevisual-linguisticcontextforsubsequentjointprocessingwithinthe
+MoEarchitecture.
+MultimodalRoutingandFusionComputation. OncethecombinedmultimodalsequenceE ∈
+in
+R(NVL+1)×Dmodel isformed,itundergoeshierarchicalprocessingwithintheFVLMoEmodule. E
+in
+is passed through an encoder layer for shared refinement to facilitate holistic interaction among
+all constituent force, visual, and language tokens. This layer is composed of a multi-head self-
+attentionmechanismwithN
+heads
+attentionheadsandasubsequentFFN,yieldingE
+enc
+∈RDmodel.
+Subsequently,E ischanneledintoasparseMixture-of-Expertslayer. ThislayeremploysE =4
+enc
+distinctexpertnetworks,eachrealizedasanindependentMLP.Adynamicgatingnetworkdetermines
+therouting,selectingthemostappropriatesingleexpert(topk =1)foreachtokeninE basedon
+enc
+learneddispatchweights. TheoutputfromtheMoEcomputationisthenintegratedbackwiththe
+inputtotheMoElayerviaaresidualconnection,yieldingE . Theresultingsequenceoffused
+fused
+multimodalfeaturesispassedthroughafinallinearprojectionlayertomatchthedimensionalityof
+theactionexpert.
+InjectingFusedFeaturesintotheActionFlowHead. Thesequenceoffusedmultimodalfeatures
+produced by the FVLMoE module serves as a guidance signal for the action generation process,
+whichisformulatedasaflow-baseddenoisingmodel.Thisguidanceismaterializedbyfirstextracting
+aspecificsub-sequence,G
+FVLMoE
+∈RHaction×Da,comprisingthefinalH
+action
+tokensfromE
+FVLMoE
+;
+thesetokensencapsulatethemostpertinentfusedguidanceforeachstepintheH -lengthaction
+action
+plan. G
+FVLMoE
+isthencombinedviaelement-wiseadditionwithS
+suffix
+∈RHaction×Da obtainedfrom
+the primary VLM’s processing of the current proprioceptive robot state s
+t
+∈ RDs and the noisy
+actiontrajectoryaτ
+t
+∈RHaction×Da atdenoisingstepτ,whereD
+s
+andD
+a
+arethedimensionalitiesof
+thestateandactionspaces,respectively. Thisadditiveinjectionmechanismensuresthattherich,
+contact-awarecontextualunderstandingdevelopedbytheFVLMoEdirectlymodulatesandrefines
+thegeneratedactionsequenceateachstepofthepredictedtrajectory.
+4.3 Datasets
+TotrainForceVLA,wecuratedanewdatasetspecificallyfocusedoncontact-richmanipulationtasks,
+emphasizing the synchronized capture of visual, proprioceptive, and force-torque data. Existing
+datasetsoftenlackthecomprehensiveforceinteractionsorthediversityofcontact-drivenscenarios
+necessarytodeveloprobustforce-awarepolicies.
+OurdatacollectionwasperformedusingaFlexivRizon7-DOFroboticarmequippedwithaDahuan
+adaptivegripper. VisualdatawascapturedfromtwoRGB-Dcameras: onestaticthird-personview
+(RealSenseD435at1280x720,30FPS)andonewrist-mountedcamera(RealSenseD415at640x480,
+30 FPS) providing egocentric perspectives. Data was collected via human teleoperation using a
+Quest3 VR interface with custom mappings to robot end-effector control. Five expert operators
+performedatotalof5distinctcontact-richtasks: bottlepumping,pluginsertion,USBdriveinsertion,
+whiteboardwiping,andcucumberpeeling,asdescribedinSection5.1. Foreachtask,operatorswere
+instructedtocompletetheobjectivewhileensuringdiverseandsuccessfulinteractionpatterns. We
+variedobjectpositionsandorientationsacrossdemonstrationstoenhancedatadiversity.
+Theresultingdataset,whichwetermForceVLA-Data,comprisesatotalof244trajectories,amounting
+to140thousandsynchronizedtimesteps. Allsensorstreamsweresynchronizedbasedontimestamps.
+Imageswereresizedto480x640pixelsandnormalized. ActionswererepresentedastargetTCPpose
+andgripperwidth. TheForceVLA-Datadataset,alongwithourdatacollectioncodeandprocessing
+scripts,willbemadepubliclyavailableatwebsitetofacilitatefurtherresearchinlearningforce-aware
+manipulationpolicies.
+5
+=== Page 6 ===
+Figure4: Overviewoftasksetupsusedinevaluation. (a)InsertUSB,(b)pumpbottle,(c)insertplug,
+(d)peelcucumber,and(e)wipeboard. Thesetasksspandiversecontactdynamicsandmanipulation
+skills,frompreciseinsertionstotool-mediatedsurfaceinteractions.
+5 Experiments
+Thissectionpresentsacomprehensivesuiteofreal-worldcontact-richmanipulationexperimentsand
+analyticalstudiestoempiricallyvalidatetheForceVLAmodel. Theevaluationisstructuredaround
+fourcoreresearchquestions: (1)theoveralleffectivenessofForceVLAcomparedtobaselinesthat
+incorporateforcewithoutourspecializedfusionmechanism;(2)themodel’sabilitytogeneralize
+acrossunseenobjectinstances,environmentalvariations,andtaskconditions;(3)theefficacyofthe
+proposedFVLMoEarchitectureinachievingoptimalmultimodalfusionforcontact-richmanipulation;
+and(4)theabilityoftheMixture-of-Expertsmoduletoappropriatelyprocessheterogeneousinput
+modalitiesandlearnmeaningfulroutingbehaviorsacrossexpertnetworks.
+5.1 ExperimentalSetups
+ToevaluatetheeffectivenessofForceVLA,weconductedexperimentsonfivediversecontact-rich
+manipulationtasks: BottlePumping,PlugInsertion,USBDriveInsertion,WhiteboardWiping,and
+CucumberPeeling,asinFigure4.Thesetaskswerechosentoassessfine-grainedcontrol,adaptability
+tovariedinitialconditions,andtheutilityofmultimodalfeedback,particularlyforcesensing. Each
+taskintroducesuniquephysicalchallenges: BottlePumpingrequirespreciseverticalpressing;Plug
+andUSBDriveInsertionsinvolveaccuratealignmentandforce-controlledinsertion;Whiteboard
+Wiping demands smooth trajectory control and surface contact; and Cucumber Peeling tests the
+abilitytoapplyandmaintaincontrolledforceduringcontinuoussurfaceinteraction.
+We trained ForceVLA using approximately 50 expert demonstrations per task. Evaluation was
+conducted over 20 trials each for the insertion and pumping tasks, 10 trials for the more time-
+consumingwhiteboardtask,and15trialsforthecucumberpeelingtask,eachinvolving15peeling
+strokes. Successwasdefinedbytask-specificcriteriasuchascompleteinsertion,effectivewiping
+motion, or substantial cumulative peel coverage. These tasks were designed to rigorously probe
+ForceVLA’scapacitytomodelandcontrolcomplex,uncertaindynamicsthroughtheintegrationof
+vision,language,andforcemodalities.
+EvaluationMetricsandBaselines. Modelperformanceisprimarilyevaluatedusingthetasksuccess
+rate across all five challenging contact-rich manipulation tasks. For specific task like cucumber
+peeling,averagepeellengthandminimumpeelingtimesarealsoreportedtoprovideamorenuanced
+assessment. TocontextualizetheperformanceofourproposedForceVLAmodel, wecompareit
+against several carefully selected baselines derived from the state-of-the-art π [10] architecture,
+0
+whichservesasourfoundationalmodel. Thespecificvariantsincludeπ -base[10]w/oF(standard
+0
+π withoutforceinput),π -base[10]w/F(π withforcesignalsdirectlyconcatenatedtostateinputs),
+0 0 0
+and corresponding π -fast[25] configurations ( w/o F and w/ F), representing potentially faster
+0
+alternatives. Theselectionofπ -base[10]allowscomparisonwithastrongexistingVLAmethod,
+0
+whilethe‘inputForce‘variantsarecrucialfordemonstratingtheefficacyofourFVLMoEfusion
+strategyoversimplerforceintegrationapproaches.
+5.2 MainResults
+OverallPerformance. AsdemonstratedinFigure5,ForceVLAachievesanaveragesuccessrateof
+60.5%acrossallfivetasks,significantlyoutperformingallbaselineconfigurations. Comparedtothe
+standardπ -basemodelwithoutforcefeedback(π -basew/F),whichachievedanaverageof37.3%,
+0 0
+6
+=== Page 7 ===
+100
+90
+80
+70
+60
+50
+40
+30
+20
+10
+0 InsertUSB InsertPlug PumpBottle WipeBoard-1 WipeBoard-2 PeelCucumber Average
+)%(etaRsseccuS
+100.0
+π0-fastw/oF π0-fastw/F 91.0 93.0
+π0-basew/oF π0-basew/F 87.0
+ForceVLA(Ours) 80.0 83.0
+67.0 64.0
+60.0 60.5
+45.0 45.0 45.0
+37.340.2
+30.0 33.0 31.0
+25.0 25.0 25.025.0 27.0
+20.0
+14.2
+10.09.0
+5.05.0
+0.00.0 0.0 0.0 0.00.0
+Figure5: Maintasksuccessratesacrossdifferentmethods. ForceVLAsignificantlyoutperformsall
+baselinesonfivecontact-richtasks. Incorporatingexternalforcefeedbackimprovesperformancefor
+π -basemodel,whileourmethodachievesthehighestaveragesuccessrate,demonstratingrobust
+0
+performance under complex interaction dynamics. “Wipe Board-1” indicates the success rate of
+successfully performing the wiping motion, while “Wipe Board-2” refers to the success rate of
+completelyerasingthemarkings.
+ForceVLAshowsanimprovementof23.2%. Thishighlightsthesubstantialbenefitofincorporating
+and effectively processing multimodal information, including force. Table 1 further highlights
+ForceVLA’ssuperiorperformanceontheintricatecucumberpeelingtask. Ourmodelexcelledon
+both key metrics: it achieved the longest average peel length per stroke (14.12cm ↑), indicating
+betterabilitytoexecutehigh-fidelitysurfacemanipulationthroughstabletoolorientation,adaptive
+contouring,andsustainedsurfacecontactcomparedtobothπ -basew/F(13.17cm)andπ -base
+0 0
+w/oF(10.27cm). Concurrently,ForceVLAdemonstratedsuperioroverallefficiencybyrequiring
+the minimum number of strokes (7 ↓) to achieve a substantially peeled cucumber, significantly
+fewerthanthe10and14strokesneededbyπ -basew/Fandπ -basew/oF,respectively. These
+0 0
+combinedresultsunderscoreForceVLA’sproficiencyinmaintainingconsistent,effectivetool-surface
+interactionandexecutingefficient,goal-directedmotionsintasksdemandingcontinuousandprecise
+forcemodulation.
+EffectivenessofForceFusionviaFVLMoE.In-
+Table1: Performanceofcucumberpeeling.
+troducing raw force signals into π -base boosts
+0
+performance from 37.3% to 40.2%, confirming Avg.Peel Min.Strokes
+Model
+theutilityofforcefeedback. However,ForceVLA Length(cm)↑ toClean↓
+surpassesbothwith60.5%,indicatingthateffec-
+π -base[10]w/oF 10.27 14
+tivefusion—enabledbyourFVLMoEmodule—is 0
+π -base[10]w/F 13.17 10
+essentialforfullyleveragingtactileinformation. 0
+ForceVLA(Ours) 14.12 7
+This demonstrates that beyond the presence of
+forcedata,howitisintegratediscriticaltoperformancegains.
+Selectionofπ -baseandπ -fastmodel. Forourfoundationalbaseline,weevaluatedπ -baseand
+0 0 0
+π -fastvariants. Theπ -basearchitecturedemonstratedsuperioroverallperformance: π -basew/
+0 0 0
+F(40.2%)andπ -basew/oF(37.3%)significantlyoutperformedπ -fastw/F(14.2%)andπ -fast
+0 0 0
+w/oF(31.0%). Whileπ -fastvariantsexhibitedacomparativeadvantagesolelyonthewhiteboard
+0
+wipingtask—potentiallyduetoasimpleractiongenerationmechanismbeingmoreattunedtosuch
+motions,theπ -fastarchitecture’sperformancenotablydegraded(from31.0%to14.2%)whenraw
+0
+force input was directly added. We attribute this sensitivity to its highly optimized and compact
+token space, which is likely disrupted by naively projected force tokens lacking corresponding
+large-scalepre-training. Conversely,π -basemodestlybenefitedfromdirectforceinput,withits
+0
+larger representational capacity presumably allowing for partial utilization of these new sensory
+signals. Givenitssuperioraggregateperformanceandmorerobusthandlingofnaiveforceintegration,
+π -basewasselectedastheprimarybaselinefordevelopingandevaluatingForceVLA.
+0
+5.3 ModelGeneralization
+To evaluate ForceVLA’s generalization capabilities, we designed five experimental settings with
+increasingtaskvariabilityandphysicaluncertainty,asillustratedinFigure6. Thesesettingsinclude:
+(1)ObjectGen. 1,whichvariesthebottletypeinthebottlepumpingtask;(2)ObjectGen. 2,which
+changestheplugtypeinthepluginsertiontask;(3)HeightGen.,whichadjuststheinitialbottle
+7
+=== Page 8 ===
+Figure6: Variantsofgeneralizationsettingsusedinourexperiments. (a–b)Differentobjectgeome-
+tries;(c)variationinsocketheight;(d)partialvisualocclusion;(e)unstablesocketconditions. These
+scenariosevaluaterobustnessunderdiversephysicalandperceptualperturbations.
+Table2: Successrates(%)ofdifferentmodelsundervariousexperimentalconditions. Maximum
+valuesineachcolumnarehighlightedinbold;second-bestvaluesareunderlined.
+Object Object Height Visual Unstable
+Model Average
+Gen. 1 Gen. 2 Gen. Occlusion Socket
+π -base[10]w/oF 48.00% 10.00% 66.67% 60.00% 10.00% 38.93%
+0
+π -base[10]w/F 32.00% 10.00% 77.78% 30.00% 10.00% 31.96%
+0
+π -fast[25]w/oF 80.00% 35.00% 88.89% 50.00% 10.00% 52.78%
+0
+π -fast[25]w/F 32.00% 5.00% 44.44% 50.00% 30.00% 32.29%
+0
+ForceVLA(Ours) 80.00% 40.00% 88.89% 90.00% 20.00% 63.78%
+heightandmeasuressuccessundertorquelimits;(4)VisualOcclusion,wherepartsoftheplugand
+socketareobscured;and(5)UnstableSocket,introducingphysicalinstabilityviaclutterbeneath
+thesocket. Thesevariationstestbothperceptualrobustnessandphysicaladaptability,withresults
+summarizedinTable2.
+Acrossallsettings,ForceVLAexhibitedsuperiorgeneralization,particularlyinscenariosrequiring
+fine physical interaction. In Object Gen. 1, it achieved an 80.00% success rate, outperforming
+baselines that lacked force input or processed it naively. In the Height Gen. setting, ForceVLA
+effectivelyscaleditsinteractionforcestovariabledepths,avoidingtorquelimitviolationsseenin
+othermodels. Furthermore,ForceVLAmaintainedhighsuccessundervisualdegradation(90.00%in
+VisualOcclusion),reflectingitsrelianceonmultimodalfeedbackbeyondvisualcues. Theseresults
+underscorethecriticalroleoftheproposedFVLMoEarchitectureinintelligentlyintegratingforce
+information-notjustforsensingcontact,butformodulatingactioninresponsetodynamicphysical
+conditions—enablingmoreversatileandrobustroboticmanipulation.
+5.4 AblationStudies
+TovalidatethearchitecturaldesignofForceVLA,partic-
+ularly the integration of force feedback, we conducted Table3: AblationResults
+comprehensive ablation studies shown in Table 3. We Model SuccessRate
+compared early, late, and our proposed fusion strategy.
+baseline[10] 45%
+Earlyfusionmethods,suchas“linearbeforeVLM”and
+linearbeforeVLM 55%
+“MoEbeforeVLM,”whichinjectforcedatapriortothe
+MoEbeforeVLM 0
+visual-languagemodel(VLM),significantlydegradedper-
+concateafterVLM 60%
+formance. Notably, the MoE-based early fusion failed
+ForceVLA(Ours) 80%
+entirely(0%successrate),highlightingthatalteringthe
+inputrepresentationsofapretrainedVLMdisruptsitslearnedfeaturedistributionsandundermines
+itscapacitytoprocessvisual-linguisticsignalseffectively.
+8
+=== Page 9 ===
+Figure7: Trajectoryvisualizationsacrosstasksandconditions. (a)USBinsertion,(b)bottlepumping,
+and(c)pluginsertionunderstableandunstablesocketconditions. Eachsequenceillustrateshow
+ForceVLAadaptsitsactionsinresponsetocontactdynamics,retryingoradjustingposewhenfailures
+occur,ultimatelyachievingsuccessfultaskcompletion.
+Latefusionstrategiesfaredbetter.The“concatenateafterVLM”method,equivalenttoabasicbaseline
+whereforcefeaturesareappendedatthedecodingstage,improvedsuccessto60%—demonstrating
+theutilityofforcesensing. However,ourproposedForceVLAarchitectureachievedamarkedly
+higher80%successrate. ByintroducingforcefeaturesaftertheVLM’scoreencodingandusingthe
+FVLMoEmoduleforadaptivefusion,ForceVLAenablesspecializedroutinganddeepermultimodal
+interaction. Theseresultsconfirmtwocoredesigninsights: forceshouldbeintroducedpost-VLM
+topreservepretrainedrepresentations,andsophisticatedfusion(viaFVLMoE)isessentialtofully
+leverageforceinguidingcontact-richroboticbehavior.
+5.5 VisualizationandCaseStudies
+Figure7illustratesForceVLA’sabilitytoadaptmotioninresponsetocontactfeedbackduringcomplex
+manipulation tasks. In the USB insertion task, when initial attempts failed due to misalignment,
+ForceVLA re-oriented or re-grasped the drive to achieve successful insertion—behaviors absent
+in baseline models, which repeated failed motions or applied excessive force. Similarly, in the
+“Unstable Socket” scenario (Figure 7c), ForceVLA maintained compliant control as the socket
+shifted,dynamicallyadjustingtheplug’sposetocompleteinsertion,whilebaselineslosttracking
+and failed. These examples highlight a key insight: simply adding force input does not ensure
+closed-loop adaptation. ForceVLA’s FVLMoE module enables deep fusion of force, vision, and
+language,supportingprecise,context-awarecontrolandrobustgeneralizationunderdynamicphysical
+conditions.
+6 Conclusion
+Inconclusion,weproposeForceVLA,aframeworkthatbridgesthegapbetweenhigh-levelmodality
+(vision/language)andlow-levelphysicalsensing(force)forcontact-richmanipulation. Atitscore,
+ForceVLAintroducesFVLMoE,aMixture-of-Expertsmodulethatdynamicallyfusesvisual,linguis-
+tic,andforcemodalitiestoenablefine-grained,context-awarecontrol. Ourexperimentsacrossfive
+challengingtasksshowthatForceVLAsignificantlyoutperformsstrongπ -basedbaselines,achieving
+0
+anaveragesuccessrateimprovementof23.2%andupto80%successonindividualtasks. Ablation
+studiesfurthervalidatethebenefitsoflate-stageforcefusionandexpertrouting. Wealsocontribute
+ForceVLA-Data,anewdatasetformultimodalcontact-richmanipulation. Throughtheco-designof
+ourarchitecturalapproachanddataset,wedemonstratemeaningfulprogresstowardVLAsystems
+thatexhibitgreateradaptivebehaviorandphysicalintelligenceinmanipulationscenarios.
+Limitation. Firstly, ForceVLA currently utilizes estimated external wrench values. While this
+approachhasproveneffective,theseestimationsmaynotalwayscapturethefullprecisionafforded
+bydirecthigh-fidelitymeasurements,particularlyinscenariosdemandingextremehapticsensitivity.
+Potentialenhancementsincludeexploringtheintegrationofsuperiorsensorsoradvancedcalibration
+9
+=== Page 10 ===
+techniquestofurtherrefinefine-grainedcontrolcapabilities. Secondly,ForceVLA’sexperimental
+validationwaspredominantlyconductedonroboticplatformswithintegrated,andtypicallyhigh-cost,
+force-torquesensing,whichcannaturallylimitbroaderaccessibility. Topromotewiderpractical
+deployment and help democratize force-aware manipulation research, we are actively assessing
+ForceVLA’sadaptabilityandperformanceonmorecommon,lower-costplatformsequippedwith
+externalorretrofittedforcesensors.
+References
+[1] AlexanderKhazatsky,KarlPertsch,SurajNair,AshwinBalakrishna,SudeepDasari,SiddharthKaramcheti,
+Soroush Nasiriany, Mohan Kumar Srirama, Lawrence Yunliang Chen, Kirsty Ellis, et al. Droid: A
+large-scalein-the-wildrobotmanipulationdataset. arXivpreprintarXiv:2403.12945,2024.
+[2] AbbyO’Neill,AbdulRehman,AbhiramMaddukuri,AbhishekGupta,AbhishekPadalkar,AbrahamLee,
+AcornPooley,AgrimGupta,AjayMandlekar,AjinkyaJain,etal. Openx-embodiment:Roboticlearning
+datasetsandrt-xmodels:Openx-embodimentcollaboration0. In2024IEEEInternationalConferenceon
+RoboticsandAutomation(ICRA),pages6892–6903.IEEE,2024.
+[3] HomerRichWalke,KevinBlack,TonyZZhao,QuanVuong,ChongyiZheng,PhilippeHansen-Estruch,
+AndreWangHe,VivekMyers,MooJinKim,MaxDu,etal. Bridgedatav2:Adatasetforrobotlearningat
+scale. InConferenceonRobotLearning,pages1723–1736.PMLR,2023.
+[4] AnthonyBrohan,NoahBrown,JusticeCarbajal,YevgenChebotar,JosephDabis,ChelseaFinn,Keerthana
+Gopalakrishnan, Karol Hausman, Alex Herzog, Jasmine Hsu, et al. Rt-1: Robotics transformer for
+real-worldcontrolatscale. arXivpreprintarXiv:2212.06817,2022.
+[5] OctoModelTeam,DibyaGhosh,HomerWalke,KarlPertsch,KevinBlack,OierMees,SudeepDasari,
+JoeyHejna,TobiasKreiman,CharlesXu,etal. Octo: Anopen-sourcegeneralistrobotpolicy. arXiv
+preprintarXiv:2405.12213,2024.
+[6] AnthonyBrohan,NoahBrown,JusticeCarbajal,YevgenChebotar,XiChen,KrzysztofChoromanski,
+TianliDing,DannyDriess,AvinavaDubey,ChelseaFinn,etal. Rt-2: Vision-language-actionmodels
+transferwebknowledgetoroboticcontrol. arXivpreprintarXiv:2307.15818,2023.
+[7] AlecRadford,JongWookKim,ChrisHallacy,AdityaRamesh,GabrielGoh,SandhiniAgarwal,Girish
+Sastry,AmandaAskell,PamelaMishkin,JackClark,etal. Learningtransferablevisualmodelsfrom
+naturallanguagesupervision. InInternationalconferenceonmachinelearning,pages8748–8763.PmLR,
+2021.
+[8] WenwenZhuang,XinHuang,XiantaoZhang,andJinZeng. Math-puma:Progressiveupwardmultimodal
+alignment to enhance mathematical reasoning. In Proceedings of the AAAI Conference on Artificial
+Intelligence,volume39,pages26183–26191,2025.
+[9] MooJinKim,KarlPertsch,SiddharthKaramcheti,TedXiao,AshwinBalakrishna,SurajNair,Rafael
+Rafailov,EthanFoster,GraceLam,PannagSanketi,etal.Openvla:Anopen-sourcevision-language-action
+model. arXivpreprintarXiv:2406.09246,2024.
+[10] KevinBlack,NoahBrown,DannyDriess,AdnanEsmail,MichaelEqui,ChelseaFinn,NiccoloFusai,
+LachyGroom,KarolHausman,BrianIchter,etal. π :Avision-language-actionflowmodelforgeneral
+0
+robotcontrol. arXivpreprintarXiv:2410.24164,2024.
+[11] Lucas Beyer, Andreas Steiner, André Susano Pinto, Alexander Kolesnikov, Xiao Wang, Daniel Salz,
+MaximNeumann,IbrahimAlabdulmohsin,MichaelTschannen,EmanueleBugliarello,etal. Paligemma:
+Aversatile3bvlmfortransfer. arXivpreprintarXiv:2407.07726,2024.
+[12] Xiang Zhang, Changhao Wang, Lingfeng Sun, Zheng Wu, Xinghao Zhu, and Masayoshi Tomizuka.
+Efficientsim-to-realtransferofcontact-richmanipulationskillswithonlineadmittanceresiduallearning.
+InConferenceonRobotLearning,pages1621–1639.PMLR,2023.
+[13] MichaelNoseworthy, BingjieTang, BowenWen, AnkurHanda, ChadKessens, NicholasRoy, Dieter
+Fox,FabioRamos,YashrajNarang,andIretiayoAkinola. Forge: Force-guidedexplorationforrobust
+contact-richmanipulationunderuncertainty. IEEERoboticsandAutomationLetters,2025.
+[14] Sung Soo Kim, Manuel Gomez-Ramirez, Pramodsingh H Thakur, and Steven S Hsiao. Multimodal
+interactionsbetweenproprioceptiveandcutaneoussignalsinprimarysomatosensorycortex. Neuron,
+86(2):555–566,2015.
+10
+=== Page 11 ===
+[15] MooJinKim,ChelseaFinn,andPercyLiang. Fine-tuningvision-language-actionmodels:Optimizing
+speedandsuccess. arXivpreprintarXiv:2502.19645,2025.
+[16] WeiZhao,PengxiangDing,MinZhang,ZhefeiGong,ShuanghaoBai,HanZhao,andDonglinWang.
+Vlas:Vision-language-actionmodelwithspeechinstructionsforcustomizedrobotmanipulation. arXiv
+preprintarXiv:2502.13508,2025.
+[17] JiamingLiu,MengzhenLiu,ZhenyuWang,LilyLee,KaichenZhou,PengjuAn,SenqiaoYang,Renrui
+Zhang,YandongGuo,andShanghangZhang. Robomamba:Multimodalstatespacemodelforefficient
+robotreasoningandmanipulation. arXivpreprintarXiv:2406.04339,2024.
+[18] YunfanJiang,AgrimGupta,ZichenZhang,GuanzhiWang,YongqiangDou,YanjunChen,LiFei-Fei,
+AnimaAnandkumar, YukeZhu, andLinxiFan. Vima: Generalrobotmanipulationwithmultimodal
+prompts. arXivpreprintarXiv:2210.03094,2(3):6,2022.
+[19] JohanBjorck,FernandoCastañeda,NikitaCherniadev,XingyeDa,RunyuDing,LinxiFan,YuFang,
+DieterFox,FengyuanHu,SpencerHuang,etal. Gr00tn1: Anopenfoundationmodelforgeneralist
+humanoidrobots. arXivpreprintarXiv:2503.14734,2025.
+[20] Cunxin Fan, Xiaosong Jia, Yihang Sun, Yixiao Wang, Jianglan Wei, Ziyang Gong, Xiangyu Zhao,
+MasayoshiTomizuka,XueYang,JunchiYan,etal. Interleave-vla:Enhancingrobotmanipulationwith
+interleavedimage-textinstructions. arXivpreprintarXiv:2505.02152,2025.
+[21] PhysicalIntelligence,KevinBlack,NoahBrown,JamesDarpinian,KaranDhabalia,DannyDriess,Adnan
+Esmail,MichaelEqui,ChelseaFinn,NiccoloFusai,etal. π .5: avision-language-actionmodelwith
+0
+open-worldgeneralization. arXivpreprintarXiv:2504.16054,2025.
+[22] QingqingZhao,YaoLu,MooJinKim,ZipengFu,ZhuoyangZhang,YechengWu,ZhaoshuoLi,Qianli
+Ma,SongHan,ChelseaFinn,etal. Cot-vla:Visualchain-of-thoughtreasoningforvision-language-action
+models. arXivpreprintarXiv:2503.22020,2025.
+[23] JunjieWen, YichenZhu, JinmingLi, ZhibinTang, ChaominShen, andFeifeiFeng. Dexvla: Vision-
+languagemodelwithplug-indiffusionexpertforgeneralrobotcontrol. arXivpreprintarXiv:2502.05855,
+2025.
+[24] QingwenBu,HongyangLi,LiChen,JisongCai,JiaZeng,HemingCui,MaoqingYao,andYuQiao.
+Towards synergistic, generalized, and efficient dual-system for robotic manipulation. arXiv preprint
+arXiv:2410.08001,2024.
+[25] KarlPertsch,KyleStachowicz,BrianIchter,DannyDriess,SurajNair,QuanVuong,OierMees,Chelsea
+Finn,andSergeyLevine. Fast: Efficientactiontokenizationforvision-language-actionmodels. arXiv
+preprintarXiv:2501.09747,2025.
+[26] ChengmengLi,JunjieWen,YanPeng,YaxinPeng,FeifeiFeng,andYichenZhu. Pointvla:Injectingthe
+3dworldintovision-language-actionmodels. arXivpreprintarXiv:2503.07511,2025.
+[27] ChengChi,ZhenjiaXu,SiyuanFeng,EricCousineau,YilunDu,BenjaminBurchfiel,RussTedrake,and
+ShuranSong. Diffusionpolicy:Visuomotorpolicylearningviaactiondiffusion. TheInternationalJournal
+ofRoboticsResearch,page02783649241273668,2023.
+[28] YanjiangGuo,YuchengHu,JiankeZhang,Yen-JenWang,XiaoyuChen,ChaochaoLu,andJianyuChen.
+Predictionwithaction:Visualpolicylearningviajointdenoisingprocess. InTheThirty-eighthAnnual
+ConferenceonNeuralInformationProcessingSystems,2024.
+[29] ZhongyiZhou,YichenZhu,MinjieZhu,JunjieWen,NingLiu,ZhiyuanXu,WeibinMeng,RanCheng,
+YaxinPeng,ChaominShen,etal. Chatvla: Unifiedmultimodalunderstandingandrobotcontrolwith
+vision-language-actionmodel. arXivpreprintarXiv:2502.14420,2025.
+[30] JiamingLiu,HaoChen,PengjuAn,ZhuoyangLiu,RenruiZhang,ChenyangGu,XiaoqiLi,ZiyuGuo,
+SixiangChen,MengzhenLiu,etal. Hybridvla: Collaborativediffusionandautoregressioninaunified
+vision-language-actionmodel. arXivpreprintarXiv:2503.10631,2025.
+[31] YansongWu,ZongxieChen,FanWu,LingyunChen,LidingZhang,ZhenshanBing,AbdallaSwikir,Sami
+Haddadin,andAloisKnoll. Tacdiffusion:Force-domaindiffusionpolicyforprecisetactilemanipulation.
+arXivpreprintarXiv:2409.11047,2024.
+[32] YifanHou,ZeyiLiu,ChengChi,EricCousineau,NaveenKuppuswamy,SiyuanFeng,BenjaminBurchfiel,
+andShuranSong. Adaptivecompliancepolicy:Learningapproximatecompliancefordiffusionguided
+control. arXivpreprintarXiv:2410.09309,2024.
+11
+=== Page 12 ===
+[33] WenhaiLiu, JunboWang, YimingWang, WeimingWang, andCewuLu. Forcemimic: Force-centric
+imitation learning with force-motion capture system for contact-rich manipulation. arXiv preprint
+arXiv:2410.07554,2024.
+[34] ZihaoHe,HongjieFang,JingjingChen,Hao-ShuFang,andCewuLuFoar. Force-awarereactivepolicy
+forcontact-richroboticmanipulation. arXivpreprintarXiv:2411.15753,2024.
+[35] WilliamXieandNikolausCorrell. Towardsforcefulroboticfoundationmodels:aliteraturesurvey. arXiv
+preprintarXiv:2504.11827,2025.
+[36] PengHao,ChaofanZhang,DingzheLi,XiaogeCao,XiaoshuaiHao,ShaoweiCui,andShuoWang. Tla:
+Tactile-language-actionmodelforcontact-richmanipulation. arXivpreprintarXiv:2503.08548,2025.
+[37] ZihangZhao, YuyangLi, WanlinLi, ZhenghaoQi, LechengRuan, YixinZhu, andKasparAlthoefer.
+Tac-man:Tactile-informedprior-freemanipulationofarticulatedobjects. IEEETransactionsonRobotics,
+2024.
+[38] YiyangLing,KaranOwalekar,OluwatobilobaAdesanya,ErdemBıyık,andDanielSeita. Impact:Intel-
+ligentmotionplanningwithacceptablecontacttrajectoriesviavision-languagemodels. arXivpreprint
+arXiv:2503.10110,2025.
+[39] HuaijiangZhu, TongZhao, XinpeiNi, JiuguangWang, KuanFang, LudovicRighetti, andTaoPang.
+Shouldwelearncontact-richmanipulationpoliciesfromsampling-basedplanners? IEEERoboticsand
+AutomationLetters,2025.
+[40] NoamShazeer,AzaliaMirhoseini,KrzysztofMaziarz,AndyDavis,QuocLe,GeoffreyHinton,andJeff
+Dean. Outrageouslylargeneuralnetworks:Thesparsely-gatedmixture-of-expertslayer. arXivpreprint
+arXiv:1701.06538,2017.
+[41] WilliamFedus,BarretZoph,andNoamShazeer.Switchtransformers:Scalingtotrillionparametermodels
+withsimpleandefficientsparsity. JournalofMachineLearningResearch,23(120):1–39,2022.
+[42] DmitryLepikhin,HyoukJoongLee,YuanzhongXu,DehaoChen,OrhanFirat,YanpingHuang,Maxim
+Krikun,NoamShazeer,andZhifengChen. Gshard:Scalinggiantmodelswithconditionalcomputation
+andautomaticsharding. arXivpreprintarXiv:2006.16668,2020.
+[43] NanDu,YanpingHuang,AndrewMDai,SimonTong,DmitryLepikhin,YuanzhongXu,MaximKrikun,
+YanqiZhou,AdamsWeiYu,OrhanFirat,etal. Glam:Efficientscalingoflanguagemodelswithmixture-
+of-experts. InInternationalconferenceonmachinelearning,pages5547–5569.PMLR,2022.
+[44] Carlos Riquelme, Joan Puigcerver, Basil Mustafa, Maxim Neumann, Rodolphe Jenatton, André Su-
+sanoPinto,DanielKeysers,andNeilHoulsby. Scalingvisionwithsparsemixtureofexperts. Advancesin
+NeuralInformationProcessingSystems,34:8583–8595,2021.
+[45] BarretZoph,IrwanBello,SameerKumar,NanDu,YanpingHuang,JeffDean,NoamShazeer,andWilliam
+Fedus. St-moe:Designingstableandtransferablesparseexpertmodels. arXivpreprintarXiv:2202.08906,
+2022.
+[46] BasilMustafa,CarlosRiquelme,JoanPuigcerver,RodolpheJenatton,andNeilHoulsby. Multimodal
+contrastivelearningwithlimoe:thelanguage-imagemixtureofexperts. AdvancesinNeuralInformation
+ProcessingSystems,35:9564–9576,2022.
+[47] HanZhao,WenxuanSong,DonglinWang,XinyangTong,PengxiangDing,XuelianCheng,andZongyuan
+Ge. More:Unlockingscalabilityinreinforcementlearningforquadrupedvision-language-actionmodels.
+arXivpreprintarXiv:2503.08007,2025.
+[48] Qiang Liu. Rectified flow: A marginal preserving approach to optimal transport. arXiv preprint
+arXiv:2209.14577,2022.
+[49] YaronLipman,RickyTQChen,HeliBen-Hamu,MaximilianNickel,andMattLe. Flowmatchingfor
+generativemodeling. arXivpreprintarXiv:2210.02747,2022.
+[50] Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. Sigmoid loss for language
+imagepre-training. InProceedingsoftheIEEE/CVFinternationalconferenceoncomputervision,pages
+11975–11986,2023.
+[51] JiaqiMa,ZheZhao,XinyangYi,JilinChen,LichanHong,andEdHChi. Modelingtaskrelationships
+inmulti-tasklearningwithmulti-gatemixture-of-experts. InProceedingsofthe24thACMSIGKDD
+internationalconferenceonknowledgediscovery&datamining,pages1930–1939,2018.
+12
+=== Page 13 ===
+A DataCollectionSystem
+Figure8: Ourdatacollectionsystemsetup.
+OurdatacollectionsystemisdepictedinFigure8(a). Thesetupfeaturesaroboticarmequipped
+withbothawrist-mountedcameraandastaticthird-personviewcameratocapturediversevisual
+perspectives. Anoperator,wearingaQuest3headsetandusinghand-heldcontrollers,teleoperates
+therobotarm. Anearbycomputerrunsthenecessarysoftwarefordataacquisition,whichincludes
+programsforinterfacingwiththerobot,synchronizingsensorstreams,andmanagingcommunication
+withtheVRteleoperationhardware. Figure8(b)illustratestheoperatorteleoperatingtheroboticarm
+tocollectdemonstrationdataforthewipeboardtask.
+B TrainingDetails
+Themodelsweremainlytrainedoncomputenodesequippedwith8×NVIDIARTX4090GPUs
+(24GBVRAMeach),64physicalCPUcores,and251GBsystemRAM,usingAdamoptimization
+(β =0.9,β =0.95)withapeaklearningrateof2.5×10−5decayingto2.5×10−6over30,000
+1 2
+steps. Multi-tasktrainingutilizeddataparallelismacross2GPUs(globalbatchsize16,effective2048
+viagradientaccumulation)asadditionalGPUsprovideddiminishingreturnsduetocommunication
+overhead,completing30,000stepsin∼12hours,whilesingle-tasktrainingused1GPUfor10,000
+steps(∼9hours),bothemployingbfloat16precisionwithgradientclipping(∥∇∥=1.0).
+ThedimensionalitiesandkeyparametersofForceVLA’scoreprocessingmodules: InputProjections,
+theFVLMoEblock,andtheActionOutputHeadaredetailedinTable4.
+Table4: FocusedviewofForceVLA’skeyarchitecturalcomponents: InputProjections,FVLMoE,
+andActionOutput. Dimensionsareindicative(e.g.,D ,D forVLMandActionExpert).
+VLM act_e
+Layer KeyParameters/Dimensions
+InputProjections
+ForceProjection Linear;Input:6(F/T),Output:D =2048
+VLM
+StateProjection Linear;Input:D =32,Output:D =1024
+state act_e
+ActionProjection Linear;Input:D =32,Output:D =1024
+action act_e
+Action-TimeMLP 2-layerMLP;Input:2×D ,Hidden/Output:D ;Swishactivation
+act_e act_e
+FVLMoEModule
+Input Concatenation:N ×D (V-Lfeatures)&1×D (Forcetoken)
+VL VLM VLM
+Pre-MoEEncoder TransformerEncoderBlock;D =2048,N =8,D =256;MLP
+model H h
+(expansionfactor1)
+MoELayer SparseMoE;E =4experts(MLPs:D →D ),Top-k=1;Router:
+model model
+D →E
+model
+OutputProjection Linear;Input:D =2048,Output:D =1024
+model act_e
+ActionOutputHead
+ActionOutputProjection Linear;Input:D =1024,Output:D =32
+act_e action
+13
+=== Page 14 ===
+C RouterAnalysis
+1.0
+0.8
+0.6
+0.4
+0.2
+0.00 20 40TaskProgress60 80
+ytilibaborPgnituoR1-poTegarevA
+Expert0 Expert1 Expert2 Expert3
+1.0
+0.8
+0.6
+0.4
+0.2
+0.00 20 40TaskProgress60 80
+ytilibaborPgnituoR1-poTegarevA
+Expert0 Expert1 Expert2 Expert3
+1.0
+0.8
+0.6
+0.4
+0.2
+0.00 20 40TaskProgress60 80
+ytilibaborPgnituoR1-poTegarevA
+1.0
+0.8
+0.6
+0.4
+0.2
+0.00 20 40TaskProgress60 80
+Expert0 Expert1 Expert2 Expert3
+ytilibaborPgnituoR1-poTegarevA
+Expert0 Expert1 Expert2 Expert3
+1.0
+0.8
+0.6
+0.4
+0.2
+0.00 20 40TaskProgress60 80
+ytilibaborPgnituoR1-poTegarevA
+Expert0 Expert1 Expert2 Expert3
+(a) Pump Bottle (b) Insert Plug (c) Wipe Board
+(d) Peel Cucumber (e) Insert USB
+Figure9:Open-loopevaluationofexpertloadacrossdifferenttaskcompletionpercentagesforvarious
+tasks: (a) Pump Bottle, (b) Insert Plug, (c) Wipe Board, (d) Peel Cucumber, and (e) Insert USB.
+Eachsubplotrepresentstheaverageexpertload(verticalaxis)asafunctionofthetaskcompletion
+percentage(horizontalaxis)overtheepisodesinthetestdataset.
+Toanalyzeroutingdynamics,wefirstmeasuredtheprobabilitydistributionoverexpertselections
+foreachtokenasitwasprocessedbytherouterintheMoEmodule. Forvariable-lengthepisodes,
+weappliedpercentile-basednormalization: eachtask(∼10episodes)wasprocessedbysegmenting
+everyepisode’stokensequenceinto100temporallyequidistantintervals,computingthemeantop-1
+probabilitypersegment,andthenaveragingthesemeansacrossepisodes. Thisensuredcross-episode
+comparabilitywhilepreservingtemporalroutingdynamics.
+AsshowninFigure9,differenttasksexhibitdistinctexpertutilizationpatterns. Sometasks(e.g.,
+insert plug, peel cucumber) show clear temporal specialization, where certain experts dominate
+specificphasesofthetask. Others(e.g.,wipeboard)demonstrateamoreconsistentpreferencefora
+singleexpertthroughoutexecution.Thesetrendssuggestthattherouterlearnstoallocatecomputation
+dynamicallyacrossexpertsbasedontask-specificsemanticsandtemporalstructure.
+What’smore,wefoundthatExpert0dominatesnearlyhalfofthetokensacrossmultipletasks. This
+persistentactivationsuggeststhatExpert0mayfunctionasageneral-purposeexpert,responsible
+forthefusionofmultiplemodalitiesorroutinecontrolprimitivesthataresharedacrosstasks. Its
+broadinvolvementcontrastswiththemoreselective,phase-specificactivationofExpert1orExpert
+3,reinforcingthehypothesisoffunctionalspecializationamongexperts. Suchasymmetryinrouting
+frequencyreflectsnotonlytemporalsemanticvariancewithintasksbutalsoarchitecturalbiastoward
+certainexperts,potentiallyshapedduringtraining.
+D Multi-taskEvaluation
+Table5: Multi-taskjointtrainingsuccessrates(%). ForceVLA(Ours)demonstratessuperioraverage
+performanceandexcelsormatchesthebestperformanceinallindividualtasks. Bestperformance(s)
+ineachcolumnareinbold.
+Pump Insert Insert Wipe Average
+Model
+Bottle Plug USB Board SR
+π -fastw/oF 0.0% 0.0% 0.0% 0.0% 0.0%
+0
+π -fastw/F 0.0% 0.0% 0.0% 0.0% 0.0%
+0
+π -basew/oF 20.0% 0.0% 0.0% 0.0% 5.0%
+0
+π -basew/F 50.0% 100.0% 10.0% 10.0% 42.5%
+0
+ForceVLA(Ours) 80.0% 100.0% 10.0% 80.0% 67.5%
+14
+=== Page 15 ===
+Theresultsofjointmulti-tasklearningaredetailedinTable5. Notably,bothπ -fastvariants(0%
+0
+averagesuccessrate)failedtoacquireskillsinthissetting,indicatingtheirlimitedcapacityfordiverse,
+concurrentlearning. Theπ -basew/oFmodelalsoperformedpoorly(5%averagesuccessrate),
+0
+managingonly20%successonasingletask. Addingdirectforceinput(π -basew/F)improvedthe
+0
+averageperformanceto42.5%,primarilyduetoitssuccessintheinsertplugtask. OurForceVLA
+model demonstrated superior multi-task capabilities, achieving the highest average success rate
+of 67.5%. It obtained 80% success in both pump bottle and wipe board tasks, and matched top
+performanceininsertplug(100%)andinsertusb(10%). Thisrobustperformanceacrossmultiple
+distinct tasks indicates ForceVLA’s capacity for concurrent skill learning, proficient instruction
+followingforvariedgoals,andhighlightstheroleofitsFVLMoEarchitectureinutilizingmultimodal
+cues,particularlyforce,withinasharedpolicy.
+E Real-worldExperimentsVisualization
+Inthissection,wepresentkeyframesfromreal-worldexperimentvideos.Eachvisualizationcontrasts
+failurecasesofbaselinemodelswithsuccessfultaskcompletionsbyourForceVLAmodelunder
+similarconditions.
+Figure10: KeyframesfromPumpBottletaskvideos.
+15
+=== Page 16 ===
+Figure11: KeyframesfromInsertUSBtaskvideos.
+Figure12: KeyframesfromWipeBoardtaskvideos.
+16
+=== Page 17 ===
+Figure13: KeyframesfromInsertPlugtaskvideos.
+Figure14: KeyframesfromInsertPlugGeneralizationtask1videos.
+17
+=== Page 18 ===
+Figure15: KeyframesfromInsertPlugGeneralizationtask2videos.
+Figure16: KeyframesfromInsertPlugGeneralizationtask3videos.
+18
+=== Page 19 ===
+Figure17: KeyframesfromInsertPlugOcclusiontask1videos.
+Figure18: KeyframesfromInsertPlugOcclusiontask2videos.
+19
+=== Page 20 ===
+Figure19: KeyframesfromInsertPlugUnstabletaskvideos.
+20

@@ -1,0 +1,578 @@
+=== Page 1 ===
+Learning Robotic Manipulation Policies from
+Point Clouds with Conditional Flow Matching
+EugenioChisari, NickHeppert, MaxArgus, TimWelschehold,
+ThomasBrox, AbhinavValada
+DepartmentofComputerScience,UniversityofFreiburg,Germany
+http://pointflowmatch.cs.uni-freiburg.de
+Abstract: Learningfromexpertdemonstrationsisapromisingapproachfortrain-
+ingroboticmanipulationpoliciesfromlimiteddata. However,imitationlearning
+algorithmsrequireanumberofdesignchoicesrangingfromtheinputmodality,
+trainingobjective,and6-DoFend-effectorposerepresentation. Diffusion-based
+methodshavegainedpopularityastheyenablepredictinglong-horizontrajectories
+andhandlemultimodalactiondistributions. Recently,ConditionalFlowMatching
+(CFM)(orRectifiedFlow)hasbeenproposedasamoreflexiblegeneralization
+ofdiffusionmodels. Inthispaper,weinvestigatetheapplicationofCFMinthe
+context of robotic policy learning and specifically study the interplay with the
+otherdesignchoicesrequiredtobuildanimitationlearningalgorithm. Weshow
+thatCFMgivesthebestperformancewhencombinedwithpointcloudinputob-
+servations. Additionally, we study the feasibility of a CFM formulation on the
+SO(3)manifoldandevaluateitssuitabilitywithasimplifiedexample. Weperform
+extensiveexperimentsonRLBenchwhichdemonstratethatourproposedPoint-
+FlowMatchapproachachievesastate-of-the-artaveragesuccessrateof67.8%over
+eighttasks,doubletheperformanceofthenextbestmethod.
+Keywords: ImitationLearning,Manipulation,ConditionalFlowMatching
+1 Introduction
+Imitationlearning(IL)isthewidelystudiedproblemoftrainingpoliciesfromagivensetofexpert
+demonstrations[1,2,3].Inrecentyears,imitationlearninghasgainedpopularityintherobotlearning
+community,asleveragingthepriorknowledgeoftheexpertdemonstratorallowstrainingcomplex
+behaviorswithsmallamountsofdata. TheprimaryapproachtolearninganILpolicyisBehavior
+Cloning(BC)[4,5],whereadeterministicmappingfromstatetoactionsislearnedinasupervised
+mannerfromtheavailabledata. WhileBChasachievedsignificantsuccessfordifferenttasks,robot
+policylearningremainsachallengingproblem,giventherequirementofhighprecision,thesequential
+correlation(i.e. noti.i.d.) ofdata,andthemultimodalityoftheactiondistribution,whichalladd
+complexitycomparedtoothersupervisedlearningproblems.
+Recently, generative models have been demonstrated to be effective at tackling some of these
+challenges.Mostprominently,DiffusionPolicy[6]adoptsascore-matchingformulationofgenerative
+diffusionmodels. Theforwarddiffusionprocessstartswithexpertrobottrajectoriesandgradually
+addsGaussiannoiseuntilthesignalapproximatespurenoise. Thedenoisingprocessrevertsthese
+steps and it is used as a training signal for the model. This is a stochastic process that results in
+GaussianconditionalprobabilitypathsmappingGaussiannoisetodata,withspecificchoicesofmean
+andstandarddeviation[7,8]. Theauthorsshowthatdiffusionpoliciescanhandlemultimodalaction
+distributionsandtodirectlypredictlongsequencesofactions.
+Diffusionpoliciessparkedstronginterestfromthecommunityandledtomanyexcitingresultsin
+roboticmanipulationapplications[9,10]. Nevertheless,relyingondiffusionmodelsalsohassome
+8thConferenceonRobotLearning(CoRL2024),Munich,Germany.
+4202
+peS
+11
+]OR.sc[
+1v34370.9042:viXra
+=== Page 2 ===
+disadvantages: diffusion models need to explicitly define an iterative forward diffusion process,
+which inherently defines the final noisy distribution and the probability path the model learns to
+denoisealong. InthetypicalcaseofGaussians,aclosed-formsolutionisavailable,enablingusto
+directlygeneratefullynoisedandintermediate,partiallynoised,samples. Inturn,inthecaseswhere
+noclosed-formsolutionfortheforwarddiffusionprocessisavailable,trainingtimewillincrease[11].
+Toovercometheselimitations,ConditionalFlowMatching(CFM)hasbeenproposedasanefficient
+generalization of diffusion models [12, 13, 11]. CFM is a simulation-free approach, i.e. it starts
+directlyfromnoisewithoutrequiringaforwarddiffusionprocess. Itis,therefore,moregeneral,since
+itallowstransportinganystartingprobabilitydistributionintothedatadistribution.
+Inspiredbyrecentflow-basedgenerativemodels, weproposePointFlowMatch, anovelimitation
+learning algorithm for robotic manipulation. PointFlowMatch uses point cloud observations that
+prove to be more effective than images [9, 10] and builds upon a CFM formulation to learn the
+distributionoftheexpertrobottrajectories. AsCFMisabletomodelarbitraryprobabilitypaths,it
+alsoallowsformulatingtheregressionontheR3 SO(3)manifold. Weevaluatetheperformance
+×
+of our proposed method on the popular RLBench benchmark [14] and compare it against strong
+recentbaselineswithbothimageandpointcloudobservations: DiffusionPolicy[6],3DDiffusion
+Policy[9],ChainedDiffuser[10],andAdaFlow[15]. Insummary,thispapermakesthefollowing
+maincontributions:
+• PointFlowMatch, anovelmethodbasedontherecentconditionalflowmatchingframeworkto
+trainroboticimitationlearningpoliciesfrompointclouds.
+• Aninvestigationoftwodifferentapproachestohandle3DrotationsinthecontextofCFMfor
+policylearning.
+• Extensiveevaluationsagainstrecentstate-of-the-artbaselinesandanablationstudyofourmain
+designchoices.
+• We make the code, models, and videos publicly available at http://pointflowmatch.cs.
+uni-freiburg.de.
+2 RelatedWork
+Generativemodelsforimitationlearninginroboticmanipulationhaveattractedsignificantinterest.
+Inthefollowing,wehighlightrecentadvancesinthistopic.
+GenerativeModelsforPolicyLearning: Oneinterestingclassofgenerativemodelsexploredfor
+roboticpoliciesistheActionChunkingTransformer(ACT)[16]. ItadoptsaCVAE[17]structure,
+where the encoder predicts a latent variable z and the decoder outputs the action sequence. A
+differentapproachistakenbyFlorenceetal.[18],whoproposeImplicitBehaviorCloning(IBC).
+IBC defines the distribution over action as an Energy-Based Model (EBM) [19]. This approach
+inherently handles multimodal distributions but is unstable to train due to the need for negative
+samplingwhencomputingtheloss.Anearlyattempttoapplydiffusionmodelstoroboticapplications
+is presented in Diffuser [20], where the authors investigate the use of diffusion models from the
+perspectiveofplanning. Refiningthisidea,Chietal.[6]proposetheseminalworkDiffusionPolicy
+(DP).DPinheritstheadvantagesofIBC(handlingmultimodalactiondistributions)whileavoidingits
+downsides. Insteadoflearninganenergyfunction,DPlearnsthegradientoftheactiondistribution,
+whichexhibitsbettertrainingstability.
+DiffusionPolicyfromPointClouds: ThesuccessofDPinspirednumerousfollow-upworks. A
+keycharacteristiccommontomanyofthemisthechoiceofpointcloudobservationrepresentations,
+insteadofRGBimages,asusedintheoriginalDPmethod. ACT3D[21]isatransformermodelthat
+predictsthenextbestwaypoint,insteadofafulltrajectory.3D-DP[9]learnstopredictfulltrajectories,
+and it also adopts a modified MLP as an efficient point cloud backbone. ChainedDiffuser [10]
+proposesahierarchicalmodelwherehigh-levelkeypointsarepredictedviaACT3Dandlow-level
+trajectories connecting these points are generated via the standard trajectory diffusion. Another
+hierarchicalmodelisHDP[22],whichbuildsonPerAct[23]asawaypointpredictorandcombines
+bothjointandend-effectorposepredictions. Whilehierarchicalmodelsachievestrongresults,we
+2
+=== Page 3 ===
+specificallyinvestigatetheperformanceoftheunderlyingtrajectorydiffusionmodelsandtherefore
+focusouranalysisonnon-hierarchicalsingle-taskpolicies.
+ConditionalFlowMatching: ConditionalFlowMatching(CFM),alsocalledRectifiedFlow(RF),is
+arecentgenerativemodeltrainingtechniquethatconnectsnoisetodataviastraightpaths[12,13,11].
+ThemoreestablisheddiffusionmodelscanbeseenasaspecialcaseoftheCFMframework,which
+ismoregeneralandconceptuallysimpler. Veryrecently,CFMwasdemonstratedtobesuperiorto
+diffusionmodelsinvariousapplications, rangingfromimagesynthesis[24]toproteinbackbone
+generation[25]. Inthecontextofrobotics,AdaFlow[15]isanimage-basedpolicytrainedwithCFM,
+whichalsoincludesavarianceestimationnetworktopredictthevarianceofthecurrentstateand
+adjustthenumberofintegrationstepsdynamicallyinordertoreduceinferencetime. Concurrentlyto
+ourwork,Braunetal.[26]investigatetheapplicationofCFMtoRiemannianmanifolds,butdonot
+provideadirectcomparisonwiththestandardEuclideanapproach,whileRouxeletal.[27]showthe
+applicationofCFMforsharedautonomyteleoperationofahumanoidrobot.
+3 TechnicalApproach
+We consider an imitation learning problem: given a dataset of n expert demonstrations
+D =
+(cid:8)(cid:0) s(i),a(i)(cid:1)(cid:9)n
+, the goal is to train a policy π : that maps the observed states s
+i=1 S →A
+totheoptimalactionsa. Giventhewidespreadaccessibilityofdepthcameras,weassumethatboth
+RGB and depth observations are available to the policy. In the following sections, we detail our
+choicesofobservationandactionspaces,trainingformulation,andmodelarchitecture.
+3.1 ObservationandActionSpaces
+Ithasbeendemonstratedthat,forrobotpolicylearning,pointcloudobservationsyieldbetterresults
+comparedtoRGBimages[9]. Thesefindingsaresupportedbythefactthatmostrecentstate-of-
+the-art approaches [21, 22, 10] building upon DP adopt point clouds as their visual observation
+representations. Pointcloudobservationsareeffectiveastheydirectlyencodethethree-dimensional
+structureofascene,andclearlyseparategeometricandsemanticfeatures,whichareinsteadblended
+togetherinrawRGBimages. Thisseparationisespeciallyhelpfulinthelowdataregimescommon
+inrobotpolicylearning. Therefore,inourapproachPointFlowMatchwealsoadoptpointcloudsas
+thevisualobservationrepresentation.
+The input to our policy consists of the T last observations, which include both the robot state
+obs
+andprocessedpointcloud, whereT isatuninghyperparameter. Pointcloudsareprocessedin
+obs
+thefollowingmanner. Foreachavailablecamera,weusetheintrinsicsandextrinsicstoprojectthe
+observeddepthvaluesinacommon3Dspace, andwemergeallobservationsintoasinglepoint
+cloud. Last,thefinalpointcloudiscomputedbyapplyingvoxel-downsamplingtoattainuniform
+density,andbycroppingallpointsoutsidetherelevantworkspacearoundtherobot.
+Theactionspaceofourmodelis10-dimensional,consistingofend-effectorposition(3-dimensional),
+end-effectororientation(6-dimensional),andgripperopen/closeaction(1-dimensional). Wechoose
+absolutepositioncontrolfollowingChietal.[6],whichshowedittobemoresuitedtoaction-sequence
+predictioncomparedtovelocitycontrol. Werepresentthegripperorientationasthe6Dvectorformed
+bytruncatingandflatteningtherelativerotationmatrix,asproposedbyZhouetal.[28]. Attesttime,
+weemployaclosed-looprecedinghorizoncontrolstrategy,i.e. wepredictT horizonstepsintothe
+pred
+future,commandonlythefirstpredictedsteptotherobot,andthenrepeattheprediction.
+3.2 ConditionalFlowMatchingforPolicyLearning
+InCFM,forarbitrarysamplesz,thepredictionproblemisformulatedasanordinarydifferential
+equation(ODE)oftheform
+d
+z(t)=v(z(t),t), z(t=0) p , (1)
+dt ∼ 0
+wherep isthearbitrarystartdistribution,commonlychosenasrandomGaussiannoisewithzero
+0
+mean and unit variance, and v : Rd [0,1] Rd is the velocity vector field that induces the
+× →
+3
+=== Page 4 ===
+probabilitypathfromthestarttothetargetdistribution. Thegoalistolearntheappropriatevector
+fieldthattransportsthechosenprobabilitydistributiontothedatadistributioninunittime. Thevector
+fieldv canbelearnedbysupervisionviathelossfunction
+θ
+(cid:20)(cid:90) 1 (cid:21)
+minE v (z ,z ) v (z ,t) 2 dt , (2)
+v z0∼p0,z1∼p1 ∥ gt 1 0 − θ t ∥2
+0
+where v is the choice of ground truth vector field we regress against. While this choice is not
+gt
+unique,CFMadoptsthetime-independent,straightlinevectorfieldv = z z ,whichhasthe
+gt 1 0
+−
+desirablepropertyofproducingstraightprobabilitypaths[12,11]. Inpractice,thevectorfieldv is
+θ
+parametrizedbyaneuralnetworkandthelossinEq.(2)canbeminimizedviamini-batchgradient
+descent. Inthecontextofpolicylearning,thetargetsamplesz aretherobottrajectoriesfromthe
+1
+expertdemonstrationdataset. Oncethemodelistrained,wecansamplez fromthestartdistribution
+0
+p andnumericallyintegratetheODEfromEq.(1)uptotimet=1togeneratenewrobottrajectories
+0
+that follow our expert data distribution. An overview of the implementation of CFM for policy
+learningisshowninAlgorithm1.
+Algorithm1CFMforPolicyLearning(Euclidean) Algorithm2CFMforPolicyLearning(SO(3))
+1 def train_step(batch): 1 def train_step(batch):
+2 obs, target_traj = batch 2 obs, target_traj = batch
+3 cond = obs_encoder(obs) 3 cond = obs_encoder(obs)
+4 t = rand() # uniform 4 t = rand() # uniform
+5 z0 = randn() # normal 5 z0 = randn_SO3() # IGSO(3)
+6 z1 = target_traj 6 z1 = target_traj
+7 target_vel = z1 - z0 7 target_vel = Log(Inv(z0) @ z1)
+8 zt = z0 + t * target_vel 8 zt = z0 @ Exp(t * target_vel)
+9 pred_vel = net(zt, t, cond) 9 pred_vel = net(zt, t, cond)
+10 loss = mse(pred_vel, target_vel) 10 loss = mse(pred_vel, target_vel)
+11 return loss 11 return loss
+12 12
+13 def inference_step(obs): 13 def inference_step(obs):
+14 cond = obs_encoder(obs) 14 cond = obs_encoder(obs)
+15 z = randn() # normal 15 z = randn_SO3() # IGSO(3)
+16 for k in k_steps: 16 for k in k_steps:
+17 t = k / k_steps 17 t = k / k_steps
+18 dt = 1 / k_steps 18 dt = 1 / k_steps
+19 pred_vel = net(z, t, cond) 19 pred_vel = net(z, t, cond)
+20 z = z + pred_vel * dt 20 z = z @ Exp(pred_vel * dt)
+21 return z 21 return z
+3.3 ConditionalFlowMatchingforDatainSO(3)
+Ourrobotstaterepresentationincludestheend-effector3Dorientation. Since3Dorientationsliveon
+theSO(3)group’smanifold,weneedtopayparticularattentiontohowwehandletheorientation’s
+prediction. Therearetwostrategieswecanemploytotacklethischallenge.
+EuclideanFormulation: ThefirststrategyistofollowthestandardCFMformulationinEuclidean
+spaceforbothtrainingandinferenceandprojecttheresultingvectortotheSO(3)group’smanifold
+onlyattheendoftheinferenceprocess,tooutputavalidrotationmatrix. Thisprojectioncanbe
+implementedasaGrahm–Schmidtprocessinthecaseofa6Drepresentationofrotationsorasthe
+SVD-basedorthogonalProcrustesinthecaseofa9Drepresentationofrotations[29].
+SO(3) Formulation: The second strategy is to define the starting random distribution and target
+vectorfielddirectlyonthe3Drotationmanifoldsothattheentireresultingprobabilitypathlives
+onSO(3). Inparticular,therandominitialstateissampledasz(t=0) ,where
+SO(3) SO(3)
+∼IG IG
+istheisotropicGaussiandistributiononSO(3). Sincethe3Drotationgroupisasmoothmanifold,
+its velocity at a specific point is expressed in the tangent space, denoted as so(3). The mapping
+fromthetangentvectorspacetothemanifoldisdefinedbytheexponentialmapExp( ),whilethe
+•
+inversemappingfromthemanifoldtothetangentspaceisdefinedbythelogarithmmapLog( ). For
+•
+4
+=== Page 5 ===
+Figure1:DiffusionandCFMarerepeatedlyappliedtoanoisytrajectory,therebyiterativelyyieldingaclean
+trajectorythatcanbeexecutedontherobot.Thegenerativemodelsalsotakeasinputencodedobservations.
+adetailedoverviewofthetopic,wereferthereadersto[30]. ForourCFMsetting,thenaturalchoice
+oftargetvectorfieldisgivenbythetangentonthemanifoldthatformsthegeodesicinterpolation
+betweenthestartandtargetsamples
+z =z Exp(tv (z ,z )), where v (z ,z )=Log (cid:0) z −1z (cid:1) . (3)
+t 0 gt 1 0 gt 1 0 0 1
+At test time, we can integrate the predicted velocity vectors in tangent space along the manifold
+geodesictosolvetheODEinEq.(1)andgenerateend-effectororientationsthatdirectlylieinSO(3).
+TheimplementationoftheSO(3)formulationofCFMforpolicylearningisshowninAlgorithm2.
+WhilethelatterapproachhasbeenstudiedinrecentworkssuchasRiemannianFlowMatching[31]
+andFoldFlow[25],acomparisonofthetwostrategiesinthecontextofpolicylearningisstilllacking.
+Inourevaluation(AppendixA.1),weinvestigatebothstrategiesandprovidethecounter-intuitive
+insightsthatthefirst,simplerapproachmightbepreferableforpolicylearninginrobotics.
+3.4 ModelArchitectureandTrainingSetup
+Toencodethepointcloudobservationintolow-dimensionalfeatures,weuseamodifiedversionof
+PointNet [32]. Compared to the original architecture, we remove both T-nets used for input and
+featuretransformation,see[33]. Theseareusedtoimproverotationandtranslationinvariance,which
+isdesirableforclassificationandsegmentationbutnotforroboticstasks. Themodelusedtode-noise
+trajectoriesisaconditional1DU-Net,similarto[6]. Thismodeltakesasinputtherandomnoise
+samplesandtheconditioninformationandreturnsthesamplevelocityinthecaseofCFMandthe
+noiseϵinthecaseofdiffusion. Foranoverview,seeFig.1. Theconditioninformationconsistsof
+theconcatenationoftherobot’sproprioceptivestate(i.e. end-effectorposes)aswellastheencoded
+visualobservation,anditisaddedtothebottleneckstateoftheU-Netmodel.
+WetrainourmodelwiththeAdamWoptimizerandalearningrateof3e−5andweightdecayof1e−6.
+Weapplycosineannealingofthelearningrateandlinearwarmupof5000steps. Weuseabatchsize
+of128andapplyEMAontheweights. Theinputpointcloudsaredownsampledto4096pointsand
+thetargetrobottrajectoriesaresubsampledwithafactorof3.
+4 ExperimentalEvaluation
+WeevaluateourproposedPointFlowMatchonRLBench[14],apopularrobotlearningbenchmark.
+Eachenvironmentconsistsofthe7-DoFFrankaEmikarobotarmtoexecuteactionsandasetoffive
+camerasaroundtheworkspace. WeuseRLBench’sautomaticexpertdemonstrationexecutionto
+collect100trajectoriesforeachtask,whichconsistsofallrobotstatesandcameraobservations. For
+evaluation,werolloutthepolicyoneachtaskfor100episodesandreporttheaveragetasksuccessrate
+acrossallepisodes. FollowingRLBench’stestprotocol,foreachepisodethetasksetupisrandomized.
+Wefurtherperformthreeevaluationrunswiththreerandomseedsandaverageoverallruns. Asa
+result, allmodelsareevaluatedonthesamesetof300randomepisodes. FollowingChainedDif-
+fuser[10],weconsiderasetofeighttasksthatrequirecontinuousinteractionwiththeenvironment,
+5
+=== Page 6 ===
+unplug close open open frame open books shoes
+charger door box fridge hanger oven shelf box
+Figure2:ExampleimagesoftheeightRLBenchtasks.
+Table1:PerformancecomparisonofPointFlowMatchwithdifferentbaselinemethodsontheRLBenchsetof
+tasks.Wereportthesuccessrate(SR)(↑)aswellasthedeltatoourmethod.Onaverage,ourmethodperforms
+considerablybetter.ForOL-ChainedDiffuserwereporttheresultsfromtheoriginalpublication,whichdonot
+includethestandarddeviation.
+unplug close open open frame open books shoes Mean Delta
+Method
+charger door box fridge hanger oven shelf box SR SR
+Dif.Policy[6] 38.0±3.6 19.3±2.5 75.7±4.2 0.0±0.0 16.0±2.6 0.0±0.0 0.3±0.6 0.0±0.0 18.7±2.3 49.1
+AdaFlow[15] 46.3±1.5 13.3±3.1 77.3±3.8 2.0±0.0 12.7±3.8 0.0±0.0 0.3±0.6 0.0±0.0 19.0±2.3 48.8
+3D-DP[9] 33.3±4.7 76.0±1.7 98.3±1.5 4.3±2.1 12.3±2.5 0.3±0.6 3.7±0.6 0.0±0.0 28.5±2.2 39.3
+OL-ChDif[10] 65.0±N/A 21.0±N/A 46.0±N/A 37.0±N/A 43.0±N/A 16.0±N/A 40.0±N/A 9.0±N/A 34.6±N/A 33.2
+PointFlowMatch 83.6±3.3 68.3±6.6 99.4±0.7 31.9±2.9 38.6±2.7 75.9±4.0 68.8±5.8 76.0±3.5 67.8±4.1 -
+wherepoint-to-pointmotionplanningapproachestypicallystruggle:unplug charger,close door,
+open box,open fridge,take frame off hanger,open oven,put books on bookshelf,and
+take shoes out of box(somenamesabbreviatedinfiguresandtables).
+4.1 BenchmarkingResults
+Inthissection,wecomparetheperformanceofPointFlowMatchwithrecentstate-of-the-artmethods
+forimitationlearningbasedongenerativemodels. Forafaircomparison,wekeepthenumberof
+denosiningand/orintegrationstepskconstantto50forallmethods.
+For image-based methods, we compare against the original Diffusion Policy [6] as well as
+AdaFlow [15] which also uses the CFM learning objective. For the scope of this analysis, we
+do not implement the adaptive step feature in AdaFlow, since we mainly focus on the quality of
+predictionandnotoninferencespeed. Forbothmethods,wefollowtheoriginalDiffusionPolicy[6]
+approachandfuseimagesfromallfiveviewpointsafterthebackbonefeatureextraction. Aspoint
+cloud-basedbaselines,weconsiderChainedDiffuser[10]aswellas3D-DP[9]. Inthiswork,we
+specificallyinvestigatetheperformanceofnon-hierarchical,single-taskpolicies. Forthisreason,we
+considertheOpenlooptrajectorydiffusionbaselinepresentedinChainedDiffuser[10],whichisthe
+underlyingdiffusionmodelwithoutthehigherlevelwaypointpolicyformingthehierarchy.
+WereporttheresultsinTab.1. ThisevaluationhighlightsthestrongperformanceofPointFlowMatch,
+whichachievesasuccessrate34percentagepointshigherthanthesecond-bestmodel. Thisresult
+demonstrates that the combination of our choices of observation type, encoder architecture, and
+trainingobjectiveleadstoahighlyeffectiveimitationlearningalgorithm. Inlinewiththefindingsof
+ourablationstudyinSec.4.2,wealsohighlighthowthepointcloudbasedpoliciesoutperformthe
+image-basedpolicies.
+4.2 AblationStudy
+Inthissection,weaimtocomparethekeydesignchoicesofourmethodandanswerthefollowing
+researchquestions:
+• ArepointcloudsamoreeffectiveobservationrepresentationcomparedtorawRGBimages?
+• IsConditionalFlowMatchingamoreeffectivetrainingobjectivecomparedtothemoreestablished
+diffusionmodels?
+• IstheSO(3)formulationofCFMmoreeffectiveatlearningtomatchthedatadistributiononthe
+3Drotationmanifold,comparedtoCFMinEuclideanspacefollowedbyaprojectiononSO(3)?
+6
+=== Page 7 ===
+Table2: Ablationofobservationtype(imagesvspointclouds),vectorfieldformulation(R6vsSO(3)),and
+trainingobjective(DDIMvsCFM)forourmethod,evaluatedonRLBenchtasksshowingthemeansuccessrate
+(SR)(↑)aswellasthedeltatotheproposedmodel.Allmodelsareevaluatedwithk=50inferencesteps.Given
+thesimilarperformanceofthethreepointcloud-basedbaselines,wereporttheaverageacross3trainingseeds,
+eachtestedonthesame3evaluationseeds,foratotalof9evaluationruns.
+Obs. Rot. Training unplug close open open frame open books shoes Mean Delta
+type formul. objective charger door box fridge hanger oven shelf box SR SR
+Img. R6 CFM 51.0±2.0 54.3±3.2 97.3±1.2 10.0±3.6 21.3±3.2 41.0±2.0 19.7±4.7 26.3±4.9 40.1±3.3 27.7
+Pcd. R6 DDIM 84.8±2.1 74.9±5.3 99.3±0.9 30.8±3.7 39.1±3.8 75.2±3.7 67.8±5.6 71.9±6.3 68.0±4.3 − 0.2
+Pcd. SO(3) CFM 82.3±3.1 68.8±4.8 99.4±0.6 34.0±7.6 38.4±4.0 74.9±2.0 68.0±6.4 73.2±1.2 67.4±4.4 0.4
+Pcd. R6 CFM 83.6±3.3 68.3±6.6 99.4±0.7 31.9±2.9 38.6±2.7 75.9±4.0 68.8±5.8 76.0±3.5 67.8±4.1 −
+−
+80
+60
+40
+20
+0
+1 2 4 8 16
+kInferenceSteps
+)
+(etaRsseccuS
+−
+40
+30
+DDIM
+20
+CFM
+10
+0
+)(]zH[SPFecnerefnI ·
+k-steps 1 2 4 8 16 50
+Inference DDIM 30 50 89 149 190 362
+Time[ms] CFM 29 49 85 149 189 354
+Succes DDIM 19.4 13.5 66.3 66.9 66.3 68.0
+Rate CFM 36.8 61.9 66.0 68.8 69.3 67.8
+Figure3:ComparisonofCFMandDDIMforvaryingvaluesofthenumberofinferencestepsk.Wecompare
+theinferencetime(↓)measuredin[ms]aswellastheinferenceFPS(↑)in[Hz]againstoverallsuccessrate(↑)
+forbothformulations.
+• Howdoesthenumberofinferencestepskaffectperformance?
+In order to answer these questions, we carry out an ablation study where we vary each of the
+aforementioneddesignchoicesandinvestigatetheirimpactonoverallperformance. Inparticular,
+we investigate 1) using images as visual observation, adopting the same ResNet backbone as in
+theoriginalDP[6],2)usingtheDenoisingDiffusionImplicitModel(DDIM)[34]insteadofthe
+CFMtrainingobjective,3)adoptingtheSO(3)formulationofCFMfortheend-effectororientations
+to learn probability paths directly on the 3D rotations manifold, 4) testing both the DDIM and
+CFM-basedmodelswithvaryinginferencestepsk,rangingfrom1to16. Wereporttheresultsin
+Tab.2andFig.3. Fromthenumericalevaluation,weobservethatthelargestimpactonperformance
+isdeterminedbythechoiceofobservationtype. ThepolicyusingrawRGBinputsis27.7percentage
+pointsworsethantheproposedmodel,highlightingthestrengthsofpointcloudobservations.
+First,weconsiderthetwodifferentformulationsoftheCFMframeworkthatcanbeusedtolearn
+aboutthedistributionof3Drotations: euclideanandSO(3). Theoutcomeforthisablationisvery
+similar, with the score averaged across all tasks showing that the SO(3) formulation achieves a
+lowersuccessrate,by0.4percentagepoints. Thisresultissurprisingandatfirstcounterintuitive,
+asweexpectedthatlearningprobabilitypathsdirectlyonthetargetmanifoldwouldachievehigher
+performance. Giventheintriguingresultofthisablation,weaddfurtheranalysisofthiscomparison
+inAppendixA.1.
+Regardingthechoiceoftrainingobjective,theresultsinTab.2showthatfork =50inferencesteps,
+theCFMobjectivedoesnotimproveoverthepopularDDIMframework,whichachievesasimilar
+successrate,withinthestandarddeviation. Nevertheless,whenconsideringthetwoobjectivesacross
+arangeofvalueofkinferencestepsinFig.3,wefindthatCFMdemonstratesstrongerperformance,
+especiallyinthelowkregime.Thisisinlinewiththeresultsobtainedfortheimagesynthesisdomain,
+whereStableDiffusion3 [24]showsthatCFMachievessimilarscorestothediffusionobjectives,but
+performsbetterwithfewerinferencesteps,requiredforfasterinference. Thischaracteristic,paired
+withthehigherflexibility,generality,andeaseofimplementation,inouropinion,makestheCFM
+formulationadvantageouscomparedtoestablisheddiffusionobjectives.
+7
+=== Page 8 ===
+Figure4:WedemonstratePointFlowMatchonarealroboticsetup.Weevaluateontwotasks:open boxand
+sponge on plate.
+4.3 RealRobotExperiments
+TodemonstratetheapplicationofPointFlowMatchonarealroboticplatform,weperformasetof
+experimentswithaFrankaEmikaPandamanipulator. Weevaluateontwotable-toptasks: open
+box and sponge on plate, shown in Fig. 4. We use two Realsense RGB-D cameras, the first
+mountedontherobotend-effectorandthesecondmountedexternally. Similarlytothesimulation
+setup,wemergethepointcloudsobtainedfrombothcamerasandprocessitviavoxel-subsampling.
+To prevent overfitting and improve the model’s robustness to the noisy point clouds, we apply
+random transformation and random noise-jitter augmentations during training. PointFlowMatch
+achievedasuccessrateof72%foropen boxand48%forsponge on plate. Themainfailure
+mode we observed in this experiment consisted of the robot reaching correctly for the object to
+grasp,butmissingitbyasmallmargin. Aselectionofpolicyrolloutsforbothtasksisshowninthe
+accompanyingvideo.
+5 Conclusion
+WepresentPointFlowMatch,anovelmethodforimitationlearningfromafixedsetofdemonstration
+examples. Ourmethodcombinestherecentlydevelopedconditionalflowmatchingframeworkwitha
+pointcloudobservationencoding. Indevelopingourmethod,weperformedanablationstudyofthe
+mostimportantcomponents. Additionally,westudyaformulationofCFMontheSO(3)manifold.
+Ourmethodachievesstate-of-the-artresultsforsingle-tasknon-hierarchicalpolicylearning,withan
+averagesuccessrateof68.6%,doublethatoftheclosestbaselinemethod.
+Limitations: Thereareafewlimitationstoourproposedmethod. Comparedtoapproachessuch
+asBCthatdirectlypredictanaction,diffusionandCFMmodelsbothhavelongerinferencetimes,
+giventheiriterativenature. Inadditiontothis,asusualinthefixed-dataimitationlearningsetting,
+CFMcannotextrapolateoutofdistributionandthus,onlylearnsmotioncorrectionbehaviorwhen
+includedinthedemonstrationset. Ourpointcloudobservationspacemergesmultipleviews,this
+requiresdepthcameraswithknownintrinsicandextrinsiccalibration. Wealsotrainedsingle-task
+policiesanddidnotinvestigategeneralizationcapabilities. Finally,implementationonarealrobot
+requiresmanuallycollectingexpertdemonstrations.
+8
+=== Page 9 ===
+Acknowledgments
+This work was funded by the Carl Zeiss Foundation with the ReScaLe project and the German
+ResearchFoundation(DFG):417962828.
+References
+[1] E.Chisari,T.Welschehold,J.Boedecker,W.Burgard,andA.Valada. Correctmeifiamwrong:
+Interactivelearningforroboticmanipulation. IEEERoboticsandAutomationLetters, 7(2):
+3695–3702,2022.
+[2] C.Celemin,R.Pe´rez-Dattari,E.Chisari,G.Franzese,L.deSouzaRosa,R.Prakash,Z.Ajanovic´,
+M. Ferraz, A. Valada, and J. Kober. Interactive imitation learning in robotics: A survey.
+FoundationsandTrends®inRobotics,10(1-2):1–197,2022.
+[3] N.Heppert,M.Argus,T.Welschehold,T.Brox,andA.Valada. Ditto: Demonstrationimitation
+bytrajectorytransformation. arXivpreprintarXiv:2403.15203,2024.
+[4] T. Osa, J. Pajarinen, G. Neumann, J. A. Bagnell, P. Abbeel, and J. Peters. An algorithmic
+perspectiveonimitationlearning. FoundationsandTrends®inRobotics,7(1-2):1–179,2018.
+[5] J.O.vonHartz,E.Chisari,T.Welschehold,W.Burgard,J.Boedecker,andA.Valada. The
+treacheryofimages: Bayesianscenekeypointsfordeeppolicylearninginroboticmanipulation.
+IEEERoboticsandAutomationLetters,2023.
+[6] C. Chi, S. Feng, Y. Du, Z. Xu, E. Cousineau, B. Burchfiel, and S. Song. Diffusion policy:
+Visuomotorpolicylearningviaactiondiffusion. InRobotics: ScienceandSystems,2023.
+[7] J.Ho,A.Jain,andP.Abbeel. Denoisingdiffusionprobabilisticmodels. AdvancesinNeural
+InformationProcessingSystems,33:6840–6851,2020.
+[8] Y.Song,J.Sohl-Dickstein,D.P.Kingma,A.Kumar,S.Ermon,andB.Poole. Score-based
+generative modeling through stochastic differential equations. In Int. Conf. on Learning
+Representations,2021.
+[9] Y.Ze,G.Zhang,K.Zhang,C.Hu,M.Wang,andH.Xu. 3Ddiffusionpolicy: Generalizable
+visuomotorpolicylearningviasimple3Drepresentations. InRobotics: ScienceandSystems,
+2024.
+[10] Z.Xian,N.Gkanatsios,T.Gervet,T.-W.Ke,andK.Fragkiadaki. ChainedDiffuser: Unifying
+trajectorydiffusionandkeyposepredictionforroboticmanipulation.InConf.onRobotLearning,
+2023.
+[11] Y.Lipman,R.T.Chen,H.Ben-Hamu,M.Nickel,andM.Le. Flowmatchingforgenerative
+modeling. InInt.Conf.onLearningRepresentations,2023.
+[12] X.Liu,C.Gong,andQ.Liu. Flowstraightandfast: Learningtogenerateandtransferdatawith
+rectifiedflow. InInt.Conf.onLearningRepresentations,2023.
+[13] M.AlbergoandE.Vanden-Eijnden. Buildingnormalizingflowswithstochasticinterpolants. In
+Int.Conf.onLearningRepresentations,2023.
+[14] S.James,Z.Ma,D.RovickArrojo,andA.J.Davison. Rlbench: Therobotlearningbenchmark
+&learningenvironment. IEEERoboticsandAutomationLetters,2020.
+[15] X.Hu,B.Liu,X.Liu,andQ.Liu. Adaflow: Imitationlearningwithvariance-adaptiveflow-
+basedpolicies. arXivpreprintarXiv:2402.04292,2024.
+[16] T.Z.Zhao,V.Kumar,S.Levine,andC.Finn. Learningfine-grainedbimanualmanipulation
+withlow-costhardware. InRobotics: ScienceandSystems,2023.
+9
+=== Page 10 ===
+[17] K.Sohn,H.Lee,andX.Yan. Learningstructuredoutputrepresentationusingdeepconditional
+generativemodels. InAdvancesinNeuralInformationProcessingSystems,2015.
+[18] P. Florence, C. Lynch, A. Zeng, O. A. Ramirez, A. Wahid, L. Downs, A. Wong, J. Lee,
+I.Mordatch,andJ.Tompson. Implicitbehavioralcloning. InConf.onRobotLearning,2022.
+[19] Y. LeCun, S. Chopra, R. Hadsell, M. Ranzato, and F. Huang. A tutorial on energy-based
+learning. Predictingstructureddata,1(0),2006.
+[20] M.Janner,Y.Du,J.Tenenbaum,andS.Levine. Planningwithdiffusionforflexiblebehavior
+synthesis. InInt.Conf.onMachineLearning,2022.
+[21] T.Gervet,Z.Xian,N.Gkanatsios,andK.Fragkiadaki. Act3d: 3Dfeaturefieldtransformersfor
+multi-taskroboticmanipulation. InConf.onRobotLearning,2023.
+[22] X.Ma,S.Patidar,I.Haughton,andS.James.Hierarchicaldiffusionpolicyforkinematics-aware
+multi-taskroboticmanipulation. InProc.oftheIEEEConf.onComputerVisionandPattern
+Recognition,2024.
+[23] M.Shridhar,L.Manuelli,andD.Fox. Perceiver-actor: Amulti-tasktransformerforrobotic
+manipulation. InConf.onRobotLearning,2022.
+[24] P.Esser,S.Kulal,A.Blattmann,R.Entezari,J.Mu¨ller,H.Saini,Y.Levi,D.Lorenz,A.Sauer,
+F.Boesel, etal. Scalingrectifiedflowtransformersforhigh-resolutionimagesynthesis. In
+Int.Conf.onMachineLearning,2024.
+[25] A.J.Bose,T.Akhound-Sadegh,G.Huguet,K.Fatras,J.Rector-Brooks,C.-H.Liu,A.C.Nica,
+M.Korablyov,M.Bronstein,andA.Tong. Se(3)-stochasticflowmatchingforproteinbackbone
+generation. InInt.Conf.onLearningRepresentations,2024.
+[26] M. Braun, N. Jaquier, L. Rozo, and T. Asfour. Riemannian flow matching policy for robot
+motion learning. In IEEE/RSJ International Conference on Intelligent Robots and Systems
+(IROS),pages0–0,2024.
+[27] Q. Rouxel, A. Ferrari, S. Ivaldi, and J.-B. Mouret. Flow matching imitation learning for
+multi-supportmanipulation. arXivpreprintarXiv:2407.12381,2024.
+[28] Y.Zhou,C.Barnes,J.Lu,J.Yang,andH.Li. Onthecontinuityofrotationrepresentationsin
+neuralnetworks. InProc.oftheIEEEConf.onComputerVisionandPatternRecognition,2019.
+[29] R.Bre´gier. Deepregressiononmanifolds:a3Drotationcasestudy. InInternationalConference
+on3DVision,2021.
+[30] J.Sola,J.Deray,andD.Atchuthan. Amicrolietheoryforstateestimationinrobotics. arXiv
+preprintarXiv:1812.01537,2018.
+[31] R.T.Q.ChenandY.Lipman. Flowmatchingongeneralgeometries. InInt.Conf.onLearning
+Representations,2024.
+[32] R.Q.Charles,H.Su,M.Kaichun,andL.J.Guibas. Pointnet: Deeplearningonpointsetsfor
+3dclassificationandsegmentation. InProc.oftheIEEEConf.onComputerVisionandPattern
+Recognition,2017.
+[33] C.Qi,H.Su,K.Mo,andL.J.Guibas.Pointnet:Deeplearningonpointsetsfor3Dclassification
+andsegmentation. InProc.oftheIEEEConf.onComputerVisionandPatternRecognition,
+2016.
+[34] J.Song,C.Meng,andS.Ermon. Denoisingdiffusionimplicitmodels. InInt.Conf.onLearning
+Representations,2020.
+[35] A. R. Geist, J. Frey, M. Zobro, A. Levina, and G. Martius. Learning with 3D rotations, a
+hitchhiker’sguidetoSO(3). Int.Conf.onMachineLearning,2024.
+10
+=== Page 11 ===
+A AdditionalExperiments
+A.1 SimplifiedSO(2)-Experiment: NoFreeLunch
+4
+1.0 1.0 0.6°
+2 0.5 0.5
+0.4°
+0 0.0 0.0
+2 0.5 0.5 0.2°
+1.0 1.0
+4 0.0°
+4 2 0 2 4 1.0 0.5 0.0 0.5 1.0 1.0 0.5 0.0 0.5 1.0
+(a)VectorfieldsoftheEuclidean (b)EuclideanFormulationusingIni- (c)EuclideanFormulationusingIni- (d)SO(2)FormulationusingInitialSamples
+(purple)andSO(2)(blue)formula- tialSamplesDrawnfromtheNormal tialSamplesDrawnUniformlyfrom DrawnUniformlyfromSO(2).
+tions. Distribution. SO(2).
+Figure5: SimplifiedExample. Theleftfigureshowstheedgecasewhenrandomsamplesareclosetothe
+oppositepoleofthetargetsample.HeretheSO(3)formulationpresentsadiscontinuitywhichmakeslearning
+moredifficult.Inthethreerightfigures,wevisualizethemeanerrorduringinferenceacrossdifferentsampling
+locationsforourdifferentformulations.Wemarkthetargetwitharedcross.OneobservesthatfortheEuclidean
+formulationtheerrorislowerforinitialsamplepointsalongtheaxisorthogonaltothetarget.Thisisexpectedas
+valuessampledalongthelinearenaturallymappedtothetargetwhennormalized.Ontheothersideinthelast
+figure,oneobserveshighererrorsclosetothepole.Additionally,atrainingdatabiasisvisibleastheerroris
+higherononesideofthediscontinuity.
+TofurtherinvestigatethecounterintuitiveresultdiscussedinSec.4.2,wesetupatoytaskontheunit
+circle. Here,thegoalistoinferarotationof0degrees,orinotherwordsthecoordinateat(1,0)on
+theunitcircle. Forthisexperiment,thepredictionisnotconditioned,andallsamplesareregressed
+againsttheuniquetargetpoint(1,0). AsdoneinSec.4.2,weevaluatetwoformulations,onewhere
+thetargetvectorfieldisdefinedintheEuclideanspaceR2,andonewhereitfollowsthegeodesicson
+theRiemannianmanifoldSO(2)[30]. Inthefollowing,werefertothemasEuclideanformulation
+andSO(2)formulation. Weprovideanoverviewoftheformulations(roboticandtoyexperiments)
+inTab.3.
+AsinthecaseofSO(3)(seeSec.3.1),theinputtothevectorfieldpredictionnetworkisthetruncated
+versionofthefullrotationstatematrix,i.e. a2Dvector. Wetrainbothformulationsonbatchesof
+size1000for2000epochsusingtheAdamoptimizerwithcosineannealedlearningrateof1e−3. For
+evaluations,weevaluate10000noisesamplesandperform50integrationsteps. Giventhefinalstate,
+wecalculatetheabsoluteangleerrortothetarget(1,0).
+TheEuclideanformulationachievesanaverageangleerrorof0.093◦ andtheSO(2)formulation
+0.216◦. WevisualizethemeanerroracrossinitialsamplepointsinFig.5. Weconcludethatboth
+formulationscan successfullysolvethe task, butwe alsoobserve higherfinalangle errorforthe
+SO(2)formulation,similartotheablationstudyfromSec.4.2.
+AsshowninFig.5a,whenrandomsamplesareclosetotheoppositepoleofthetargetsample,the
+SO(2)casepresentsstrongdiscontinuities,withvectorfieldsofnearbypointspointinginopposite
+directions. For successful gradient-based learning, however, we need the input-output mapping
+to exhibit some notion of continuity. The exponential coordinates used to represent vectors on
+thetangentspacedonotfulfillthepre-imagesconnectivityconstraint,whichmeansthatasmooth
+functiontointerpolatebetweeninputsamplesisnotguaranteedtoexist[29,35]. Adiscontinuityin
+thetargetmappingresultsindifficultiesinfittingthemodelviagradient-basedlearning. Additionally,
+ifthetrainingdataforthenetworkisnotequallydistributedonbothsidesofthepole,weintroducea
+databiastowardseitherside.
+FortheEuclideanformulationontheotherhand,theneedtoprojectthefinaloutputtothemanifold
+ofvalidrotationsisalsoasourceoferror,sincetheprojectionisonlyappliedatinferencetimeandit
+isnotpartofthetrainingprocess. ThiscanbeseeninFig.5b,whererandomsamplesfurtheraway
+fromthex-axispresenthigherabsoluteangleerrors. Asaresult,weconcludethatbothformulations
+exhibitdifferentcharacteristics,eachwiththeirdrawbacks,andthechoiceofoneoptionoverthe
+otherneedstobeevaluatedcarefully.
+11
+=== Page 12 ===
+Table3: Comparisonofdifferentstatedimensionsandtheirrespectivevelocities,targetcalculationandpro-
+gressionformulations. FordefinitionsoftheLog(•)-andExp(•)-mapswerefertoSolaetal.[30]. †Asfor
+calculatingthefinalangleonlythefirstcolumnisneeded,weomitcalculatingthesecondorthonormalvector.
+Thus,insteadofperformingthefullGrahm-Schmidtprocess,weonlyperformanormalizationoftheinferred
+statevariablethatmapsthevectortotheunitcircle.
+Formulation Statez Velocityv TargetVelocityv StateProgression StateConversion
+gt
+3D-Euclidean R6 R6 z z z+∆tv Grahm-Schmidt
+1 0
+SO(3) R3×3 R3 Log −(cid:0) z−1z (cid:1) zExp (∆tv) N/A
+SO(3) 0 1 SO(3)
+2D-Euclidean R2 R2 z z z+∆tv Grahm-Schmidt†
+1 0
+SO(2) R2×2 R1 Log −(cid:0) z−1z (cid:1) zExp (∆tv) N/A
+SO(2) 0 1 SO(2)
+12

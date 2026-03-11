@@ -1,0 +1,1072 @@
+=== Page 1 ===
+PublishedasaconferencepaperatICLR2025
+ET-SEED: EFFICIENT TRAJECTORY-LEVEL SE(3)
+EQUIVARIANT DIFFUSION POLICY
+ChenruiTie1,2∗ YueChen1∗ RuihaiWu1∗
+BoxuanDong1 ZeyiLi1 ChongkaiGao2† HaoDong1†
+1PekingUniversity 2NationalUniversityofSingapore
+chenrui.tie@u.nus.edu yuechen@stu.pku.edu.cn wuruihai@pku.edu.cn
+Success Rate of 6 Simulation Tasks (%)
+50 Demos, Test on various SE(3)-transformed Object Poses Global
+3D Diffusion Policy ET-SEED (Ours) Global
+80 Local Local
+60
+40
+Transformed Equivariant
+20 Observation Action Sequence
+0Open Bottle CapOpen DoorRotate TriangleCalligraphyFold GarmentFling Garment
+Average Success Rate of 6 Simulation Tasks (%)
+75 Given 25 Demos 75 Given 50 Demos Global Global
+50 50
+25 25 Local
+0 Original New Pose 0 Original New Pose Local
+(a) (b) (c)
+Figure 1: ET-SEED is a visual imitation learning algorithmthat marries SE(3) equivariant visual
+representationswithdiffusionpolicies. (a)ET-SEEDachievesurprisingefficiencyandspatialgen-
+eralizationthanbaselines. (b)Whentheinputobjectobservationisrotatedortranslated,theoutput
+actionsequencechangeequivariantly. (c)Visualizationsofsimulationenvironments.
+ABSTRACT
+Imitation learning, e.g., diffusion policy, has been proven effective in various
+robotic manipulation tasks. However, extensive demonstrations are required for
+policy robustness and generalization. To reduce the demonstration reliance, we
+leverage spatial symmetry and propose ET-SEED, an efficient trajectory-level
+SE(3) equivariant diffusion model for generating action sequences in complex
+robotmanipulationtasks. Further, previousequivariantdiffusionmodelsrequire
+theper-stepequivarianceintheMarkovprocess,makingitdifficulttolearnpolicy
+undersuchstrongconstraints.WetheoreticallyextendequivariantMarkovkernels
+andsimplifytheconditionofequivariantdiffusionprocess, therebysignificantly
+improvingtrainingefficiencyfortrajectory-levelSE(3)equivariantdiffusionpol-
+icy.WeevaluateET-SEEDonrepresentativeroboticmanipulationtasks,involving
+rigidbody,articulatedanddeformableobject. Experimentsdemonstratesuperior
+dataefficiencyandmanipulationproficiencyofourproposedmethod, aswellas
+itsabilitytogeneralizetounseenconfigurationswithonlyafewdemonstrations.
+Videosandcodeareavailableat: https://et-seed.github.io/
+1 INTRODUCTION
+Imitationlearninghasachievedpromisingresultsforacquiringrobotmanipulationskills(Zhuetal.,
+2023; Fu et al., 2024; Chi et al., 2023; Wang et al., 2025). Though, one of the main challenges
+ofimitationlearningisthatitrequiresextensivedemonstrationstolearnarobustmanipulationpol-
+icy(Brohanetal.,2022;Liuetal.,2024;Mandlekaretal.,2021).Especiallyoncethespatialposeof
+theobjecttobemanipulatedrunsoutofthedemonstrationdistribution,thepolicyperformancewill
+easily decrease. Although some works seek to tackle these issues through data augmentation (Yu
+etal.,2023)orcontrastivelearning(Maetal.,2024),theyusuallyrequiretask-specificknowledge
+orextratraining,andwithouttheoreticalguaranteeofspatialgeneralizationability.
+∗Equalcontribution
+†Correspondingauthor
+1
+5202
+raM
+2
+]OR.sc[
+2v09930.1142:viXra
+=== Page 2 ===
+PublishedasaconferencepaperatICLR2025
+Another promising idea is to leverage symmetry. Symmetry is ubiquitous in the physical world,
+and many manipulation tasks exhibit a specific type of symmetry known as SE(3) Equivariance.
+SE(3)isagroupconsistingof3Drigidtransformations. Forexample,asshowninfig.1(b),areal
+robot arm is required to write characters “ICLR” on a paper or fold a garment, when the pose of
+thepaperorthegarmentchanges,themanipulationtrajectoriesoftheend-effectorshouldtransform
+equivalently. Employing such symmetries into policy learning can not only improve the data effi-
+ciency but also increase the spatial generalization ability. Recent works on 3D manipulation have
+exploredusingSE(3)equivarianceintheimitationlearningprocess. Mostoftheseworksfocuson
+equivariantposeestimationofthetargetobjectorend-effector(Ryuetal.,2024;Huetal.,2024;Gao
+et al., 2024). Trajectory-level imitation learning has achieved state-of-the-art performances on di-
+versemanipulationtasks(Chietal.,2023;Yangetal.,2024b). Bygeneratingawholemanipulation
+trajectory, this kind of method is capable to tackle more complex manipulation task beyond pick-
+and-place. For trajectory-level equivariance, Equivariant Diffusion Policy (Wang et al., 2024) and
+Equibot(Yangetal.,2024a)proposeequivariantdiffusionprocessforroboticmanipulationtasks.
+However, previoustrajectory-leveldiffusionmodelsforroboticmanipulationhavetwokeylimita-
+tions. First, to maintain equivariance throughout the diffusion process, these models assume that
+every transition step must preserve equivariance. As we will show in section 4.1, training neu-
+ral networks with equivariance is more challenging than neural networks with invariance, requir-
+ing additional computational resources and leading to slower convergence. This design constrains
+themodel’sefficiency, makingithardfortacklingcomplexlong-horizonmanipulationtasks. Sec-
+ond, these models define the diffusion process in Euclidean space, which is not a natural defini-
+tion,andlimitstheexpressiveness. Sincethefocusisonequivariantdiffusionprocesseswithinthe
+SE(3) group, it is more natural to define both the diffused variables and the noise as elements of
+the SE(3) group, which will lead to better convergence and multimodal distributions representa-
+tion(Urainetal.,2023).
+Inthiswork, weproposeET-SEED,anewtrajectory-levelSE(3)equivariantdiffusionmodelfor
+manipulationtasks. ET-SEEDimprovesthesampleefficiencyanddecreasesthetrainingdifficulty
+by restricting the equivariant operations during the diffusion denoising process. We extend the
+equivaraintMarkovprocesstheoryandprovethatduringthefulldenoisingprocess,atleastonlyone
+equivarianttransitionisrequired.Then,weintegratethediffusionprocessonSE(3)manifold(Jiang
+etal.,2024)andSE(3)transformers(Fuchsetal.,2020)todesignanewtrajectory-levelequivariant
+diffusionmodelonSE(3)space. Inexperiment, weevaluateourmethodonseveralcommonand
+representative manipulation tasks, including rigid body manipulation (rotate triangle, open bottle
+cap), articulated object manipulation (open door), long-horizon tasks (robot calligraphy), and de-
+formableobjectmanipulation(foldandflinggarment). Experimentsshowourmethodoutperforms
+SOTAmethodsintermsofdataefficiency,manipulationproficiencyandspatialgeneralizationabil-
+ity. Further,inreal-worldexperiments,withonly20demonstrationtrajectories,ourmethodisable
+togeneralizetounseenscenarios.
+Insummary,ourcontributionsaremainlyasfollowed:
+• WeproposeET-SEED,anefficienttrajectory-levelSE(3)equivariantdiffusionpolicyde-
+finedonSE(3)manifold,whichachievesaproficientandgeneralizablemanipulationpol-
+icywithonlyafewdemonstrations.
+• We extend the theory of equivariant diffusion processes and derive a novel
+SE(3)equivariantdiffusionprocess,forsimplifiedmodelingandinference.
+• We extensively evaluate our method on standard robot manipulation tasks in both simu-
+lationandreal-worldsettings,demonstratingitsdataefficiency,manipulationproficiency,
+andspatialgeneralizationability,significantlyoutperformingbaselinemethods.
+2 RELATED WORK
+2.1 LEVERAGINGEQUIVARIANCEFORROBOTICMANIPULATION
+Previous research has demonstrated that leveraging symmetry or equivariance in 3D Euclidean
+space can improve spatial generalization in a variety of robotic manipulation tasks. Lim et al.
+(2024); Hu et al. (2024); Simeonov et al. (2022); Xue et al. (2023b); Gao et al. (2024) proposed
+2
+=== Page 3 ===
+PublishedasaconferencepaperatICLR2025
+SE(3)equivariantmodelforgraspposeprediction. Otherworkshavealsoleveragedthissymmetry
+in tasks such as part assembly (Wu et al., 2023; Scarpellini et al., 2024), object manipulation on
+desktop (Wangetal.,2024),articulatedanddeformableobjectmanipulation (Yangetal.,2024b)
+andaffordancelearning (Chenetal.,2024). Mostofthesestudieseitherfocussolelyongenerating
+asingle6Dposeorfailtoguaranteeend-to-endequivarianceacrosstheentireSE(3)space. Inthis
+paper, our proposed method is capable of generating manipulation trajectories while theoretically
+maintainingend-to-endequivarianceovertheentireSE(3)group.
+2.2 EQUIVARIANTDIFFUSIONMODELS
+Diffusionmodels (Sohl-Dicksteinetal.,2015;Hoetal.,2020)composeapowerfulfamilyofgen-
+erativemodelsthathaveproveneffectiveinroboticmanipulationtasks (Chietal.,2023). Previous
+studies (Guan et al., 2023; Schneuing et al., 2022) have investigated the effectiveness of combin-
+ing spatial equivariance in the diffusion process to increase data efficiency and improve the spa-
+tial generalization ability of the model. GeoDiff (Xu et al., 2022) gave a theoretical proof of
+SE(3)equivariantMarkovprocess. Diffusion-EDFs (Ryuetal.,2024)andOrbitgrasp (Huetal.,
+2024) introduced SE(3) equivariant diffusion processes for target grasp pose prediction, but lack
+thecapabilitytogenerateentiremanipulationtrajectories. Wangetal.(2024)proposedanequivari-
+ant diffusion policy capable of addressing SO(2) equivariant tasks. EquiBot (Yang et al., 2024a)
+extendedequivariantdiffusionpoliciestoSIM(3)transformations,withtheassumptionthatevery
+transitionstepinthediffusionprocessisequivariant,whichdemandsahightrainingcost.Wefurther
+discusstheconditionsofSE(3)equivariantdiffusionprocessandprovethatnoteach, butatleast
+one equivariant step is required. Based on this condition, we propose a novel SE(3) equivariant
+diffusionmodelachievingbetterperformancethanpreviousworks.
+2.3 DIFFUSIONONSE(3) MANIFOLD
+Mostdiffusionmodelsdefinethediffusionprocessonpixelspace(Hoetal.,2020)or3DEuclidean
+space(Chietal.,2023). Leachetal.(2022)introducesadenoisingdiffusionmodelonSO(3)group.
+SE(3)-DiffusionFields(Urainetal.,2023)suggeststhatin6-DoFgraspposegenerationscenarios,
+formulating the diffusion process in SE(3) manifold provides better coverage and representation
+ofmultimodaldistributions,resultinginimprovedsampleefficiencyandperformance. Jiangetal.
+(2024) proposes a SE(3) diffusion model for robust 6D object pose estimation. In this work, we
+introduceanequivariantdiffusionmodelonSE(3)manifoldforrobotmanipulation,revealingthe
+superiorityofdefiningequivariantdiffusionprocessonSE(3)overEuclideanspace.
+3 PRELIMINARY BACKGROUND
+SE(3)GroupanditsLieAlgebra. SE(3)(SpecialEuclidianGroup)isagroupconsistingof3D
+rigid transformations. Each SE(3) transformation can be represented as a 4×4 matrix (denoted
+as T), indicating linear transformation on homogeneous 4-vectors. Formally, T = [R t] , where
+0 1
+R ∈ R3×3 is a rotation matrix, t ∈ R3 is a translation vector. The Lie algebra se(3) is a linear
+6D vector space corresponding to the tangent space of SE(3) . Each element of se(3) is a 6D
+vector δ ∈ R6. The mutual mapping between SE(3) and se(3) is achieved by the logarithm map
+Log : SE(3) → R6 and the exponential map Exp : R6 → SE(3). More information about
+SE(3)andse(3)canbefoundinappendixA.
+SE(3) EquivariantFunction. Generally,wecallafunctionf :X →Y thatmapselementsfrom
+inputspaceX tooutputspaceY isequivarianttoagroupGiftherearegrouprepresentationsofG
+onX andY respectivelydenotedbyρX andρY suchthat∀ :ρY(g)◦f =f ◦ρX(g)
+g∈G
+In other words, the function f commutes with representations of the group G. In this paper, we
+focus on SE(3) group, and represent elements of SE(3) as 4×4 matrices. As special cases of
+generalequivariance,wecandefineSE(3)equivariantandinvariantfunctionsas:
+3
+=== Page 4 ===
+PublishedasaconferencepaperatICLR2025
+Definition1 SE(3)EquivariantFunction.
+Afunctionf :X →Y iscalledSE(3)equivariantif
+∀ :T ◦f =f ◦T (1)
+T∈SE(3)
+Definition2 SE(3)InvariantFunction.
+Afunctionf :X →Y iscalledSE(3)invariantif
+∀ :f =f ◦T (2)
+T∈SE(3)
+SE(3)EquivariantTrajectory. Inmanyroboticmanipulationtasks,thetrajectoriesofthemanip-
+ulatorshowacertainsymmetry. Iftherepresentationofatrajectoryundercertaincoordinateframe
+isSE(3)invariant,wecallthetrajectoryasSE(3)Equivariant. Formally,itcanbedefinedas
+Definition3 SE(3)EquivariantTrajectory.
+Atrajectory{s }n iscalledSE(3)equivariantifexistsacoordinateframeA, suchthat
+i i=1
+for any transformation T ∈ SE(3) applied on both the trajectory and the coordinate
+frame(denoted as {s′}n = T{s }n and A′ = TA), the representation of {s′}n by
+i i=1 i i=1 i i=1
+thebasisofA′issameastherepresentationof{s }n bythebasisofA.
+i i=1
+Thispropertymeansthetrajectoryis“attached”onacertainframe,andwhentheframetransforms,
+thetrajectorytransformsaccordingly. Inourexperiments, weselect6representativemanipulation
+taskswiththissymmetry. FurtherdiscussioncanbefoundinappendixG.
+4 METHOD
+ProblemFormulation. Weformulatetheproblemasanimitationlearningsetting,aimingtolearn
+a mapping from observation O to action sequence A, with some demonstrations from an expert.
+In our setting, the observation O is colored point clouds P = {(x ,c ),···,(x ,c )} ∈ RN×6.
+1 1 N N
+The action is defined directly as the desired 6D pose H ∈ SE(3) of the end-effectors. So in our
+setting,theactionsequencemeanstothetrajectoryofend-effectors. Thisexperimentalsetupdoes
+not require additional input information, and the action definition is both intuitive and consistent
+withrealrobotcontrol,makingitapplicabletoawiderangeofroboticmanipulationtasks.
+In this paper, we propose ET-SEED, a trajectory-
+levelend-to-endSE(3)equivariantdiffusionmodel
+𝑝(cid:2869)(𝑥(cid:3038)(cid:2879)(cid:2869)|𝑥(cid:3038),𝑐)
+for robotic manipulation. ET-SEED can theoreti-
+𝑝(cid:2870)(𝑥(cid:3038)(cid:2879)(cid:2869)|𝑥(cid:3038),𝑐) cally guarantee the output actions are equivari-
+ant to any SE(3) transformation applied on the
+inputobservation,whileonlyinvolvingoneequiv-
+ariant denoising step. Fig. 2 is a general example
+to show how it works, given an observation and a
+Invariant Equivariant noisy action sequence, our model first implement
+Transitions Transition
+K −1invariantdenoisingsteps,andpasstheresult
+intothelastequivariantdenoisingsteptogeneratea
+SE(3)equivariantdenoisedtrajectory.
+Figure2: Illustrationofthedenoisingpro-
+We will discuss equivariant Markov processes fur-
+cess of ET-SEED. A random trajectory xK
+ther to explain the correctness and advantages of
+firstpassesthroughaninvarianttransitionfor
+ourproposeddiffusionprocessinsection4.1, with
+K −1 times and finally passes an equivari-
+only one denoising step SE(3) equivariant and the
+ant transition once. This process is efficient
+rest SE(3) invariant. Then introduce our modified
+whilekeepingSE(3)equivarianceproperty.
+SE(3) invariant and equivariant backbones in sec-
+tion4.2,andillustrateourSE(3)equivariantdiffu-
+sionprocessinsection4.3.
+4
+=== Page 5 ===
+PublishedasaconferencepaperatICLR2025
+4.1 EQUIVARIANTMARKOVPROCESS
+For a Markov process xK:0, and any roto-translational transformation T ∈ SE(3). Geodiff (Xu
+et al., 2022) shows that if the initial probabilistic distribution is SE(3) invariant, i.e.,p(xK) =
+p(TxK), and the Markov transitions p(xk−1|xk) are SE(3) equivariant for any 1 ≤ k ≤ K,
+i.e.,p(xk−1|xk)=p(Txk−1|Txk),thenthedensityofx satisfiesp(x )=p(Tx ). Equibot(Yang
+0 0 0
+et al., 2024a) adapts the theory and makes it more consistent with the robotics setting. They in-
+volve an additional condition c (can be seen as an observation) and show that if the initial distri-
+bution p(xK|c) and transitions are all equivariant, i.e.,p(xK|c) = p(TxK|Tc),p(xk−1|xk,c) =
+p(Txk−1|Txk,Tc)thenthemarginaldistributionsatisfiesp(x0|c)=p(Tx0|Tc).
+Inthispaper,wediscoverthattheconditionofgettinganequivariantmarginaldistributionp(x0|c)
+canbeweaker. Formally,wefirstdefinethreeMarkovtransitionswithdifferentproperties.
+p (xk−1|xk,c)=p (xk−1|xk,Tc)
+1 1
+p (xk−1|xk,c)=p (Txk−1|xk,Tc) (3)
+2 2
+p (xk−1|xk,c)=p (Txk−1|Txk,Tc)
+3 3
+ThenwederivethemarginaldistributionusingthethreetypesofMarkovtransitions. Wehavethe
+followingstatement. SeeappendixBforthedetailedproof.
+Proposition1 ForaMarkovprocessxK:0,iftheinitialdistributionp(xK|c) = p(xK|Tc),
+firstK−n+1transitionsfollowthepropertyofp ,themiddle1transitionfollowsp ,and
+1 2
+thelastn−2transitionsfollowp ,thenthefinalmarginaldistributionsatisfiesp(x0|c) =
+3
+p(Tx0|Tc).
+Previous works (Wang et al., 2024; Yang et al., 2024a) make all transitions p -like, which is a
+3
+specialcaseofproposition1. Inpractice,weobservethattrainingneuralnetworkstoapproximate
+thepropertiesofp andp ismuchmorechallengingcomparedtop ,bothintermsofperformance
+2 3 1
+and training cost. When the condition c is transformed by a SE(3) element, the distributions in
+p andp changeequivalently,whilethedistributioninp remainsunchanged. Learningtooutput
+2 3 1
+an equivariant feature is clearly more challenging for neural networks than producing an invariant
+feature. Additionally, in most of implementations of equivariant networks, building and training
+a model whose output is SE(3) equivariant to the input takes up more computing resources than
+a SE(3) invariant version. We design experiments to validate these facts. The results show that
+whether in single step or multiple steps setting, training invariant model is easier than equivariant
+model. DetailsofthisconfirmatoryexperimentcanbefoundinappendixD.
+In ET-SEED, we set the parameter n = 2, meaning there are K − 1 p -like transitions (re-
+1
+ferred to as “SE(3) Invariant Denoising Steps”) and one p -like transition (referred to as the
+2
+“SE(3) Equivariant Denoising Step”). This key design choice significantly reduces the training
+complexity,therebyenhancingtheoverallperformanceofourmethod.
+4.2 SE(3) EQUIVARIANTBACKBONE
+Inordertogeneratewholemanipulationtrajectories,it’snecessarythatthenetworkhastheability
+to output a translation vector at anywhere in the 3D space (even beyond the convex hull of the
+object), which can not be achieved by directly using existing equivariant backbones (Fuchs et al.,
+2020;Dengetal.,2021;Liao&Smidt,2022). Inthispaper, basedonSE(3)Transformer(Fuchs
+et al., 2020), we propose SE(3) equivariant backbone E and invariant backbone E , which
+equiv inv
+aresuitableforpredictingSE(3)actionsequenceswhiletheoreticallysatisfyingdefinition1and2.
+Theimplementationdetailscanbefoundat appendixE.Theinputofbackboneisasetofpoints
+coordinatesX ∈ RN×3, withsometype-0featuresDin andtype-1featuresDin attachedoneach
+0 1
+point. Type-0vectorsareinvariantunderroto-translationtransformationsandtype-1vectorsrotate
+and translate according to SE(3) transformation of point cloud. The output can be elements of
+SE(3),eachelementisrepresentedasa4×4matrix. FortheSE(3)equivariantmodelE ,we
+equiv
+have
+∀ :TE (X;Din,Din)=E (TX;Din,TDin) (4)
+T∈SE(3) equiv 0 1 equiv 0 1
+5
+=== Page 6 ===
+PublishedasaconferencepaperatICLR2025
+AndfortheSE(3)invariantmodelE ,wehave
+inv
+∀ :E (X;Din,Din)=E (TX;Din,TDin) (5)
+T∈SE(3) inv 0 1 inv 0 1
+Algorithm1Trainingphase Algorithm2Inferencephase
+repeat fork=K,...,2do
+SampleA0,O∼p
+data
+PredictAˆk→0=E
+inv
+(O,Ak;k)
+Samplek∼Uniform({1,...,K}),ε∼N(0,I) forHk i ∈Akdo
+for H H k i = ∈ E A x 0 p d (cid:0) o γ √ 1−α¯ ε (cid:1) F (cid:0) √ α¯ ;H0,H(cid:1) + H λ i k−1 Lo = g( E H x k p ) ( ) λ 0 Log(Hˆ i k→0Hk i )
+i t t i 1 i
+A Pr s e s d ig ic n t A Aˆ k k→ = 0 { = H s k i } ( T i O = p 0 ,Ak;k) Pre A di s c s t ig Aˆ n 1 A → k 0 = = { E H eq k i u } iv T i ( = p O 0 ,A1;1)
+OptimizelossL= θ loss(Aˆk→0,A0(Ak)−1) for U H pd 1 i a ∈ te A H 1 0 d = o Hˆ1→0H1
+untilconverged i i i
+Return:A0={H0}Tp
+i i=0
+4.3 SE(3) EQUIVARIANTDIFFUSIONPROCESS
+𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹×𝑲𝑲−𝟏𝟏
+Input Equivariant
+Self-Attention
+TensorField Invariant
+Linear Network Denoise
+projection
+Graph
+Pooling
+Noisy Action Equivariant Action
+Sequences normalization Inv. SE(3) Transformer Sequences
+𝑲𝑲 𝟏𝟏
+𝑨𝑨 A
+Equivariant
+Self-Attention
+TensorField Equivariant
+Linear Network Denoise
+projection
+Graph
+Pooling
+Point Cloud Equivariant Noise Free Action
+normalization Eqv. SE(3) Transformer Sequences
+𝑷𝑷 𝟎𝟎
+A
+𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹𝑹×𝟏𝟏
+Figure3: Overviewofourpipeline. Acoloredpointcloudandarandomsampledactionsequence
+are first passed through K −1 SE(3) invariant denoising steps and then a SE(3) equivariant de-
+noisingsteptogenerateanoisefreeactionsequence. AlthoughInv. SE(3)TransformerandEqv.
+SE(3)Transformerhavesamenetworkarchitecture,thefeaturetypesofinputandoutputdiffer,re-
+sultingindifferentcoefficientmatricesinnetworkforward.DetailscanbereferredtoinappendixE.
+Inspiredbystandarddiffusionmodel, ET-SEEDprogressivelydisturbsthenoise-freeactionH0 ∈
+SE(3)intoanoisyactionHK.Asstandarddiffusionprocessassumethefinalnoisyvariablex fol-
+T
+lowsthestandardGaussiandistributionN(0,I),weassumethenoisyactionHK followaGaussian
+distributiononSE(3),centeredattheidentitytransformationH. Soweuseaninterpolation-based
+SE(3)diffusionformula,whichrepresenttheHk ∼q(Hk|H0)atnoisestepk(1≤k ≤K)as
+√ √
+Hk =Exp (cid:0) γ 1−α¯ ε (cid:1) F (cid:0) α¯ ;H0,H(cid:1) ,ε∼N(0,I) (6)
+t t
+(cid:124) (cid:123)(cid:122) (cid:125)(cid:124) (cid:123)(cid:122) (cid:125)
+Perturbation Interpolation
+√
+The interpolation function F
+(cid:0)
+α¯
+;H0,H(cid:1)
+is an intermediate transformation between the origin
+t √
+actionH0 andtheidentitytransformationH. ByapplyingaperturbationnoiseExp (cid:0) γ 1−α¯ ε (cid:1)
+t
+on the intermediate transformation, we get a diffused action Hk. As shown in algorithm 1, we
+6
+=== Page 7 ===
+PublishedasaconferencepaperatICLR2025
+designamodels topredicttheappliednoiseinasupervisedlearningfashion. Moreexplanation
+θ
+about6canbefoundinJiangetal.(2024)orappendixF.
+ThisformulationisananalogyofDDPM(Hoetal.,2020),whichrepresentthenoisyimageas
+x =α¯ x +β¯ε¯,ε¯∼N(0,I) (7)
+t t 0 t
+Wecantreatthefirsttermof7asinterpolationbetweenx and0,secondtermasexternalnoise.
+0
+ThegoalofSE(3)reverseprocessistotrainadenoisingnetwork,graduallyrefinethenoisyaction
+to the optimal ones. As illustrated in fig. 3 , the input of reverse process is an observation O, an
+noisy action sequence AK = [HK,HK,...,HK], where T is the action prediction horizon, and
+0 1 Tp p
+eachHK isdrawnfromaSE(3)GaussiandistributioncenteredatidentitytransformationH. The
+i
+denoising process forms a Markov chain AK → AK−1 → ··· → A0. In each denoising step,
+the input of our denoising network s consists of observation O, noisy action sequence Ak, and
+θ
+scalar condition k, outputs the predicted relative transformation between Ak and noise-free action
+sequenceA0. Formally,wehave
+Aˆk→0 =s (O,Ak;k) (8)
+θ
+ToensuretheoverallSE(3)equivarianceofourpipeline, weproposeanoveldesignofdenoising
+networks . ItconsistsofoneSE(3)invariantbackboneE andoneSE(3)equivariantbackbone
+θ inv
+E . We use E to denoise in the first K −1 iterations and use E to denoise in the last
+equiv inv equiv
+iteration. Formally,s isdefinedas
+θ
+(cid:26)
+E (O,Ak;k),k >1
+s (O,Ak;k)= inv (9)
+θ E (O,Ak;k),k =1
+equiv
+Asillustratedinalgorithm2,inthefirstK−1denoisingiteration,weuseSE(3)invariantbackbone
+E topredictnoise,andforeachHkinAk,weusethei-thtransformationHˆk→0ofpredictednoise
+inv i i
+sequenceAˆk→0toimplementadenoisestepby
+Hk−1 =Exp(λ Log(Hˆk→0Hk)+λ Log(Hk)) (10)
+i 0 i i 1 i
+Thisformulation,byminimizingtheKLdivergenceoftheposteriordistributionandpriordistribu-
+tionofHk−1,isabletoinferamorereliabledistributionforHk−1(Jiangetal.,2024).
+i i
+By implementing the above SE(3) invariant denoising step for K −1 times, we get the partially
+denoised action sequence A1, which is invariant to any SE(3) transformation of O. In the last
+denoisingiteration,weuseaSE(3)equivariantbackboneE topredictnoiseAˆ1→0anddirectly
+equiv
+apply each Hˆ1→0 of Aˆ1→0 on corresponding action H1,i.e.H0 = Hˆ1→0H1. And finally get the
+i i i i i
+noise-freeactionsequenceA0 =[H0,H0,...,H0 ].
+0 1 Tp
+With such design, the end-to-end equivariance is guaranteed. When the input observation O is
+transformedbyanySE(3)elementT,theoutputdenoisedactionsequenceA0willbeequivariantly
+transformed. Formally,wehavefollowingproposition,withdetailedproofattachedin appendixC.
+Proposition2 For a Markov process AK:0, if AK is sampled from Gaussian distribution,
+A0 =ETSEED(AK;O). Then,∀T ∈SE(3):TA0 =ETSEED(TO,AK).
+7
+=== Page 8 ===
+PublishedasaconferencepaperatICLR2025
+Table1: Successrates(↑)andstandarddeviationofdifferenttasksinsimulation.
+OpenBottleCap OpenDoor RotateTriangle
+T NP T NP T NP
+Method 25 50 25 50 25 50 25 50 25 50 25 50
+DP3(Zeetal.,2024) 65±4.5 76±5.5 11±4.2 14±6.5 61±2.24 72±2.74 9±3.54 16±5.48 67±2.74 89±2.24 5±2.24 10±2.74
+DP3+Aug 35.0±5.044±4.2 38±4.47 46±7.42 43±8.37 54±6.52 30±4.18 40±8.22 35±3.54 42±4.47 32±5.70 41±4.18
+EquiBot(Yangetal.,2024a) 63±2.74 73±2.74 63±5.70 77±7.58 56±2.24 72±2.24 58±7.58 77±7.58 67±2.74 84±2.24 64±8.66 86±5.48
+ET-SEED(Ours) 67±2.74 81±2.24 74±6.52 82±2.74 66±2.24 75±2.74 66±2.74 76±2.24 83±2.24 93±2.74 85±2.24 89±4.18
+Calligraphy FoldGarment FlingGarment
+T NP T NP T NP
+Method 25 50 25 50 25 50 25 50 25 50 25 50
+DP3(Zeetal.,2024) 28±2.74 50±3.54 0±0.00 3±2.74 44±2.24 60±4.18 4±5.48 8±4.48 36±5.48 67±4.48 4±5.48 9±8.22
+DP3+Aug 8±2.74 21±4.18 3±2.24 12±11.5113±5.70 27±7.58 17±10.3731±9.62 28±7.58 38±4.48 11±4.18 31±2.24
+EquiBot(Yangetal.,2024a) 24±5.48 43±8.37 14±10.8440±10.6134±4.18 58±2.74 33±2.74 60±7.90 35±6.12 61±6.52 36±6.52 64±8.22
+ET-SEED(Ours) 38±2.74 55±3.54 36±6.52 54±8.22 47±2.74 67±2.74 49±2.24 69±4.18 50±5.00 67±4.48 48±4.47 62±5.70
+Table2: SE(3)Geodesicdistances(↓)ofdifferenttasksinsimulation.
+Openbottlecap OpenDoor RotateTriangle
+T NP T NP T NP
+Method 25 50 25 50 25 50 25 50 25 50 25 50
+DP3(Zeetal.,2024) 0.257 0.197 1.413 1.785 0.384 0.354 0.478 0.442 0.265 0.192 1.812 1.627
+DP3+Aug 0.283 0.234 0.276 0.218 0.391 0.315 0.442 0.329 0.247 0.187 0.578 0.447
+EquiBot(Yangetal.,2024a) 0.194 0.151 0.197 0.170 0.241 0.224 0.266 0.228 0.197 0.107 0.214 0.099
+ET-SEED(Ours) 0.133 0.114 0.127 0.124 0.127 0.101 0.121 0.128 0.098 0.082 0.104 0.087
+Calligraphy FoldGarment FlingGarment
+T NP T NP T NP
+Method 25 50 25 50 25 50 25 50 25 50 25 50
+DP3(Zeetal.,2024) 0.305 0.241 4.988 4.662 0.479 0.298 4.466 4.179 0.529 0.348 4.993 4.365
+DP3+Aug 0.354 0.337 4.752 4.365 1.318 0.976 1.524 1.219 1.318 0.976 1.524 1.219
+EquiBot(Yangetal.,2024a) 0.291 0.117 0.282 0.129 0.368 0.293 0.387 0.288 0.418 0.343 0.437 0.338
+ET-SEED(Ours) 0.124 0.083 0.121 0.089 0.299 0.149 0.287 0.136 0.349 0.179 0.337 0.186
+5 EXPERIMENTS
+We systematically evaluate ET-SEED through both simulation and real-world experiments, aim-
+ingtoaddressthefollowingresearchquestions: (1)Doesourmethoddemonstratesuperiorspatial
+generalization compared to existing imitation learning approaches? (2) Can our method achieve
+comparable performance with fewer demonstrations? (3) Is our method applicable to real-world
+roboticmanipulationtasks?
+5.1 SIMULATIONEXPERIMENTS
+Tasks. Wedesignsixrepresentativerobotmanipulationtasks:OpenBottleCap,OpenDoor,Rotate
+Triangle,Calligraphy,ClothFolding,andClothFling.Thesetasksencompassmanipulationofrigid
+bodies,articulatedbodies,anddeformableobjects,aswellasdual-armcollaboration,long-horizon
+tasks,andcomplexmanipulationscenarios. Abriefoverviewisillustratedin fig.1. Foreachtask,
+wesetupmultiplecamerastocapturefullpointcloudsoftheobjectstobemanipulated. Weassume
+eachrobotmanipulatoroperateswithinacomplete6DoFSE(3)actionspace. Furtherdetailsand
+discussionsoftheirequivariantpropertiescanbefoundin appendixG.
+Baselines. Wecompareourmethodagainstthefollowingbaselines:
+• 3DDiffusionPolicy(DP3)(Zeetal.,2024): Adiffusion-based3Dvisuomotorpolicy.
+• 3DDiffusionPolicywithDataAugmentations(DP3+Aug): SamearchitectureasDP3,
+withSE(3)dataaugmentationadded.
+8
+=== Page 9 ===
+PublishedasaconferencepaperatICLR2025
+• EquiBot (Yang et al., 2024a): A baseline combines SIM(3)-equivariant neural network
+architectureswithdiffusionpolicy.
+DP3andDP3+AugareusedtocompareET-SEEDwithbaselinemethodsthatutilizedataaugmen-
+tation to achieve spatial generalization, while EquiBot allows for a comparison between different
+architecturesofequivariantdiffusionprocess.
+Augmentations. The DP3+Aug baseline utilizes augmentations during training. In all environ-
+ments, training data is augmented by (1) rotating the observation along all three axes by random
+angles between 0◦ and 90◦, and (2) applying a random Gaussian offset to the observation. The
+standarddeviationoftheGaussiannoiseissetto10%oftheworkspacesize.
+Evaluation.FollowingthesetupofGaoetal.(2024),wecollectdemonstrationsandtrainourpolicy
+under the Training setting (T), subsequently testing the trained policy on both T and New Poses
+(NP),wheretargetobjectposesundergorandomSE(3)transformations. Weevaluateallmethods
+usingtwometrics,basedon20evaluationrollouts,averagedover5randomseeds.Sincewegenerate
+completemanipulationtrajectories,thefinalsuccessratealoneisinadequateforfullyassessingthe
+trajectory’squality. Wecalculatethegeodesicdistancebetweeneachstepofthepredictedtrajectory
+andthegroundtruthtrajectory,providingamorecomprehensivereflectionofthetrajectory’soverall
+quality. The geodesic distance between each step of the predicted trajectory and the ground truth
+trajectory,wecanobtainamoreaccuratereflectionofthetrajectory’soverallquality. Thedefinition
+ofgeodesicdistancebetweenT,Tˆ ∈SE(3)is
+(cid:114)
+D geo (T,Tˆ)= (cid:13) (cid:13) (cid:13) Log(RTRˆ) (cid:13) (cid:13) (cid:13) 2 + (cid:13) (cid:13) ˆt−t (cid:13) (cid:13) 2 , (11)
+where R and t are the rotation and translation parts of T. We report D in the same manner as
+geo
+successrates.
+Results. Table 1 and 2 provide a quantitative comparison between our method and the baseline.
+BothDP3anditsaugmentedvariantdemonstratestrongperformanceinthetrainingsetting(T),but
+they exhibit a significant drop in performance when faced with New Poses (NP) scenarios. This
+highlights that merely incorporating data augmentation is insufficient for the model to generalize
+effectivelytounseenposes. Instead,leveragingequivarianceprovesessentialforenhancingspatial
+generalization.
+Table3: Ablationstudies.
+While EquiBot achieves commendable results in both
+success rate and D , it struggles with more complex,
+geo Design Average
+long-horizon tasks such as Calligraphy and Fold Gar-
+ment. Also,whenlessdemonstrationsaregiven,theper- Oursw/oSE(3) 24±4.48
+formanceisnotsatisfactory. Thesechallengesstemfrom Oursw/oEqv-Diff 57±6.52
+the inherent complexity of its diffusion process design, Ours 76±2.24
+where maintaining equivariance in each Markov transi-
+tionaddssubstantialdifficultytothelearningtask.
+Incontrast,ET-SEEDconsistentlyoutperformsacrossallsixtasks,withminimalperformancedrop
+when facing unseen object poses. This advantage is especially pronounced when using a limited
+number of demonstrations, showcasing ET-SEED’s superior data efficiency, manipulation profi-
+ciency,andspatialgeneralizationability.
+AblationStudies. WeconductablationstudiesontheNewPose(NP)scenariooftherepresentative
+OpeningDoortasktoevaluatetheeffectivenessofdifferentcomponentsofourapproach:
+• Oursw/oSE(3): OurmethodwithoutSE(3)invarianceandequivarianceinthebackbone
+architecture. Inthisvariant,weuseastandardPointNet++topredictnoiseateachstep.
+• Ours w/o Eqv-Diff: Our method without the SE(3) equivariant denoising process. In-
+stead, weuseanon-equivariantdiffusionprocess(DDIM),followingtheapproachof Ze
+etal.(2024).
+Table 3 shows quantitative comparisons with ablations. Clearly each component improves our
+method’scapability.
+9
+=== Page 10 ===
+PublishedasaconferencepaperatICLR2025
+5.2 REAL-ROBOTEXPERIMENT
+Open Bottle Cap Open Door Fold Garment Calligraphy
+Figure 4: Visualizations of the real-world environments used in our experiments. The tasks are
+performed using multiple Microsoft Azure Kinect cameras and Intel® RealSense for point cloud
+fusionandaFrankaroboticarmforexecution.
+Setup. We test the performance of our model on four tasks on real scenarios. All the tasks are
+visualizedinFigure4. WeuseSegmentAnythingModel2(SAM2)(Ravietal.,2024)tosegment
+theobjectfromthesceneandprojectthesegmentedimagewithdepthtopointcloud. Pleaserefer
+toappendixHandourwebsiteformoredetailsandvideosofreal-worldmanipulations.
+Expertdemonstrationsarecollectedbyhumantele-operation. TheFrankaarmandthegripperare
+teleoperatedbythekeyboard. Sinceourtaskscontainmorethanonestageandincludetworobots
+andvariousobjects,makingtheprocessofdemonstrationcollectionverytime-consuming,weonly
+provide20demonstrationsforeachtask.
+Intestsetting, Weplacetheobjectat10differentpositionswithdifferentposesthatareunseenin
+thetrainingdata. Eachpositionisevaluatedwithonetrial.
+Results. Results for our real robot
+tasks are given in Table 4. Con- Table4: Successratesinreal-worldrobotexperiments.
+sistent with our simulation findings,
+inrealworldexperiments, ET-SEED Method OpenBottleCap OpenDoor Calligraphy FoldGarment
+performs better than baselines in all DP3 0.2 0.2 0.0 0.1
+DP3+Aug 0.2 0.3 0.0 0.2
+thefourtasks,givenonly20demon- EquiBot 0.6 0.5 0.0 0.3
+strations. The evaluation shows the ET-SEED(Ours) 0.8 0.6 0.4 0.6
+effectiveness and spatial generaliza-
+tionabilityofourmethod.
+6 CONCLUSION
+Inthispaper,weproposeET-SEED,anefficienttrajectory-levelSE(3)equivariantdiffusionpolicy.
+Our method enhances both data efficiency and spatial generalization while reducing the training
+complexity typically encountered in diffusion-based methods. Through theoretical extensions of
+equivariant Markov kernels, we demonstrated that the SE(3) equivariant diffusion process can be
+achievedgivenaweakercondition,significantlysimplifyingthelearningtask. Experimentalresults
+on diverse robotic manipulation tasks show that ET-SEED performs better than SOTA methods.
+Real-world experiments further validate the generalization ability of our model to unseen object
+poseswithonly20demonstrations.ET-SEEDisanovelapproachfordataefficientandgeneralizable
+imitationlearning,pavingthewayformorecapableandadaptiverobotsinreal-worldapplications.
+However,theproposedmethodhascertainlimitations. 1)TheequivarianceofET-SEEDisdesigned
+forobjectpointclouds,so,pre-processingisrequiredtoextractsegmentedobjectpointcloudsfrom
+the scene point clouds. 2) The action space is defined as the 6D poses of the end-effectors, and
+we assume the end-effectors can reach any feasible 6D pose by inverse kinematics solvers and
+controllers. Additionally,thisactionspaceisnotabletotackledexterousmanipulationtasksasthey
+needactionspacewithhigherdimension.
+10
+=== Page 11 ===
+PublishedasaconferencepaperatICLR2025
+7 ACKNOWLEDGMENT
+We gratefully acknowledge the financial support provided by the National Youth Talent Support
+Program[grantnumber8200800081]andtheNationalNaturalScienceFoundationofChina[grant
+number62376006]. Thisfundinghasbeeninstrumentalinenablingourresearchandthesuccessful
+completionofthiswork.
+REFERENCES
+Anthony Brohan, Noah Brown, Justice Carbajal, Yevgen Chebotar, Joseph Dabis, Chelsea Finn,
+Keerthana Gopalakrishnan, Karol Hausman, Alex Herzog, Jasmine Hsu, et al. Rt-1: Robotics
+transformerforreal-worldcontrolatscale. arXivpreprintarXiv:2212.06817,2022.
+AlperCanberk,ChengChi,HuyHa,BenjaminBurchfiel,EricCousineau,SiyuanFeng,andShuran
+Song. Clothfunnels: Canonicalized-alignmentformulti-purposegarmentmanipulation,2022.
+YueChen,ChenruiTie,RuihaiWu,andHaoDong. Eqvafford: Se(3)equivarianceforpoint-level
+affordancelearning. arXivpreprintarXiv:2408.01953,2024.
+Cheng Chi, Siyuan Feng, Yilun Du, Zhenjia Xu, Eric Cousineau, Benjamin Burchfiel, and Shu-
+ran Song. Diffusion policy: Visuomotor policy learning via action diffusion. arXiv preprint
+arXiv:2303.04137,2023.
+Congyue Deng, Or Litany, Yueqi Duan, Adrien Poulenard, Andrea Tagliasacchi, and Leonidas J
+Guibas. Vectorneurons: Ageneralframeworkforso(3)-equivariantnetworks. InProceedingsof
+theIEEE/CVFInternationalConferenceonComputerVision,pp.12200–12209,2021.
+EthanEade. Liegroupsfor2dand3dtransformations. URLhttp://ethaneade.com/lie.pdf,revised
+Dec,117:118,2013.
+ZipengFu,TonyZZhao,andChelseaFinn. Mobilealoha: Learningbimanualmobilemanipulation
+withlow-costwhole-bodyteleoperation. arXivpreprintarXiv:2401.02117,2024.
+Fabian Fuchs, Daniel Worrall, Volker Fischer, and Max Welling. Se (3)-transformers: 3d roto-
+translation equivariant attention networks. Advances in neural information processing systems,
+33:1970–1981,2020.
+ChongkaiGao,ZhengrongXue,ShuyingDeng,TianhaiLiang,SiqiYang,LinShao,andHuazheXu.
+Riemann: Nearreal-timese(3)-equivariantrobotmanipulationwithoutpointcloudsegmentation,
+2024. URLhttps://arxiv.org/abs/2403.19460.
+Jiaqi Guan, Wesley Wei Qian, Xingang Peng, Yufeng Su, Jian Peng, and Jianzhu Ma. 3d equiv-
+ariant diffusion for target-aware molecule generation and affinity prediction. arXiv preprint
+arXiv:2303.03543,2023.
+JonathanHo,AjayJain,andPieterAbbeel. Denoisingdiffusionprobabilisticmodels. Advancesin
+neuralinformationprocessingsystems,33:6840–6851,2020.
+BoceHu, XupengZhu, DianWang, ZihaoDong, HaojieHuang, ChenghaoWang, RobinWalters,
+andRobertPlatt. Orbitgrasp:se(3)-equivariantgrasplearning. arXivpreprintarXiv:2407.03531,
+2024.
+HaoboJiang,MathieuSalzmann,ZhengDang,JinXie,andJianYang.Se(3)diffusionmodel-based
+point cloud registration for robust 6d object pose estimation. Advances in Neural Information
+ProcessingSystems,36,2024.
+Adam Leach, Sebastian M Schmon, Matteo T. Degiacomi, and Chris G. Willcocks. Denoising
+diffusion probabilistic models on SO(3) for rotational alignment. In ICLR 2022 Workshop on
+GeometricalandTopologicalRepresentationLearning,2022. URLhttps://openreview.
+net/forum?id=BY88eBbkpe5.
+Yi-LunLiaoandTessSmidt. Equiformer: Equivariantgraphattentiontransformerfor3datomistic
+graphs. arXivpreprintarXiv:2206.11990,2022.
+11
+=== Page 12 ===
+PublishedasaconferencepaperatICLR2025
+ByeongdoLim,JongminKim,JihwanKim,YonghyeonLee,andFrankCPark. Equigraspflow: Se
+(3)-equivariant6-dofgraspposegenerativeflows. In8thAnnualConferenceonRobotLearning,
+2024.
+Bo Liu, Yifeng Zhu, Chongkai Gao, Yihao Feng, Qiang Liu, Yuke Zhu, and Peter Stone. Libero:
+Benchmarking knowledge transfer for lifelong robot learning. Advances in Neural Information
+ProcessingSystems,36,2024.
+TeliMa,JiamingZhou,ZifanWang,RongheQiu,andJunweiLiang. Contrastiveimitationlearning
+forlanguage-guidedmulti-taskroboticmanipulation. arXivpreprintarXiv:2406.09738,2024.
+AjayMandlekar,DanfeiXu,JosiahWong,SoroushNasiriany,ChenWang,RohunKulkarni,LiFei-
+Fei,SilvioSavarese,YukeZhu,andRobertoMart´ın-Mart´ın.Whatmattersinlearningfromoffline
+humandemonstrationsforrobotmanipulation. arXivpreprintarXiv:2108.03298,2021.
+NikhilaRavi,ValentinGabeur,Yuan-TingHu,RonghangHu,ChaitanyaRyali,TengyuMa,Haitham
+Khedr, Roman Ra¨dle, Chloe Rolland, Laura Gustafson, Eric Mintun, Junting Pan, Kalyan Va-
+sudev Alwala, Nicolas Carion, Chao-Yuan Wu, Ross Girshick, Piotr Dolla´r, and Christoph Fe-
+ichtenhofer. Sam2: Segmentanythinginimagesandvideos. arXivpreprintarXiv:2408.00714,
+2024. URLhttps://arxiv.org/abs/2408.00714.
+HyunwooRyu,JiwooKim,HyunseokAn,JunwooChang,JoohwanSeo,TaehanKim,YubinKim,
+ChaewonHwang,JongeunChoi,andRobertoHorowitz.Diffusion-edfs:Bi-equivariantdenoising
+generativemodelingonse(3)forvisualroboticmanipulation. InProceedingsoftheIEEE/CVF
+ConferenceonComputerVisionandPatternRecognition,pp.18007–18018,2024.
+Gianluca Scarpellini, Stefano Fiorini, Francesco Giuliari, Pietro Morerio, and Alessio Del Bue.
+Diffassemble: Aunifiedgraph-diffusionmodelfor2dand3dreassembly. InProceedingsofthe
+IEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),June2024.
+Arne Schneuing, Yuanqi Du, Charles Harris, Arian Jamasb, Ilia Igashov, Weitao Du, Tom Blun-
+dell,PietroLio´,CarlaGomes,MaxWelling,etal. Structure-baseddrugdesignwithequivariant
+diffusionmodels. arXivpreprintarXiv:2210.13695,2022.
+Anthony Simeonov, Yilun Du, Andrea Tagliasacchi, Joshua B Tenenbaum, Alberto Rodriguez,
+Pulkit Agrawal, and Vincent Sitzmann. Neural descriptor fields: Se (3)-equivariant object rep-
+resentations for manipulation. In 2022 International Conference on Robotics and Automation
+(ICRA),pp.6394–6400.IEEE,2022.
+JaschaSohl-Dickstein,EricWeiss,NiruMaheswaranathan,andSuryaGanguli. Deepunsupervised
+learning using nonequilibrium thermodynamics. In International conference on machine learn-
+ing,pp.2256–2265.PMLR,2015.
+Julen Urain, Niklas Funk, Jan Peters, and Georgia Chalvatzaki. Se (3)-diffusionfields: Learning
+smoothcostfunctionsforjointgraspandmotionoptimizationthroughdiffusion. In2023IEEE
+InternationalConferenceonRoboticsandAutomation(ICRA),pp.5923–5930.IEEE,2023.
+Dian Wang, Stephen Hart, David Surovik, Tarik Kelestemur, Haojie Huang, Haibo Zhao, Mark
+Yeatman,JiuguangWang,RobinWalters,andRobertPlatt. Equivariantdiffusionpolicy,2024.
+YuanfeiWang,XiaojieZhang,RuihaiWu,YuLi,YanShen,MingdongWu,ZhaofengHe,Yizhou
+Wang, and Hao Dong. Adamanip: Adaptive articulated object manipulation environments and
+policylearning. InInternationalConferenceonLearningRepresentations,2025. URLhttps:
+//openreview.net/forum?id=Luss2sa0vc.
+RuihaiWu, ChenruiTie, YushiDu, YanZhao, andHaoDong. Leveragingse(3)equivariancefor
+learning3dgeometricshapeassembly.InProceedingsoftheIEEE/CVFInternationalConference
+onComputerVision,pp.14311–14320,2023.
+Minkai Xu, Lantao Yu, Yang Song, Chence Shi, Stefano Ermon, and Jian Tang. Geodiff: A geo-
+metricdiffusionmodelformolecularconformationgeneration.arXivpreprintarXiv:2203.02923,
+2022.
+12
+=== Page 13 ===
+PublishedasaconferencepaperatICLR2025
+Han Xue, Yutong Li, Wenqiang Xu, Huanyu Li, Dongzhe Zheng, and Cewu Lu. Unifolding: To-
+wardssample-efficient,scalable,andgeneralizableroboticgarmentfolding,2023a.
+ZhengrongXue,ZhechengYuan,JiashunWang,XueqianWang,YangGao,andHuazheXu.Useek:
+Unsupervisedse(3)-equivariant3dkeypointsforgeneralizablemanipulation. In2023IEEEIn-
+ternationalConferenceonRoboticsandAutomation(ICRA),pp.1715–1722.IEEE,2023b.
+Jingyun Yang, Zi ang Cao, Congyue Deng, Rika Antonova, Shuran Song, and Jeannette Bohg.
+Equibot: Sim(3)-equivariantdiffusionpolicyforgeneralizableanddataefficientlearning. arXiv
+preprintarXiv:2407.01479,2024a.
+JingyunYang,CongyueDeng,JimmyWu,RikaAntonova,LeonidasGuibas,andJeannetteBohg.
+Equivact: Sim (3)-equivariant visuomotor policies beyond rigid object manipulation. In 2024
+IEEE International Conference on Robotics and Automation (ICRA), pp. 9249–9255. IEEE,
+2024b.
+TianheYu,TedXiao,AustinStone,JonathanTompson,AnthonyBrohan,SuWang,JaspiarSingh,
+ClaytonTan,JodilynPeralta,BrianIchter,etal. Scalingrobotlearningwithsemanticallyimag-
+inedexperience. arXivpreprintarXiv:2302.11550,2023.
+YanjieZe,GuZhang,KangningZhang,ChenyuanHu,MuhanWang,andHuazheXu. 3ddiffusion
+policy: Generalizable visuomotor policy learning via simple 3d representations. arXiv preprint
+arXiv:2403.03954,2024.
+YifengZhu,AbhishekJoshi,PeterStone,andYukeZhu. Viola: Imitationlearningforvision-based
+manipulation with object proposal priors. In Conference on Robot Learning, pp. 1199–1210.
+PMLR,2023.
+13
+=== Page 14 ===
+PublishedasaconferencepaperatICLR2025
+A SE(3) GROUP AND se(3) ALGEBRA
+In this section, we briefly introduce the SE(3) Lie group and se(3) Lie algebra. One can refer
+toEade(2013)formoredetailedexplaination.
+A.1 BASICTERMS
+AnelementinSE(3)canberepresentedasa4×4matrix
+R∈SO(3),t∈R3
+(cid:18) R t (cid:19) (12)
+C =
+0 1
+ThisrepresentationmeanswecancomputethecompositionandinversionofelementsinSE(3)by
+matrixmultiplicationandinversion.
+Anelementδ =se(3)canberepresentedbymultiplesofthegenerators
+δ =(u,ω)T ∈R6 (13)
+uisthetranslation,u∈R3
+ω is the rotation (exactly the axis-angle representation, its normal is the rotation angle, and its
+directionistherotationaxis),ω ∈R3
+There’sa1-1mapbetweenSE(3)andse(3)
+δ =ln(C)
+(14)
+C =exp(δ)
+A.2 INTERPOLATION
+two elements a,b ∈ G, we would like to interpolate between the two elements according to a
+parametert∈[0,1],defineaninterpolationfunction
+f :G×G×R→G (15)
+Firstdefineagroupelementthattasksatob
+d:=b·a−1d·a=b (16)
+ComputethecorrespondingLiealgebravectorandscaleitbyt
+d(t)=t·ln(d);d =exp(d(t))
+t
+f(a,b,t)=d ·a (17)
+t
+A.3 GAUSSIANDISTRIBUTION
+ConsideraLiegroupGanditsLiealgebravectorspaceg,withkDoF.Ameantransformationµ∈G
+andacovariancematrixΣ∈Rk×k. WecansampleanelementfromtheGaussiandistributiononG
+δ ∼N(0;Σ)(δ ∈g)
+(18)
+x=exp(δ)·µ
+c.f. GaussianinRD
+(cid:26) (cid:27)
+1 1 1
+N(x|µ,Σ)= exp − (x−µ)TΣ−1(x−µ) (19)
+(2π)D/2|Σ|1/2 2
+14
+=== Page 15 ===
+PublishedasaconferencepaperatICLR2025
+B PROOF OF PROPOSITION 1
+(cid:90)
+p(x0|c)= p(xK|c)p(x0:K−1|xK,c)dx1:K
+(cid:90) K
+(cid:89)
+= p(xK|c) p(xk−1|xk,c)dx1:K
+k=1
+(cid:90) K n−2
+(cid:89) (cid:89)
+= p(xK|c)( p(xk−1|xk,c))p(xn−2|xn−1,c)( p(xi−1|xi,c))dx1:K
+k=n i=1
+(20)
+(cid:90) K
+(cid:89)
+= p(xK|Tc)[ p (xk−1|xk,Tc)]p (Txn−2|xn−1,Tc)
+1 2
+k=n
+n−2
+(cid:89)
+[ p (Txi−1|Txi,Tc)]dx1:K
+3
+i=1
+=p(xn−1|Tc)p(Txn−2|xn−1,Tc)p(Tx0|Txn−2,Tc)
+=p(Tx0|Tc)
+C PROOF PROPOSITION 2
+Here, for simplicity, we define two operations. 1) For a matrix T and a list of matrix A =
+[H ,...,H ],thenotationTAmeansmultiplyingT oneachH . i.e.,TA = [TH ,...,TH ]. 2)
+1 N i 1 N
+FortwolistsofmatrixA = [H ,...,H ],B = [G ,...,G ],thenotationAB meansmultiplying
+1 N 1 N
+thematricesatthecorrespondingpositions. i.e.,AB =[H G ,...,H G ]
+1 1 N N
+Asshownin4and5,ourbackbonesaretheoreticallySE(3)equivariantandinvariant,i.e.
+E (O,Ak;k)=E (TO,Ak;k)
+inv inv
+(21)
+TE (O,Ak;k)=E (TO,Ak;k)
+equiv equiv
+WefirstlyuseE todenoiseK−1steps,soforany1<k ≤K,thedenoiseiterationsatisfies
+inv
+Aˆk→0 =E (O,Ak;k) (22)
+inv
+WhentheinputobservationistransformedbySE(3)element,forthepropertyofE ,wehave
+inv
+∀ :Aˆk→0 =E (TO,Ak;k) (23)
+T∈SE(3) inv
+ItmeansthepredictednoiseAˆk→0 keepsinvariantnomatterwhatSE(3)transformationisapplied
+ontheinputobservation. Andthenwecarryeachelementofthepredictednoisesequenceinto10
+, it’s obvious that Hk−1 is also SE(3) invariant for any 1 ≤ i ≤ T . So we can infer that H1 is
+i p i
+SE(3)invarianttoinputobservation. IntermsofMarkovtransition,thefirstK −1transitionsare
+p -like.
+1
+p(Hk−1|Hk,O)=p(Hk−1|Hk,TO),1<k ≤K (24)
+i i i i
+For the last denoising iteration, we use a SE(3) equivariant model to predict noise, so when the
+inputobservationistransformed,wehave
+∀ :TAˆ1→0 =E (TO,A1;1) (25)
+T∈SE(3) equiv
+CarryeachelementtheresultintothelastdenoisestepH0 = Hˆ1→0H1,wewilldiscoverthefinal
+i i i
+denoisedactionsequenceAˆ0 isSE(3)Equivariant. Inanotherword, thelastMarkovtransitionis
+p -like.
+2
+p(H0|H1,O)=p(TH0|H1,TO) (26)
+i i i i
+Additionally, as the initial noisy action HK is sampled from Gaussian distribution, it’s not condi-
+i
+tionedontheobservation.
+p(HK|O)=p(HK|TO) (27)
+i i
+Combine 24, 26, 27 together and put them back into 20, we find the whole diffusion process for
+single action is SE(3) equivariant. Joint all the H0(0 ≤ i ≤ T ) into a sequence A0, it’s easy
+i p
+to verify proposition 2 holds. In other word, our predicted action sequence is theoretically
+SE(3)equivarianttoinputobservations.
+15
+=== Page 16 ===
+PublishedasaconferencepaperatICLR2025
+D EXPERIMENTS SHOWING OUR PROPOSED MARKOV PROCESS IS EASIER TO
+LEARN
+ThepropertiesofthreedifferentMarkovtransitionscanbedescribedas
+p(y|x,c)=p (y|x,Tc)
+1
+p(y|x,c)=p (Ty|x,Tc) (28)
+2
+p(y|x,c)=p (Ty|Tx,Tc)
+3
+In practice, we use the SE(3) Transformer (Fuchs et al., 2020) with different input and output
+featuretypestoapproximatethethreetypesoftransitions(DenotedasP1Net,P2NetandP3Net).
+D.1 SINGLE-STEPEVALUATION
+Inthisvalidationexperiment,wetakeapointcloudP withrandomorientationasobservation(fo-
+cusing solely on rotation for simplicity). The detailed input and output feature types are shown
+intable5. AccordingtothefeaturesofSE(3)Transformer,it’seasytoverifythenetworkssatisfy
+thecorrespondingequivariantproperties.
+Table5: InputandOutputFeatureTypes
+InputFeature OutputFeature Supervision FinalLoss
+P1Net 3type-0 9type-0 identitymatrix 0.0002
+P2Net 3type-0 3type-1 Poseofinputpts 0.25
+P3Net 1type-1 3type-1 Poseofinputpts 0.27
+Forallthreenetworks, theinputfeatureconsistsof3scalarvaluesattachedtoeachpoint, andthe
+outputfeatureconsistsof9scalarvalues(afterpoolingacrossallpoints). ForP1Net,theoutputis
+set as nine type-0 features, meaning the output remains invariant to the rotation of the input point
+cloud. WesupervisetheoutputbycomputingtheL2lossbetweenitandafixedrotationmatrix. In
+contrast, for P2Net andP3Net, theoutput is treatedas threetype-1 features, which are supervised
+usingtheposeoftheinputpointcloud. Theonlydifferenceamongthethreenetworksistheinput
+andoutputfeaturetypes,whileallotherhyperparametersremainthesame.
+Comparison of Three Models
+1.4
+P1Net
+1.2
+P2Net
+1
+P3Net
+s
+s0.8
+o
+L0.6
+0.4
+0.2
+0
+2 4 6 8 10
+Train Epochs
+Figure 5: Loss curve of P1Net, P2Net and P3Net. After only several gradient descent, the loss of
+P1Netconvergesalmostto0,whilethelossesofP2NetandP3Netdonotdecreaseobviously.
+After training for the same number of epochs, the loss curve of the three networks is shown in
+fig.5. Theexperimentsdemonstratethattheinvariantmodel(P1Net)issignificantlyeasiertotrain
+comparedtotheequivariantmodels(P2NetandP3Net),asitisexpectedtooutputthesamevalues
+regardlessofthetransformationappliedtotheinputpointcloud. Additionally,weobservethatthe
+useofhigher-typefeaturesinP2NetandP3Netresultsinincreasedmemoryrequirementsandlonger
+inferencetimes.
+16
+=== Page 17 ===
+PublishedasaconferencepaperatICLR2025
+D.2 MULTI-STEPEVALUATION
+Moreover, to further demonstrate the superiority of our proposed diffusion process, we compose
+P1Net, P2Net and P3Net in different ways and evaluate the performance. In this experiment, we
+comparetwodiffusionprocesses,bothareend-to-endequivarianttotheconditionc,buthavediffer-
+entkindsoftransitions. Sameasthesingle-stepexperiment, wetakeapointcloudPwithrandom
+orientationasobservation(fo-cusingsolelyonrotationforsimplicity.
+Forthefirstprocess,alltransitionsarep -like. SoweuseoneP3Nettoapproximatethetransition
+3
+function. The input features of this P3Net consists of 3 type-1 features(same size with a rotation
+matrix),andonetype-0scalerindicatingtheindexofcurrentdenoisingstep. Andtheoutputofthe
+P3Netisalso3type-1features. Sothefirstdiffusionprocesscanbewrittenas
+x =P3Net(P,x ,k),for1≤k ≤K (29)
+k−1 k
+Andforthesecondprocess, thefirstK −1denoisingstepsarep -like, andthelastisp -like. So
+1 2
+hereweuseoneP1NetandoneP2Nettoapproximatethetransitions. TheinputoftheP1Netis10
+type-0features, 9representingtherotationmatrix, 1representingtheindexofdenoisingstep, and
+theoutputis9type-0featuresrepresentingtherotationmatrix. TheinputoftheP2Netis9type-0
+featuresrepresentingtherotationmatrix, asweonlyuseitinthelaststep, wedon’tinputthestep
+indexintoit.AndtheP2Netoutputs3type-1features.Formally,thediffusionprocesscanbewritten
+as
+x =P1Net(P,x ,k),for2≤k ≤K (30)
+k−1 k
+x =P2Net(P,x ) (31)
+0 1
+According to the properties of SE(3) Transformer, it’s easy to verify the two diffusion processes
+arebothequivarianttotheinputpointcloudP. Wegeneratesamenumberofdiffusiondatapieces
+{P,xK:0}andseparatelytrainthemodelsintwodiffusionprocess. Thesupervisionisaddedonthe
+outputofeachtransitionstep. Tocomparetheperformanceofthetwodiffusionprocess,weshow
+thefinallossL(x0 ,x0 )ofthetwoprocesswithrespecttothetrainingepoch.
+pred gt
+Comparison of Two diffusion process
+120
+Inv+Eqv
+100
+Pure Eqv
+80
+60
+40
+20
+0
+2 4 6 8 10
+Train Epochs
+ssoL
+Figure 6: Loss curve of two diffusion process. After only several gradient descent, the loss of
+Inv.+Eqv. processonvergesmuchfasterthanthePureEqv. process
+Asshownin fig.6. ,theInv.+Eqv. processconvergesmuchfasterthanthePureEqv. process.
+Withthetwoexperiments, wedemonstrateourchoiceofusingK −1p -likedenoisingstepsand
+1
+onlyonep -likestepisbetterthanusingK p -likesteps.
+2 3
+E IMPLEMENTATION OF SE(3) EQUIVARIANT AND INVARIANT BACKBONES
+HereweintroducetheimplementationofourtrueSE(3)equivariantbackboneE andinvariant
+equiv
+backboneE SE(3)Transformer(Fuchsetal.,2020).
+inv
+17
+=== Page 18 ===
+PublishedasaconferencepaperatICLR2025
+Ingeneral,eachmoduleconsistsof2SE(3)Transformers,calledaspos netandori net,outputing
+translation and rotation separately. As the output of SE(3) Transformer is per-point features, we
+implementameanpoolingoverallpointstogetglobalfeatures.
+E.1 INVARIANTMODULE
+Wesettheoutputofori netas6×T type0features,andthenimplementSchimidtorthogonalization
+p
+togetrotationmatrix. Asthe6×T type0featuresareSE(3)invariant,therotationmatrixisalso
+p
+invariant.
+We set the output of pos net as 3×T type0 features, which is naturally invariant to any SE(3)
+p
+transformationofthepointcloud,guaranteedbythetranslationinvarianceofSE(3)Transformer.
+Finally we combine each translation and rotation parts to a 4×4 matrix. So we get T of 4×4
+p
+matrices,andallofthemareinvarianttoanySE(3)transformationsofinputpointcloud.
+E.2 EQUIVARIANTMODULE
+Wesettheoutputofori netas2×T type1features,andthenimplementSchimidtorthogonalization
+p
+on each 2 type1 features to get T of rotation matrices. As the 2×T type1 features are SE(3)
+p p
+equivariant,therotationmatricesarealsoequivariant.
+Wesettheoutputofpos netas2×T type1featureand3×T type0feature(denotedasoffset).First
+p p
+weimplementSchimidtorthogonalizationoneach2type1features,getarotationmatrix(denoted
+asR). Additionally, wedenotethemasscenteroftheinputpointcloudasM := 1ΣN x , x is
+N i=1 i i
+thecoordinateofthei-thpoint. Thenwecanwriteeachofthepredictedtranslationstas
+t(X)=M+R·offset (32)
+WecanprovethistranslationvectorisequivarianttoanySE(3)transformationoftheinputpoint-
+cloudX. Whentheinputpointcloudistransformed,X′ =R X +t .
+data data
+t(X′)=(R M+t )+R R·offset
+data data data
+=R (M+R·offset)+t (33)
+data data
+=R t(X)+t
+data data
+Finally we combine each translation and rotation parts to a 4×4 matrix. So we get T of 4×4
+p
+matrices,andallofthemareequivarianttoanySE(3)transformationsofinputpointcloud.
+F EQUIVARIANT DIFFUSION ON SE(3) MANIFOLD
+Thenoisyactionofstepkcanberepresentedas
+√ √
+Hk =Exp (cid:0) γ 1−α¯ ε (cid:1) F (cid:0) α¯ ;H0,H(cid:1) ,ε∼N(0,I) (34)
+t t
+(cid:124) (cid:123)(cid:122) (cid:125)(cid:124) (cid:123)(cid:122) (cid:125)
+Perturbation Interpolation
+√
+Thefirstterm,Exp(γ 1−α¯ ε)isarandomnoiseonSE(3)manifold,aimingtorandomizethedif-
+t
+fusionprocess.AccordingtotheGaussiandistributiononSE(3)(appendixA.3),aSE(3)Gaussian
+variablecanbewrittenastheExpofaGaussianvariableonse(3). Sowefirstrandomlysamplea
+√
+6D noise ε ∈ R6 from unit Gaussian distribution, then scale it by a scheduler factor γ 1−αˆ to
+t
+controlthemagnitudeoftheperturbationatdifferentsteps. FinallyweusetheExpmaptoconvert
+thevariablebacktoSE(3).
+ThesecondtermisaninterpolationonSE(3)manifoldbetweenH0 andH. Theideabehindthis
+function is, first project the SE(3) transformation to se(3) , perform linear interpolation in this
+tangent space, and then convert the interpolated vector back to SE(3) to obtain the interpolated
+transformation. One can refer to Jiang et al. (2024) for more details. Formally, the interpolation
+funcionF canbeexpressedas
+√ √
+F
+(cid:0)
+α¯ ;H
+,H(cid:1)
+=Exp
+(cid:0)(cid:0)
+1− α¯
+(cid:1)
+·log
+(cid:0)HH−1(cid:1)(cid:1)
+H (35)
+t 0 t 0 0
+18
+=== Page 19 ===
+PublishedasaconferencepaperatICLR2025
+G SIMULATION TASKS– FURTHER DETAILS
+• Rotate Triangle: A robotic arm with 2D anchor pushes the triangle to a target 6D pose.
+ThetaskrewardiscomputedasthepercentageoftheTriangleshapethatoverlapswiththe
+targetTrianglepose.
+• Open Bottle Cap: A bottle with a cap is placed at a random position in Workspace, and
+a robot arm is tasked with opening the cap. In this task, the demonstrations show robots
+Unscrewing bottle cap with parallel gripper. Success in this task depends on whether the
+bottlecapissuccessfullyopened.Notethat,duetosimulatorconstraints,openingthebottle
+capsimplyinvolvesliftingitupwardwithouttheneedtotwistitfirst.
+• OpenDoor: Thistaskevaluatesthemanipulationofarticulatedobjects. Themodelisre-
+quiredtogeneratetrajectoriestoopendoorspositionedatvariousorientations.Thedemon-
+strationisgivenas: Weinitializethegripperatapointpsampledonthehandleofthedoor
+andsettheforwardorientationalongthenegativedirectionofthesurfacenormalatp. And
+thenwepullthedoorbyadegree. Differentfromdoorpushing,weperformagraspingat
+contactpointpforpulling. Successinthistaskisdeterminedbytheopeningangleofthe
+door.
+• Robot Calligraphy: This long-horizon task involves using a robot arm to write complex
+Chinese characters on paper, accounting for different orientations. Success in this task
+is determined by the aesthetic quality and accuracy of the characters or patterns formed,
+whichshouldcloselyresemblethetargettrajectory.
+• Fold Garment: A long-horizon task involving deformable object manipulation, where a
+robotfoldsalong-sleevedgarment. Therobotfoldsthesleevesinwardalongthegarment’s
+centralaxis,thengatherstheloweredgeofthegarmentandfoldsitupward,aligningitwith
+theunderarmregion. AfoldingsucceedswhentheIntersection-over-Union(IOU)between
+thetargetandthefoldedgarmentsexceedsabar(Xueetal.,2023a;Canberketal.,2022).
+• Fling Garment: A dual-arm task for manipulating deformable objects. The robot grasps
+the two shoulder sections of a wrinkled dress, lifting it to allow the fabric is clear of the
+surface. Thenflingsthegarmentittoflattenthefabric,andthenplacesitbackontoaflat
+surface. Successisdeterminedbytheprojectionareaoftheflattenedgarment.
+SomeofthesixtasksareexactlySE(3)equivariant,andsomearepartially. IntheOpenDoortask,
+the manipulation trajectory is exactly equivariant with the point cloud of the door. In the Robot
+Calligraphytask,themanipulationtrajectoryisexactlyequivariantwiththepointcloudofthepaper
+andthehandwritingthathasbeenwritten. IntheOpenBottleCaptask,themanipulationtrajectory
+isexactlyequivariantwiththepointcloudofthebottle. IntheRotateTriangletask, aswealways
+addsametransformationoninitialposeandtargetposeofthetriangle,themanipulationtrajectory
+isexactlyequivariantwiththepointcloudofthetriangle. IntheFlingGarmentandFoldGarment
+tasks, thetrajectoriesarenotexactlyequivariantwiththeinitialobservationofthegarment, asthe
+deformationdiffersineachinitialization. Butevenso,ourmethodcanalsooutperformbaselines.
+The intuition is, by ensuring end-to-end SE(3) equivariance, our model treats a point cloud in
+theobservationspaceandallthepointcloudspossiblebySE(3)transformationasanequivalence
+class, so the observation space is reduced to the quotient space of the observation space over the
+SE(3)group. OncetheSE(3)equivarianceisnaturallyensured,thenetworkcanfocusonthegeo-
+metricfeaturesoftheobject,soitstillhastheabilitytogeneralizetothedeformationandgeometry
+ofobjects.
+H REAL TASKS– FURTHER DETAILS
+In the task of Open Bottle Cap, unlike in a simulator, the process in the real world involves first
+twisting the cap and then lifting it off to open. The bottle is initially placed at a random position
+on the table. For Opening Door, the initial position of the cabinet is randomly determined. In
+Calligraphy, we use flat-bristled brushes and watercolor paper, which is randomly positioned on
+thetable. InClothFolding,thelimitedworkspaceoftheFrankarobotmeansitcannotreachevery
+possiblelocation.Therefore,theplacementofclothesisnotrandombutisinsteadbasedonlocations
+accessibletotherobot.
+19

@@ -1,0 +1,701 @@
+=== Page 1 ===
+ManiCM: Real-time 3D Diffusion Policy via Consistency Model for
+Robotic Manipulation
+Guanxing Lu1 , Zifeng Gao1∗, Tianxing Chen2, Wenxun Dai1, Ziwei Wang3, Wenbo Ding1, Yansong Tang1†
+1Tsinghua Shenzhen International Graduate School, Tsinghua University
+2 Shanghai AI Laboratory, 3 Nanyang Technological University
+{lgx23@mails.,tang.yansong@sz.}tsinghua.edu.cn
+{konbi.gao,chentianxing2002,wxdai2001}@gmail.com, ziweiwa2@andrew.cmu.edu
+https://ManiCM-fast.github.io
+Abstract—Diffusion models have been verified to be effective 80
+in generating complex distributions from natural images to 60
+motion trajectories. Recent diffusion-based methods show im- 40
+pressiveperformancein3Droboticmanipulationtasks,whereas 20
+they suffer from severe runtime inefficiency due to multiple
+denoising steps, especially with high-dimensional observations. 0.00 0.05 0.10 0.15
+Runtime Per Step (s)
+To this end, we propose a real-time robotic manipulation model
+named ManiCM that imposes the consistency constraint on the
+diffusion process, so that the model can generate robot actions
+inonlyone-stepinference.Specifically,weformulateaconsistent
+diffusion process in the robot action space conditioned on the
+point cloud input, where the original action is required to be
+directly denoised from any point along the ODE trajectory. To
+modelthisprocess,wedesignaconsistencydistillationtechnique
+to predict the action sample directly instead of predicting the
+noise within the vision community for fast convergence in the
+low-dimensional action manifold. We evaluate ManiCM on 31
+robotic manipulation tasks from Adroit and Metaworld, and
+the results demonstrate that our approach accelerates the state-
+of-the-art method by 10 times in the average inference speed
+while maintaining competitive average success rate.
+I. INTRODUCTION
+Designing robots for diverse manipulation tasks has been
+highly desired in the robotic community for a long time.
+In this pursuit, previous arts have made great progress in
+exploring different architectures, e.g., perceptive models like
+convolutional networks [1], [2], transformers [3], [4], and
+generative models like diffusion models [5], [6], [7]. Among
+these choices, diffusion-based policies receive increasing
+attentionfortheircapacitytomodeldiversehigh-dimensional
+robotic trajectories, where robot observation is provided as
+the condition for generation. For instance, diffusion models
+have been extensively utilized across various domains as
+high-level procedure planners [8], [9], [10], [11], [12], low-
+level motion policies [13], [14], [5], [15], [16], [17], teacher
+models [18], [19], and data synthesis engines [20], [21],
+[22],demonstratingimpressiveperformanceindiverserobotic
+tasks.
+However,diffusion-basedfashionsinevitablysufferfromse-
+vere runtime inefficiency by requiring considerable sampling
+steps for high-quality action synthesis during inference, even
+with some sampling acceleration [24]. As shown in Figure 1,
+the diffusion policy (DP [5]) requires ∼162ms per step to
+generate a high-quality action. Moreover, the 3D diffusion
+)%(
+etaR
+sseccuS
+Adroit Metaworld
+ManiCM (4-step) 80 ManiCM (4-step) ManiCM (1-step) DP3 ManiCM (1-step) DP3
+60 DP
+DP 40
+20
+BCRNN+3D BCRNN+3D
+0.00 0.05 0.10 0.15 0.20
+Runtime Per Step (s)
+Fig. 1: Trade-off Between Efficiency and Effectiveness. We
+present ManiCM, a real-time 3D diffusion policy by imposing the
+consistency constraint on the diffusion process. BCRNN+3D [23]
+is a state-of-the-art perceptive model-based behavior cloning agent
+augmented with 3D point cloud input. DP [5] and DP3 [6] are
+the state-of-the-art diffusion-based manipulation agents. ManiCM
+achieves a decision-making runtime of 16ms, which is 10× faster
+than previous mainstream methods.
+policy (DP3 [6]) only achieves a decision latency of ∼178ms
+whendealingwiththehigh-dimensional3Dpointcloudinput,
+whichblockstheapplicationsofreal-timeclosed-loopcontrol.
+To address this issue, recent efforts have been proposed
+to speed up the inference phase of diffusion models by
+hierarchical sampling [25], [15], [16]. Nevertheless, it is hard
+to determine the hierarchy across task domains that exhibit
+different challenging levels, which limits the practicality of
+the existing works to 3D robotic manipulation.
+Recently, the concept of consistency models [26], [27]
+has been introduced in image generation, which synthetizes
+high-fidelity images with a minimal number of steps. In
+this paper, we propose a ManiCM method that leverages
+the concept of consistency models for real-time robotic
+manipulation. Different from existing methods that focus
+on designing hierarchical planning for specific domains, we
+design a generalizable consistency distillation technique to
+generate robot actions in only one-step inference. More
+specifically, we first formulate a diffusion process to denoise
+robot action conditioned on the point cloud, and then ensure
+the consistency property that the original action can be
+directly denoised from any point along the ODE trajectory.
+Then, we utilize the consistency distillation technique to
+predict the action sample directly, based on the observation
+that predicting the denoised action converges faster than
+predicting the noise in the vision community. We evaluate
+ManiCM on a diverse set of robotic manipulation tasks from
+5202
+peS
+6
+]OR.sc[
+3v68510.6042:viXra
+=== Page 2 ===
+Adroit and Metaworld, and the results illustrate that our
+𝒂 Teacher
+approach achieves an average inference speed acceleration diffuse 𝒏+𝒌 Network
+of 10× compared to the state-of-the-art method, while still
+pcd ODE
+maintaining competitive average success rates (Figure 1). We 𝒂 𝟎 pose Solver 𝚽
+introduceconsistencydistillationintotheroboticmanipulation
+diffuse k-step
+area and accelerate high-quality 3D manipulation action
+generation to a real-time level. Our contributions can be 𝒂 𝒏+𝒌 Encoder Compact3DRepr. 𝒂ෝ 𝒏
+concluded as follows:
+• We propose a real-time 3D diffusion policy to learn ManiCM Target Network
+robot action conditioned on the point cloud, so that the
+original action can be directly denoised from any point EMA
+along the ODE trajectory.
+• We design a manipulation consistency distillation tech-
+nique to predict the action sample directly instead of
+Manipulation Consistency
+predicting the noise for fast convergence to the action
+Distillation
+manifold. 𝒂ෝ 𝟎 𝒂ෝ 𝟎 −
+• Extensive experiments on 31 robotic manipulation tasks
+from Adroit and Metaworld demonstrate that our ap- Fig. 2: Overall Pipeline.Givenarawactionsequencea 0 ,wefirst
+proach accelerates the state-of-the-art method by a large perform a forward diffusion to introduce noise over n+k steps.
+The resulting noisy sequence a is then fed into both the online
+margin in average inference speed while maintaining n+k
+networkandtheteachernetworktopredictthecleanactionsequence.
+competitive average success rates. The target network uses the teacher network’s k-step estimation
+results to predict the action sequence. To enforce self-consistency,
+a loss function is applied to ensure that the outputs of the online
+II. RELATEDWORK
+network and the target network are consistent.
+A. Diffusion Models for 3D Robotic Manipulation
+The exploration of the most effective architecture for end- B. Consistency Models
+to-end robotic manipulation has been a long-standing process. To accelerate the sampling speed of the current diffusion
+The trended architectures include convolution networks [1], models (DMs) [30], [28], [31], [32], the concept of consis-
+[2], transformers [3], [4], and diffusion models [8], [9], tency models (CMs) [26] was first introduced in the image
+[10], [11], [12], [13], [14], [5], [20], [21], [22], [6], [16], generation domain. The core idea behind the consistency
+[17]. Among these, diffusion models first emerged as a models is to enforce the model to learn to map any point
+transformative approach in image generation [28], [24], at any time to the origin of the probability flow ODE (PF-
+leveraging the iterative refinement of Gaussian noise into ODE) trajectory, i.e., the clean image. The consistency model
+data samples. Recently, they have been introduced to the facilitates efficient image generation, allowing trade-offs
+field of embodied AI, and have made significant progress between extremely few inference steps and the generation
+in applications that demand nuanced decision-making and quality.Recently,latentconsistencymodels(LCMs)[27],[33]
+adaptive control. Specifically, [5], [8], [9] first demonstrated successfullydistilledfromtheStableDiffusion[32],achieving
+thepotentialofthediffusionmodelinlow-dimensionalcontrol significant acceleration in the speed of text-conditioned
+tasks.Furthermore,thediffusionmodelclasses[6],[29],[16], image generation. Based on LCMs, [34], [35] introduce
+[17] are extended to more complex 3D robotic manipulation diverse conditional controls to manipulate the text-to-image
+tasks, and also achieve superior performance to other tra- latent consistency models. Moreover, the consistent model
+ditional architectures. However, applying diffusion models has been introduced in various research domains such as
+to 3D robotic manipulation faces the issue of insufficient video [36], [37], 3D human motion [38], and audio [39],
+decision-making frequency. 3D tasks involve complex spatial unlocking new capabilities for various real-time applications.
+representations, which pose significant challenges for real- While initial success has been achieved in incorporating
+time robotic operation and control. Denoising processes are relatively simple embodied tasks with the consistency model,
+effective at generating high-fidelity outputs, but their iterative as explored in [40], [41], [42], its application to complex
+nature can be computationally expensive, creating a conflict robotic manipulation tasks with high-dimensional 3D visual
+between thorough exploration of the solution space and the conditions still remains largely unexplored. To fill this
+need for fast decision-making in dynamic robotic tasks. To research gap, we propose ManiCM to achieve real-time 3D
+solvethisissue,recentmethodspresenttoskipinferencesteps diffusion policy generation for the first time.
+by hierarchical sampling [25], [15], [16], while it is hard to
+determine the hierarchy across different domains. In this
+III. APPROACH
+paper, we harness the power of the consistency model [26] In this section, we first present the problem formulation
+to improve the efficiency of diffusion models in 3D decision- and the preliminaries on consistency models (Section III-
+making, utilizing point clouds as effective 3D representations. A). Then, we present an overview of our pipeline, and
+=== Page 3 ===
+detail the design of each component in the manipulation network’). The consistency loss is defined as:
+consistency model (Section III-B). To enable our model to L(θ,θ−;Φ)=E(cid:2) d (cid:0) f (x ,t ),f (xˆΦ,t ) (cid:1)(cid:3) , (3)
+learn consistent generation from the teacher network, we θ tn+1 n+1 θ− tn n
+propose the manipulation consistency distillation (Section III- where d(·,·) is a metric function chosen for measuring the
+C). distance between two samples and Φ represent the ODE
+Solver.f (·,·)andf (·,·)arereferredtoas‘onlinenetwork’
+θ θ−
+A. Problem Formulation
+and‘targetnetwork’accordingto[26].Whentheoptimization
+The demand for robotic manipulation is of great signifi- of the online network converges, the target network will
+cance in the pursuit of the general embodied agent. To train eventually match the online network since θ− is a running
+a manipulation agent, we focus on imitation learning that average of θ.
+learns a policy from a limited set of expert demonstrations.
+B. ManiCM: Manipulation Consistency Model
+The policy π :O (cid:55)−→A maps the observation o∈O to the
+3D Conditional Generation. To incorporate the rich spatial
+robot action a∈A. The observation contains the point cloud
+information embedded in the 3D point cloud, we propose
+received from an eye-to-hand RGB-D camera and the robot
+to inject the point cloud representation into the diffusion
+proprioception data. ManiCM uses sparse point clouds as the
+3D representation. Based on the 3D visual input o(t) and the policy as conditions. Specifically, given the depth image
+received from a single-view RGB-D camera, we first obtain
+robot poses, the agent is required to generate the optimal
+actionfortherobotarmandgrippersa(t),whichrespectively the point cloud by the extrinsic and intrinsic of the camera.
+We down-sample the point cloud via farthest point sampling,
+demonstrates the change in 3D space of the end-effector
+in order to focus on the interest region like the robot arm
+followed by a normalized torque that the gripper fingers
+and targets. Then, the sparse point cloud is encoded by a
+should apply. While existing diffusion models produce high-
+carefully designed MLP point cloud encoder, resulting in a
+quality robot actions, their iterative inference limits real-time
+compact 3D representation. Subsequently, we condition the
+3D manipulation. Therefore, we propose a framework based
+original diffusion model with the compact 3D representation,
+on the consistency model to enhance decision efficiency.
+which can be expressed as:
+The Consistency Model (CM) [26] introduces an efficient
+generative model designed for effective single-step or few- at−1 =α (cid:0) at−γ ϵ (cid:0) at,t,p,q (cid:1)(cid:1) +σ N(0,I),t>0, (4)
+t t θ t
+step inference generation while maintaining a comparable
+where ϵ is the predicted noise. p and q denote point cloud
+performance. Given a PF-ODE that can transfer data into θ
+conditions and robot poses, respectively.
+noise, the objective of CM is to learn the solution function
+Manipulation Self-Consistency Function. However, the
+f(·,·) of this PF-ODE, such that any point on the ODE
+iterative procedure in Equation (4) raises a non-negligible
+trajectory, can be mapped back to the original distribution
+computationalburden,especiallywithhigh-dimensionalpoint
+through f(·,·). Given a solution trajectory {x } of
+t t∈[ϵ,T]
+cloud conditions. To this end, we propose to constrain the
+the PF-ODE, the consistency function f is defined as f :
+original action to be recovered from any point along the
+(x ,t)(cid:55)−→x ,wheret∈[0,T],T >0isafixedconstant.To
+t ϵ
+trajectory, so that the model can generate action in only one
+avoid potential numerical instability at zero, ϵ is a very small
+step in the test phase:
+fixedpositivenumberinsteadofzero,andxˆ canberegarded
+ϵ
+as an approximation of the data distribution (xˆ ϵ ∼p data (x)). a0 =c skip (t)at+c out (t)F θ (cid:0) at,t,p,q (cid:1) ,t≥0, (5)
+According to [26], the consistency function should satisfy
+the self-consistency property defined as: where F θ is a manipulation consistency function that con-
+tains the accumulated ϵ in Equation (4) along the tra-
+θ
+f(x t ,t)=f(x t′ ,t′),∀t,t′ ∈[ϵ,T]. (1) jecto (cid:112) ry. In practice, c skip (t) = σ d 2/(β2t2 + σ d 2), c out (t) =
+βt/ (β2t2+σ2), where β denotes a timestep scaling value
+As shown in Equation (1), the implication of the self- d
+while σ is a balance value. The F (·,·) can be parametrized
+d θ
+consistency property is that for any input pairs (x ,t) on
+t to predict the action sample or the noise epsilon. In main-
+the same PF-ODE trajectory, their outputs f(x ,t) remain
+t stream diffusion generation works for image generation, the
+consistent. All consistency models have to meet the boundary
+default prediction type is noise rather than sample. We spec-
+condition f(x ,ϵ)=x , as it plays an important role in the
+ϵ ϵ ulate that while directly predicting samples may intuitively
+success of consistency model training, according to [26]. To
+yield higher-quality generated outputs [43], predicting the
+imposetheself-consistencypropertyondeepneuralnetworks,
+distributionofimagesismuchmorechallengingfordenoising
+we implement function f(·,·) as:
+modelsinhigh-dimensionalimagespace.However,thedimen-
+sionality of the robot action is quite small (approximately 28)
+f (x,t)=c (t)x+c (t)F (x,t), (2)
+θ skip out θ
+in manipulation tasks. In this scenario, directly learning the
+where c (t) and c (t) are differentiable functions with distribution of the samples is relatively easy and brings low
+skip out
+c (ϵ) = 1 and c (ϵ) = 0, and F (·,·) is a parametrized variance andfast convergence,echoing[6].Moreimportantly,
+skip out θ
+deep neural networks to learn the self-consistency. Consis- the large prediction variance caused by predicting noise
+tency Distillation is a method for training CM by distilling will be amplified in consistency models. Specifically, the
+knowledgefrompre-traineddiffusionmodels(i.e.,the‘teacher consistency property encourages the f (a ,t ) to match
+θ n n
+=== Page 4 ===
+TABLE I: Comparisons on Runtime. We evaluate 100 episodes on 31 challenging tasks from Adroit and Metaworld across 3 random
+seeds and report the time consumption per step (s) with standard deviation. The best results are bold. The performance of our ManiCM
+in one-step inference surpasses all state-of-the-art models, providing ample evidence for the effectiveness of consistency distillation.
+Additionally, we include two non-diffusion-based models, BC-GMM+3D and BC-RNN+3D, for reference.
+Adroit Metaworld Metaworld Metaworld Metaworld
+Method NFE Average
+(3) Easy(18) Medium(3) Hard(3) Very Hard(4)
+DP 10 - - - - - 162.6±1.2
+Image-basedManiCM(1-step) 1 14.9 16.2 16.1 15.5 16.3 16.0±0.1
+Voxel-basedDP 10 183.6 205.3 192.2 198.8 211.5 202.1±1.1
+Voxel-basedManiCM(1-step) 1 18.1 20.0 20.6 20.5 20.8 20.0±0.2
+BC-GMM+3D 1 14.7 15.9 16.1 15.8 16.9 15.9±0.7
+BC-RNN+3D 1 14.9 16.8 16.2 16.4 16.4 16.6±0.5
+DP3 10 159.6 177.4 186.1 183.2 181.8 177.6±1.4
+SimpleDP3 10 95.5 123.5 119.2 124.6 124.7 120.6±0.9
+DP3(4-step) 4 52.6 66.5 76.3 58.6 62.1 64.9±0.9
+SimpleDP3(4-step) 4 27.3 34.4 33.6 35.6 34.2 33.6±0.5
+ManiCM(1-step) 1 16.9 17.6 17.2 17.0 16.5 17.3±0.1
+ManiCM(4-step) 4 56.3 66.8 68.2 67.9 69.4 66.2±0.3
+TABLE II: Comparisons on Success Rate. We evaluate 100 episodes on 31 challenging tasks from Adroit and Metaworld across 3
+random seeds and report the success rates (%) with standard deviation. The best results are bold. The performance of our ManiCM
+in one-step inference surpasses all state-of-the-art models, providing ample evidence for the effectiveness of consistency distillation.
+Additionally, we include two non-diffusion-based models, BC-GMM+3D and BC-RNN+3D, for reference.
+Adroit Metaworld Metaworld Metaworld Metaworld
+Method NFE Average
+(3) Easy(18) Medium(3) Hard(3) Very Hard(4)
+DP 10 31.6 77.1 18.0 3.0 22.5 52.8±3.6
+Image-basedManiCM(1-step) 1 32.2 77.5 18.9 4.3 21.5 53.1±3.9
+Voxel-basedDP 10 35.7 80.2 24.5 12.4 30.8 57.5±3.1
+Voxel-basedManiCM(1-step) 10 36.4 80.5 24.9 11.5 31.5 57.8±3.8
+BC-GMM+3D 1 3.8 4.7 3.8 3.4 3.4 4.2±0.4
+BC-RNN+3D 1 4.1 4.5 3.8 3.2 3.0 4.0±0.5
+DP3 10 76.1 91.7 46.3 44.8 62.3 77.5±3.8
+SimpleDP3 10 73.0 90.4 47.3 45.6 56.5 75.8±3.3
+DP3(4-step) 4 75.3 86.1 39 44.0 61.3 72.4±2.6
+SimpleDP3(4-step) 4 73.0 84.3 37.3 43.3 62.0 70.9±3.3
+ManiCM(1-step) 1 74.9 92.9 47.7 44.2 65.7 78.5±4.2
+ManiCM(4-step) 4 78.2 93.0 48.0 46.7 64.5 79.0±3.9
+aˆ = f (a ,t ), while the original diffusion model only the clean aˆ∗ and aˆ , respectively. In order to make sure the
+0 θ 0 0 0 0
+requires aˆ to be close to aˆ . Thus, the variance is self-consistencypropertyEquation(1)isrespected,wedesign
+n n−1
+propagatedalongtheODEtrajectoryinconsistencymodeling, a target network cloned from the online network, and we
+which ultimately blocks the convergence of prediction noise expect the denoised outputs of the online network and the
+in manipulation tasks (Figure 3). Therefore, we parameterize target network to be aligned. Specifically, the target network
+the manipulation self-consistency function F (·,·) to predict generates aˆ− utilizing a obtained from processing aˆ∗ with
+θ 0 n 0
+the action sample rather than noise. a k-step ODE solver Φ (e.g., DDIM [24]), such that aˆ
+0
+and aˆ− are obtained by the consistency function f(·,·) in
+0
+C. Manipulation Consistency Distillation
+Equation (2). Therefore, the consistency distillation loss is
+To train ManiCM, we adopt the method of consistency expressed as,
+distillation, as depicted in Figure 2. Here a represents the
+0 (cid:20)(cid:13) (cid:13)2 (cid:21)
+sequence of robotic arm actions, which comprises multiple L (θ,θ−)=E (cid:13)f (a ,t )−f (aˆΦ,t )(cid:13) ,
+MCD (cid:13) θ n+k n+k θ− n n (cid:13)
+actions, with the dimensionality determined by the specific 2
+(6)
+task.pcddenotesthepointcloudobtainedfromimageswhile
+where ∥·∥ is the ℓ norm. Besides, θ− is updated with the
+pose signifies the current pose of the robotic arm from the 2 2
+exponentialmovingaverage(EMA)oftheparameterθdefined
+offlinedataset.Theseinputsareprocessedthroughanencoder
+as θ− ← sg(µθ− + (1 − µ)θ), where sg(·) denotes the
+to obtain compact representations, which are then used as
+stopgradoperationandµsatisfies0≤µ<1.InEquation(6),
+conditional inputs for the teacher network, online network,
+aˆΦ is the k-step estimation from a . Therefore, the aˆΦ
+andtargetnetwork.Givenaground-truthexpertactiona ,we n n+k n
+0 can be formulated as,
+first obtain the noisy action a by conducting a forward
+n+k
+diffusion operation with n + k steps to add noise to a 0 , aˆΦ n ←a n+k +(t n −t n+k )Φ(a n+k ,t n+k ), (7)
+where k is the skipping interval mentioned in Section III-A.
+Subsequently, the noisy action a is feed-forwarded to where Φ(·,·) is the update function of a k-step ODE solver
+n+k
+a frozen teacher network and the online network to decode applied to PF-ODE. As outlined in Section III-A, we utilize
+=== Page 5 ===
+EMAtoupdatetheparametersofthetargetnetworkfromthe as an additional device-agnostic metric for inference speed.
+parameters of the online network. We refer to the pre-trained For the success rate, the higher the better. For the NFE and
+manipulation 3D diffusion model, such as DP3 [6], as the the runtime, the lower the better.
+"teacher network". Implementation Details. For ManiCM, an AdamW [49]
+Compared to other manipulation diffusion models, our optimizer with a batch size of 128 and a learning rate of
+ManiCM model achieves the fastest runtime (∼16ms per 5e-5 is employed for 3K epochs training. We also adopt
+action) during the inference phase by sampling high-quality a cosine decay learning rate scheduler and 500 iterations
+actions in just one step, which is illustrated in Table I. of linear warm-up. The EMA rate is set to µ = 0.95 by
+default and we use DDIM-Solver [24] with a skipping step
+IV. EXPERIMENTS
+of k =10 as ODE Solvers. Unless otherwise specified, our
+In this section, we first introduce the experiment setup experiments are conducted using 100 training time steps.
+including datasets, baseline methods, evaluation metrics and The teacher model employed in our experiments uses DDIM
+implementation details (Section IV-A). Then we compare with an inference step of 10. For the input, We utilize an
+our method with the state-of-the-art approaches to show observation steps value of 2, indicating that we use the point
+the superiority in runtime efficiency and success rate on clouds from the two most recent time steps as conditions.
+simulation environment (Section IV-B) and real-world envi- Similarly, with a horizon of 4, we predict four consecutive
+ronment(SectionIV-C).Subsequently,weconductanablation actions during each iteration for long-horizon tasks, while
+study to explore different design choices in our ManiCM only 2 actions are executed per prediction. To focus on the
+(Section IV-D). We also illustrate the visualization results to interestarea,weobtaindepthimageswithsize84×84froma
+depict our intuition (Section IV-E). Further results can be singlecamera.Thepoint cloudisdownsampledto 512points
+found in the supplementary material. using the Farthest Point Sampling (FPS) algorithm, while
+the dimension of agent poses and actions are determined
+A. Experimental Setup
+by the specific task. Both point clouds and agent poses are
+Datasets.Weconductoursingle-taskexperimentsinthewell- encodedusinganMLPencoderintoembeddingsoflength64.
+recognized MetaWorld [44] and Adroit [45] benchmarks, For normalization, we limit the min and max of action and
+resulting in a total of 31 tasks. These tasks range from observation to [−1,1] independently since the prediction of
+simple pick-and-place tasks to more challenging scenarios DDIM would clip the prediction to [−1,1] to ensure training
+such as dexterous manipulation, which ensure that the model stability. We implement our model in PyTorch [50], and all
+is effective across various scenarios. Specifically, MetaWorld compared models are trained and evaluated on one NVIDIA
+tasks are grouped into different difficulty levels from easy RTX 4090 GPU to benchmark the decision runtime.
+to very hard according to [46]. For offline training datasets,
+B. Comparison with the State-of-the-Art Methods
+we obtain expert demonstrations through heuristic policies
+in MetaWorld, and acquire them utilizing the reinforcement In this section, we compare ManiCM with existing state-
+learning method VRL3 [47] in Adroit. We obtain a limited of-the-art methods on Adroit and Metaworld to demonstrate
+number of 10 expert demonstrations for training in each the effectiveness of our method.
+benchmark, following [6] for fair comparisons. We also ComparisonsonRuntime.TableIillustratesthecomparison
+conduct multi-task experiments on eight high-quality tasks of the runtime per step of each model. Our method achieves
+selected from RLBench [48] benchmark. All models are an impressive runtime around 16ms per step on average,
+trained with 20 demonstrations per task and use only the which is ∼10× faster than the baseline method DP3. The
+front camera view following [29]. acceleration comes from the manipulation consistency model,
+Baselines. This work primarily emphasizes accelerating the which can generate robot actions in only one-step inference.
+inference speed of 3D modality in diffusion policy to achieve Besides, the 4-step inference version of ManiCM also
+real-time robotic action generation. To this end, our main improves the efficiency by ∼3×, Moreover, the proposed
+baseline is the state-of-the-art point cloud-based 3D diffusion ManiCM also surpasses the lightweight version Simple DP3
+policy (DP3 [6]). Additionally, we compare our method with significantly, which shows that the speedup from reducing
+‘Simple DP3’, a variation of DP3 with a lightweight policy the sampling speed is a more efficient way than shrinking the
+backbone.Ourbaselinesalsoincludethewell-knowndiffusion model itself. The results demonstrate the superiority of our
+policy (DP [5]) and 3D Diffuser Actor (3dda [29]) for more ManiCM in terms of runtime, which verifies our intuition
+comprehensive performance comparisons. To ensure fairness, that incorporating the consistency model boosts the inference
+theresolutionofallimagesanddepthmapsremainsconsistent speed in various robotic manipulation tasks.
+across all experiments. Comparisons on Success Rate. Table II depicts the com-
+Evaluation Metrics. Following [6], we assess 20 episodes parison of the success of each model. The results show that
+every 200 training epochs and then calculate the average of our method accelerates the diffusion process without any
+thehighest5successrates,alongwiththeaverageruntimeper performance drop. Specifically, with only one-step inference,
+step. For each main experiment, we run 3 random seeds with our ManiCM can approximate or even surpass the state-of-
+seed numbers 0, 1, 2 to mitigate the performance fluctuation. the-art model DP3 and Simple DP3 by 1.0%. By distilling
+We also report the Number of Function Evaluations (NFE) the diffusion process with consistency regularization, our
+=== Page 6 ===
+100
+75
+50
+25
+0
+0 20 40
+)%(
+etaR
+sseccuS
+Metaworld Hand Insert Metaworld Box Close Metaworld Door Open Metaworld Handle Pull
+100 100 100
+ManiCM sample
+DP3 sample 75 75 75
+ManiCM epsilon
+DP3 epsilon 50 50 50
+25 25 25
+0 0 0
+0 20 40 0 20 40 0 20 40
+100
+75
+50
+25
+0
+0 20 40
+)%(
+etaR
+sseccuS
+Metaworld Pick Place Metaworld Stick Push Metaworld Dial Turn Metaworld Reach Wall
+100 100 100
+75 75 75
+50 50 50
+25 25 25
+0 0 0
+0 20 40 0 20 40 0 20 40
+100
+75
+50
+25
+0
+0 20 40
+Step (k)
+)%(
+etaR
+sseccuS
+Metaworld Soccer Metaworld Handle Press Side Adroit Hammer Adroit Pen
+100 100 100
+75 75 75
+50 50 50
+25 25 25
+0 0 0
+0 20 40 0 10 20 0 10 20
+Step (k) Step (k) Step (k)
+Fig. 3: Learning Curve. Learning curves of ManiCM with sample prediction vs. noise prediction. ManiCM converges remarkably faster
+by predicting action sample directly than noise.
+TABLE III: Ablation on Different Diffusion Steps of the Teacher Model. ‘SR’ refers to the success rate. ‘→’ means skipping from
+the original training denoising steps to k steps in inference with DDIM-Solver.
+Adroit Metaworld Average
+Method / DDIM Step k
+Runtime SR Runtime SR Runtime SR
+DP3 (100→10) 159.6 76.1 179.6 77.6 177.6 77.5
+DP3 (1000→50) 920.8 75.5 998.1 78.5 994.4 78.2
+ManiCM (100→10) 16.9 74.9 17.3 78.9 17.3 78.5
+ManiCM (1000→50) 19.4 77.6 16.9 75.0 17.4 75.3
+Fig.4:Qualitative Comparisons.WecompareManiCMwiththestate-of-the-artmethod DP3[6]intwotypicalmanipulation
+tasks from Adroit and Metaworld, respectively. With only one-step inference, ManiCM achieves the fastest action generation
+while producing high-quality motions that successfully complete the tasks.
+method avoids overfitting to the training demonstrations. manipulation consistency model.
+Especially, in the Metaworld Very Hard tasks, our
+Comparisons on Multi-Task Setup. Figure 5 compares
+method outperforms the state-of-the-art method with an
+ManiCM with the 3D Diffuser Actor [29] baseline on the
+absolute improvement of 3.4%. Moreover, increasing the
+multi-task RLBbench simulation environment. The results
+sampling steps in ManiCM yields even better performance
+show that ManiCM achieves competitive performance while
+onaverage(79.0%vs.78.5%).Theaboveexperimentalresults
+demonstrating a remarkable 13.3× acceleration in inference
+prove the effectiveness of handling robotic tasks with our
+speed, highlighting our consistency model’s effectiveness on
+=== Page 7 ===
+100
+80
+60
+40
+20
+0
+ManiCM 3dda
+)%(
+etaR
+sseccuS
+Average Success Rate
+2.0
+1.6
+1.2
+0.8
+0.4
+0.0
+ManiCM 3dda
+)s(
+emitnuR
+Average Runtime Per Step ManiCM achieves 10× faster inference speeds than DP3
+while maintaining comparable success rates, validating its
+effectiveness in real-world setup.
+D. Ablation Studies
+In this section, we explore the impact of different design
+choices in our ManiCM.
+Ablation on Sample Prediction and Epsilon Prediction.
+We conduct a comparison between directly predicting the
+sample and predicting the noise ‘epsilon’, which is a widely-
+Fig. 5: Multi-Task performance Comparison. ManiCM bal- used technique in the vision community [28]. From Figure 3,
+ances accuracy with 3D Diffuser Actor [29] while achieving we can observe that sample prediction in the noise sampler
+×13.3 faster inference speeds on RLBench. brings faster convergence than predicting the noise epsilon
+in various tasks and methods. This is also observed in [6].
+Besides,theperformanceofthenoisepredictionisevenworse
+when we implement consistency distillation. This is because
+predicting the action sample is more direct than training a
+denoising model for the low-dimensional action manifold.
+More importantly, the consistency distillation process will
+(a) Slide Block (b) Stack Cube (c) Transfer Piece causecompoundinstability,sothattheperformanceofsample
+prediction is much stronger than noise prediction variation
+Fig. 6: Our real-world experiment setup. We use an
+(78.5% vs. 24.4% on average).
+end effector and a DH Robotics AG-95 gripper based on
+Ablation on Different Diffusion Steps of the Teacher
+UR3e arms and include three diverse manipulation tasks.
+Model. We compare our ManiCM with the state-of-the-art
+A Realsense D435i camera is applied to capture visual
+methodDP3underdifferentDDIMsamplingstepsinTableIII.
+observations.
+We can conclude that: 1) The task success rates do not
+TABLE IV: Real World Experiment Results. Each task is monotonically increase when taking more diffusion sampling
+evaluated with 10 trials.
+steps in both DP3 and ManiCM, which indicates that most
+of the diffusion steps are redundant. As a result, we can
+Method SlideBlock StackCube TransferPiece
+distill the teacher model with multiple-step inference into
+SR Runtime SR Runtime SR Runtime
+an online model that generates high-quality action in only
+DP3 90 177.2 80 181.3 70 172.4 one sampling step. 2) For different diffusion sampling steps,
+ManiCM 80 16.9 80 17.2 80 16.8
+our ManiCM can stably distill competitive capacity in task
+completion, where it accelerates the runtime efficiency by
+a multi-task setup.
+∼57 × when the teacher is a DDIM with 50 inference steps.
+C. Real World Experiments
+E. Qualitative Analysis
+As shown in Figure 6, we evaluate ManiCM in the
+Wepresenttwoqualitativeexamplesofthegeneratedaction
+real world on three tasks from easy to hard with different
+sequence in Figure 4 from DP3 and our ManiCM in Adroit
+embodiments: Slide Block, Stack Cube, and Transfer Piece.
+and MetaWorld, respectively. In the left case, the agent needs
+1) Slide Block: The robot has to push the gray block off tospinthepentoaspecificanglegivenbythegreenreference
+the white cube with the end-effector (see Figure 6a). pen with its dexterous hand. The compared method DP3
+2) Stack Cube: The robot has to pick up the red cube and fails to spin the pen to the correct angle, while our method
+then stack it on top of the white cube with a parallel succeeds in spinning it to the angle specified by the green
+jaw gripper (see Figure 6b). pen on the ground. In the right case, the agent is required to
+3) Transfer Piece: The robot has to partially close the kick the football into the goal with its parallel jaw gripper.
+gripper, insert it into the left side of the box to pick DP3 stretches the gripper to the goal without holding the
+the piece, and then place the piece on the right side of ball by just mimicking the expert trajectories in the training
+the box with a parallel jaw gripper. This task is more set, while ManiCM successfully kicks the ball into the goal.
+complex and requires higher precision (see Figure 6c). Both cases verify that our ManiCM accelerates the denoising
+We use an end effector and a DH Robotics AG-95 gripper process by a large margin, while maintaining the fine-grained
+based on UR3e arms and a Realsense D435i camera to 3D comprehension across diverse robotic tasks.
+capturevisualobservations,withanNVIDIARTX4090GPU
+for inference. We retain the same network architecture and
+V. CONCLUSION
+input-output configuration as in the simulation environment. In this paper, we have proposed a ManiCM method that
+For each task, we conduct 10 trials to evaluate the average imposes the consistency constraint on the diffusion process,
+successrateandinferencetime.AsdemonstratedinTableIV, which brings 3D diffusion-based robotic manipulation to
+=== Page 8 ===
+a real-time level. We design a manipulation consistency [18] G.Lu,S.Zhang,Z.Wang,C.Liu,J.Lu,andY.Tang,“Manigaussian:
+self-consistency function that predicts the action sample Dynamicgaussiansplattingformulti-taskroboticmanipulation,”arXiv
+preprintarXiv:2403.08321,2024.
+directly based on 3D point cloud condition. Subsequently, we
+[19] Y. Ze, G. Yan, Y.-H. Wu, A. Macaluso, Y. Ge, J. Ye, N. Hansen,
+implement a manipulation consistency distillation to ensure L.E.Li,andX.Wang,“Gnfactor:Multi-taskrealrobotlearningwith
+theactionisdenoisedfromanypointalongtheODEtrajectory generalizableneuralfeaturefields,”inCoRL,2023,pp.284–301.
+[20] C.Lu,P.J.Ball,andJ.Parker-Holder,“Syntheticexperiencereplay,”
+within only one-step inference, which avoids the inefficient
+inWorkshoponReincarnatingReinforcementLearningatICLR,2023.
+iterative denoising procedure in the original diffusion model. [21] T.Yu,T.Xiao,A.Stone,J.Tompson,A.Brohan,S.Wang,J.Singh,
+Extensive experiments across various task suites verify the C.Tan,D.M,J.Peralta,B.Ichter,K.Hausman,andF.Xia,“Scaling
+robotlearningwithsemanticallyimaginedexperience,”inRSS,2023.
+effectiveness and efficiency of our method. However, the
+[22] H. He, C. Bai, K. Xu, Z. Yang, W. Zhang, D. Wang, B. Zhao, and
+scalability of the consistency model to distill a large-scale X.Li,“Diffusionmodelisaneffectiveplanneranddatasynthesizer
+pre-trained diffusion policy is still under-explored and we formulti-taskreinforcementlearning,”inNeurIPS,2023.
+[23] A.Mandlekar,D.Xu,J.Wong,S.Nasiriany,C.Wang,R.Kulkarni,
+leave this issue for future work.
+L.Fei-Fei,S.Savarese,Y.Zhu,andR.Martín-Martín,“Whatmatters
+inlearningfromofflinehumandemonstrationsforrobotmanipulation,”
+ACKNOWLEDGEMENT
+arXivpreprintarXiv:2108.03298,2021.
+TheauthorteamwouldliketoacknowledgeZhixuanLiang [24] J.Song,C.Meng,andS.Ermon,“Denoisingdiffusionimplicitmodels,”
+arXivpreprintarXiv:2010.02502,2022.
+and Yao Mu from the University of Hong Kong for their
+[25] Z. Dong, J. Hao, Y. Yuan, F. Ni, Y. Wang, P. Li, and Y. Zheng,
+helpful technical discussion and suggestions. “Diffuserlite: Towards real-time diffusion planning,” arXiv preprint
+arXiv:2401.15443,2024.
+REFERENCES
+[26] Y.Song,P.Dhariwal,M.Chen,andI.Sutskever,“Consistencymodels,”
+inICML,2023.
+[1] M. Shridhar, L. Manuelli, and D. Fox, “Cliport: What and where
+[27] S. Luo, Y. Tan, L. Huang, J. Li, and H. Zhao, “Latent consistency
+pathwaysforroboticmanipulation,”inCoRL,2022.
+models:Synthesizinghigh-resolutionimageswithfew-stepinference,”
+[2] S. James, K. Wada, T. Laidlow, and A. J. Davison, “Coarse-to-fine
+arXivpreprintarXiv:2310.04378,2023.
+q-attention: Efficient learning for visual robotic manipulation via
+[28] J.Ho,A.Jain,andP.Abbeel,“Denoisingdiffusionprobabilisticmodels,”
+discretisation,”inCVPR,2022.
+NeurIPS,pp.6840–6851,2020.
+[3] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, J. Dabis, C. Finn,
+[29] T.-W. Ke, N. Gkanatsios, and K. Fragkiadaki, “3d diffuser actor:
+K. Gopalakrishnan, K. Hausman, A. Herzog, J. Hsu, et al., “Rt-1:
+Policy diffusion with 3d scene representations,” arXiv preprint
+Roboticstransformerforreal-worldcontrolatscale,”arXivpreprint
+arXiv:2402.10885,2024.
+arXiv:2212.06817,2022.
+[30] J. Sohl-Dickstein, E. Weiss, N. Maheswaranathan, and S. Ganguli,
+[4] A.Brohan,N.Brown,J.Carbajal,Y.Chebotar,X.Chen,K.Choro-
+“Deepunsupervisedlearningusingnonequilibriumthermodynamics,”
+manski,T.Ding,D.Driess,A.Dubey,C.Finn,etal.,“Rt-2:Vision-
+inICML,2015,pp.2256–2265.
+language-action models transfer web knowledge to robotic control,”
+arXivpreprintarXiv:2307.15818,2023. [31] A.Q.NicholandP.Dhariwal,“Improveddenoisingdiffusionproba-
+[5] C.Chi,S.Feng,Y.Du,Z.Xu,E.Cousineau,B.Burchfiel,andS.Song,
+bilisticmodels,”inICML,2021,pp.8162–8171.
+“Diffusionpolicy:Visuomotorpolicylearningviaactiondiffusion,”in [32] R.Rombach,A.Blattmann,D.Lorenz,P.Esser,andB.Ommer,“High-
+RSS,2023. resolution image synthesis with latent diffusion models,” in CVPR,
+[6] Y. Ze, G. Zhang, K. Zhang, C. Hu, M. Wang, and H. Xu, “3d 2022,pp.10684–10695.
+diffusionpolicy:Generalizablevisuomotorpolicylearningviasimple [33] S.Luo,Y.Tan,S.Patil,D.Gu,P.vonPlaten,A.Passos,L.Huang,
+3drepresentations,”inRSS,2024. J.Li,andH.Zhao,“Lcm-lora:Auniversalstable-diffusionacceleration
+[7] M. Reuss, M. Li, X. Jia, and R. Lioutikov, “Goal-conditioned module,”arXivpreprintarXiv:2311.05556,2023.
+imitationlearningusingscore-baseddiffusionpolicies,”2023.[Online]. [34] J.Chen,Y.Wu,S.Luo,E.Xie,S.Paul,P.Luo,H.Zhao,andZ.Li,
+Available:https://arxiv.org/abs/2304.02532 “Pixart-{\delta}:Fastandcontrollableimagegenerationwithlatent
+[8] M. Janner, Y. Du, J. B. Tenenbaum, and S. Levine, “Planning with consistencymodels,”arXivpreprintarXiv:2401.05252,2024.
+diffusionforflexiblebehaviorsynthesis,”inICML,2022. [35] J.Xiao,K.Zhu,H.Zhang,Z.Liu,Y.Shen,Y.Liu,X.Fu,andZ.-J.
+[9] A. Ajay, Y. Du, A. Gupta, J. B. Tenenbaum, T. S. Jaakkola, Zha,“Ccm:Addingconditionalcontrolstotext-to-imageconsistency
+and P. Agrawal, “Is conditional generative modeling all you models,”arXivpreprintarXiv:2312.06971,2023.
+need for decision making?” in ICLR, 2023. [Online]. Available: [36] X. Wang, S. Zhang, H. Zhang, Y. Liu, Y. Zhang, C. Gao, and
+https://openreview.net/forum?id=sP1fo2K9DFG N.Sang,“Videolcm:Videolatentconsistencymodel,”arXivpreprint
+[10] Z. Dong, Y. Yuan, J. Hao, F. Ni, Y. Mu, Y. Zheng, Y. Hu, T. Lv, arXiv:2312.09109,2023.
+C.Fan,andZ.Hu,“Aligndiff:Aligningdiversehumanpreferencesvia [37] F.-Y.Wang,Z.Huang,X.Shi,W.Bian,G.Song,Y.Liu,andH.Li,
+behavior-customisablediffusionmodel,”inarXivpreprint2310.02054, “Animatelcm: Accelerating the animation of personalized diffusion
+2023. models and adapters with decoupled consistency learning,” arXiv
+[11] F. Ni, J. Hao, Y. Mu, Y. Yuan, Y. Zheng, B. Wang, and Z. Liang, preprintarXiv:2402.00769,2024.
+“Metadiffuser:Diffusionmodelasconditionalplannerforofflinemeta- [38] W.Dai,L.-H.Chen,J.Wang,J.Liu,B.Dai,andY.Tang,“Motionlcm:
+rl,”InternationalConferenceonMachineLearning,ICML,2023. Real-timecontrollablemotiongenerationvialatentconsistencymodel,”
+[12] Y. Du, S. Yang, B. Dai, H. Dai, O. Nachum, J. B. Tenenbaum, arXivpreprintarXiv:2404.19759,2024.
+D.Schuurmans,andP.Abbeel,“Learninguniversalpoliciesviatext- [39] Y.Bai,T.Dang,D.Tran,K.Koishida,andS.Sojoudi,“Accelerating
+guidedvideogeneration,”inNeurIPS,2023. diffusion-basedtext-to-audiogenerationwithconsistencydistillation,”
+[13] T.Pearce,T.Rashid,A.Kanervisto,D.Bignell,M.Sun,R.Georgescu, arXivpreprintarXiv:2309.10740,2023.
+S.V.Macua,S.Z.Tan,I.Momennejad,K.Hofmann,andS.Devlin, [40] Y. Chen, H. Li, and D. Zhao, “Boosting continuous control with
+“Imitatinghumanbehaviourwithdiffusionmodels,”inICLR,2023. consistencypolicy,”arXivpreprintarXiv:2310.06343,2023.
+[14] Z.Wang,J.J.Hunt,andM.Zhou,“Diffusionpoliciesasanexpressive [41] A.Prasad,K.Lin,J.Wu,L.Zhou,andJ.Bohg,“Consistencypolicy:
+policyclassforofflinereinforcementlearning,”inICLR,2023. Accelerated visuomotor policies via consistency distillation,” arXiv
+[15] Z. Xian, N. Gkanatsios, T. Gervet, T.-W. Ke, and K. Fragkiadaki, preprintarXiv:2405.07503,2024.
+“Chaineddiffuser:Unifyingtrajectorydiffusionandkeyposeprediction [42] Z.DingandC.Jin,“Consistencymodelsasarichandefficientpolicy
+forroboticmanipulation,”inCoRL,2023. class for reinforcement learning,” arXiv preprint arXiv:2309.16984,
+[16] X.Ma,S.Patidar,I.Haughton,andS.James,“Hierarchicaldiffusion 2023.
+policyforkinematics-awaremulti-taskroboticmanipulation,”CVPR, [43] D.Kingma,T.Salimans,B.Poole,andJ.Ho,“Variationaldiffusion
+2024. models,”NeurIPS,vol.34,pp.21696–21707,2021.
+[17] G.Yan,Y.-H.Wu,andX.Wang,“Dnact:Diffusionguidedmulti-task [44] T.Yu,D.Quillen,Z.He,R.Julian,A.Narayan,H.Shively,A.Bellathur,
+3dpolicylearning,”arXivpreprintarXiv:2403.04115,2024. K.Hausman,C.Finn,andS.Levine,“Meta-world:Abenchmarkand
+=== Page 9 ===
+evaluation for multi-task and meta reinforcement learning,” arXiv
+preprintarXiv:1910.10897,2021.
+[45] A. Rajeswaran, V. Kumar, A. Gupta, G. Vezzani, J. Schulman,
+E.Todorov,andS.Levine,“Learningcomplexdexterousmanipulation
+withdeepreinforcementlearninganddemonstrations,”arXivpreprint
+arXiv:1709.10087,2018.
+[46] Y.Seo,D.Hafner,H.Liu,F.Liu,S.James,K.Lee,andP.Abbeel,
+“Maskedworldmodelsforvisualcontrol,”inCoRL,2023,pp.1332–
+1344.
+[47] C. Wang, X. Luo, K. Ross, and D. Li, “Vrl3: A data-driven
+framework for visual deep reinforcement learning,” arXiv preprint
+arXiv:2202.10324,2023.
+[48] S. James, Z. Ma, D. R. Arrojo, and A. J. Davison, “Rlbench: The
+robotlearningbenchmark&learningenvironment,”RA-L,2020.
+[49] I.LoshchilovandF.Hutter,“Decoupledweightdecayregularization,”
+arXivpreprintarXiv:1711.05101,2019.
+[50] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury, G. Chanan,
+T.Killeen,Z.Lin,N.Gimelshein,L.Antiga,A.Desmaison,A.Köpf,
+E.Yang,Z.DeVito,M.Raison,A.Tejani,S.Chilamkurthy,B.Steiner,
+L.Fang,J.Bai,andS.Chintala,“Pytorch:Animperativestyle,high-
+performancedeeplearninglibrary,”2019.

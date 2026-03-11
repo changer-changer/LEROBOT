@@ -1,0 +1,908 @@
+=== Page 1 ===
+Spec-VLA: Speculative Decoding for Vision-Language-Action Models with
+Relaxed Acceptance
+SongshengWang1* † and RuchengYu2* and ZhihangYuan2 and
+ChaoYu34 and FengGao3 and YuWang3 and DerekF.Wong1§
+1 NLP2CTLab,DepartmentofComputerandInformationScience,UniversityofMacau
+2 InfinigenceAI3 TsinghuaUniversity4 ZhongguancunAcademy
+{nlp2ct.songsheng,ruchengyu1130,hahnyuan}@gmail.com
+{yuchao,yu-wang}@mail.tsinghua.edu.cn
+gaof22@mails.tsinghua.edu.cn
+derekfw@um.edu.mo
+Abstract et al.; Cheang et al., 2024; Vuong et al., 2023)
+have achieved significant progress by leveraging
+Vision-Language-Action(VLA)modelshave therichunderstandingandgenerationcapabilities
+made substantial progress by leveraging the
+from pre-trained visual encoders or Visual Lan-
+robust capabilities of Visual Language Mod-
+guageModels(VLMs). Thesemodelscangener-
+els(VLMs). However,VLMs’significantpa-
+aterobotactionsfollowinglanguageinstructions. rametersizeandautoregressive(AR)decoding
+Withthedevelopmentoflarge-scalerobotpredic-
+natureimposeconsiderablecomputationalde-
+mandsonVLAmodels. WhileSpeculativeDe- tiondatasets,recentlyproposedVLAmodelssuch
+coding(SD)hasshownefficacyinaccelerating asOpenVLA(Kimetal.,2024)demonstratehigh
+LargeLanguageModels(LLMs)byincorporat- generalizability across diverse tasks and environ-
+ingefficientdraftingandparallelverification, ments(Lietal.,2024b).
+allowingmultipletokenstobegeneratedinone
+Toachievethegoalsabove, theparametersize
+forwardpass,itsapplicationtoVLAmodelsre-
+of backbone VLMs is substantial, increasing the
+mainsunexplored. ThisworkintroducesSpec-
+computational demand for robot control systems.
+VLA,anSDframeworkdesignedtoaccelerate
+VLAmodels. Duetothedifficultyoftheaction Meanwhile,theVLMs’Autoregressive(AR)next-
+predictiontaskandthegreedydecodingmecha- token-predictionstrategyfurtherincreasesthede-
+nismoftheVLAmodels,thedirectapplication coding latency of VLA models. A series of stud-
+oftheadvancedSDframeworktotheVLApre- iesaddresstheefficiencyissuethroughmodelar-
+dictiontaskyieldsaminorspeedimprovement.
+chitecture redesign (Wen et al., 2025; Liu et al.,
+Toboostthegenerationspeed,weproposean
+2024b)ortask-specificoptimizations(Kimetal.,
+effective mechanism to relax acceptance uti-
+2025). OthereffortsincorporateLargeLanguage
+lizingtherelativedistancesrepresentedbythe
+Model(LLM)inferenceaccelerationmethodssuch
+action tokens of the VLA model. Empirical
+resultsacrossdiversetestscenariosaffirmthe as Early-Exit (Schuster et al., 2022) and Jacobi-
+effectivenessoftheSpec-VLAframework,and Decoding (Kou et al., 2024) into VLA infer-
+furtheranalysissubstantiatestheimpactofour ence (Yue et al., 2024; Song et al., 2025). How-
+proposedstrategies,whichenhancetheaccep-
+ever,incorporatingsuchmethodsrequiresresource-
+tancelengthby44%,achieving1.42×speedup
+intensive fine-tuning of the backbone VLM for
+comparedwiththeOpenVLAbaseline,without
+Early-Exit (Yue et al., 2024) or pretraining for
+compromisingthesuccessrate. Thesuccessof
+Jacobi-Decoding (Song et al., 2025). Moreover,
+theSpec-VLAframeworkhighlightsthepoten-
+tialforbroaderapplicationofspeculativeexe- inJacobi-Decoding,enablingparalleldecodingde-
+cutioninVLApredictionscenarios. Wemake grades the model performance compared to AR
+ourcodeanddatapubliclyavailableathttps: decoding(Songetal.,2025).
+//github.com/PineTreeWss/SpecVLA. SpeculativeDecoding (SD)providesalossless
+solutionandalsoallowsfortheparallelgeneration
+1 Introduction
+of LLMs. A typical SD architecture, such as Ea-
+gle (Li et al., 2024d), employs a draft model to
+TheVision-Language-Action(VLA)models(Bro-
+generate draft tokens efficiently, with the LLMs
+han et al., 2022, 2023; Mees et al., 2024; Wu
+servingastheverificationmodeltoensurethecor-
+*Equalcontribution.
+rectnessofthesetokens. Astheparametersofthe
+†WorkwasdoneduringtheinternshipatNICS-EFCLab,
+draftmodelaredecoupled,additionalfine-tuning
+DepartmentofElectronicEngineering,TsinghuaUniversity.
+§Correspondingauthor. oftheverificationmodelisnotrequired.
+5202
+peS
+02
+]GL.sc[
+2v42422.7052:viXra
+=== Page 2 ===
+fectivenessoftheSpec-VLAframework,enabling
+Autoregressive
+Decoding an acceptance length from 2.10 to 2.94. Analy-
+Final sis confirms that our proposed relaxation of ac-
+Prompt VLA Model
+Action ceptancestrategysignificantlyenhancestheaccep-
+tancelengthby26%to44%, enhancesthegener-
+ationspeedby1.22×to1.42×whilemaintaining
+Jacobi thesuccessrateoftheVLAmodels.
+Decoding Existing reinforcement learning studies have
+Final highlighted the importance of robustness, either
+Prompt VLA Model
+Action inmulti-tasksettingswherepolicydegradationoc-
+curs (Bai et al., 2023; Liu et al., 2025), or under
+adversarialperturbationswhereagentsexhibitvul-
+nerability (Bai et al., 2025). Inspired by these
+Speculative
+studies,wefurtheranalyzetherobustnessofVLA
+Decoding
+models under speculative decoding with relaxed
+Final
+Prompt VLA Model acceptance by exploring the relaxation threshold
+Action
+undermultipletasks,demonstratingthepotential
+Relaxed
+ofSDframeworksintheVLApredictiondomain.
+Acception
+2 RelatedWorks
+Draft Model
+2.1 AccelerationforVLAModels
+Figure 1: Comparison of Autoregressive Decoding,
+Jacobi-Decoding,andSpec-VLADecodingFramework. RecentadvancesinacceleratingVLAmodelscan
+Spec-VLAframeworkenablesparallelgenerationwith-
+be broadly categorized into multiple directions.
+outtuningorretrainingfortargetVLAmodel.
+Token-leveloptimizationmethodsreducecomputa-
+tionalredundancythroughvision-languagetoken
+selection. TheFastV(Pertschetal.,2025)distills
+Recent works have applied the SD framework
+task-relevantvisualfeaturesusingauxiliarytrans-
+invisualgeneration(Jangetal.,2024;Parketal.,
+formers,whileSparseVLM (Zhangetal.,2024c)
+2025), designing a task-specific methodology to
+dynamically prunes tokens via spatial attention
+relax the acceptance for the verification model.
+thresholds. Thoughefficientwithoutarchitectural
+The application of SD architecture to accelerate
+changes,theseapproachesrelyheavilyonheuristic
+the VLA prediction task is intuitive, enabling ef-
+token selection, risking generalization failures in
+ficient adaptation to speed up the generation of
+novelscenarios.
+downstreamtaskswhileretainingtheknowledgeof
+ConventionalLLMaccelerationtechniqueslike
+theVLAbackbonemodel. However,itsapplication
+quantization, pruning, and early-exit strategies
+totheVLAmodelhasnotyetbeenexplored.
+have also been adapted for VLA scenarios.
+Thisworkintroducesthespeculativedecoding QAIL (Park et al., 2024) employs quantization-
+frameworktotheARrobotactiongeneration. We aware fine-tuning but suffers from precision loss.
+propose the Spec-VLA, the first SD framework Mope-CLIP (Lin et al., 2024) explores modality-
+designed for VLA inference acceleration, which specificpruningforvision-languagemodels,and
+applies the advanced features of the speculative DeeR (Yue et al., 2024) implements early-exit
+decodingtotherobotactiongenerationscenarios. mechanismsthatcompromiseactiontrajectoryco-
+Surprisingly,thedirectapplicationoftheSDframe- herence. While effective in constrained settings,
+workyieldsminorspeedimprovementsduetothe such methods often degrade cross-modal interac-
+intricatedifficultyofVLApredictionforthedraft tionqualityandrequiretask-specifictuning.
+modelandthegreedydecodingstrategy. Tofurther Structural modifications, such as Robo-
+boost the generation speed, we propose utilizing mamba (Liu et al., 2024b) and TinyVLA (Wen
+VLAmodels’tokenrepresentationtorelaxtheac- et al., 2025), redesign model backbones using
+ceptancebasedontheactiondistancebetweendraft lightweight SSM or distilled vision encoders,
+tokensandground-truthtokens. Empiricalresults achieving latency reduction through structural
+across various test scenarios demonstrate the ef- simplification. The Kim et al. (2025) propose
+=== Page 3 ===
+temporal consistency losses to regularize action sesofvisualfeatureutilizationinmultimodalap-
+smoothness, and Song et al. (2025) reformulate plications such as visual question answering and
+decodingviaJacobiiterationforparalleltrajectory imagecaptioning. Despitetheseadvances,theap-
+generation. The aforementioned methodologies plication of SD methodologies within the VLA
+notonlyrequiredomain-specificdatafine-tuning generationscenarioremainsunexplored.
+orretrainingbutalsointroduceaugmentedsystem Relaxed acceptance proves effective in the SD
+complexitythroughmodelarchitecturalredesign. framework, demonstrating particular promise for
+Beyond architectural redesign and decoding extending efficiency gains to novel application
+strategies, recent RL-based studies also target scenarios. It boosts throughput by loosening the
+efficiency in VLA inference. SEER (Bai et al., criteria for accepting proposed tokens, striking
+2024) improves sample efficiency via aligned a balance between efficiency and fidelity. Spec-
+experience estimation and policy regularization, Dec (Xia et al., 2022) replaces the strict greedy
+whileD3P(Yuetal.,2025)acceleratesinference check by accepting any drafted token appearing
+byadaptivelyadjustingdiffusionsteps. Together, intheARmodel’stop-kcandidates,significantly
+theyhighlightcomplementaryRL-drivenstrategies raisingtokenacceptanceratesandoverallthrough-
+forefficientVLAinference. putwithoutdegradingoutputquality. Meanwhile,
+theLanternframework(Jangetal.,2024)accepts
+2.2 SpeculativeDecodingforLLMs
+the top-k similar tokens in the dictionary, which
+TheSDhasemergedasaneffectiveparadigmfor significantly boosts the generation speed for vi-
+inference acceleration in AR generative models, sualgeneration. (Furtherimprovements(Lietal.,
+such as machine translation models (Stern et al., 2024a;Zhangetal.,2023)). Theseadvancements
+2018)anddecoder-onlyLLMs(Chenetal.,2023). proves the potential of relaxed acceptance in en-
+TheevolutionarytrajectoryofSDframeworksre- hancingtheefficiencyofmultimodalmodels,such
+vealsthreedistinctdevelopmentphases. Pioneer- asVLAmodels.
+ing SD frameworks exemplified by Medusa (Cai
+etal.,2024)andMedusa-CTC(Wenetal.,2024) 3 Background
+introducedparallelgenerationcapabilitiesthrough
+3.1 DecodingofVLAModels
+multi-head decoding architectures coupled with
+tree-attentionverificationmechanisms. Subsequent LargeVLAmodels(Maetal.,2024),suchasOpen-
+developments in the Eagle series, including Ea- VLA (Kim et al., 2024) and RT-2 (Brohan et al.,
+gle (Zhang et al., 2024a) and Eagle-2 (Li et al., 2023) series, predict action sequences to control
+2024c), advanced the paradigm through architec- robots. Theyemployasequenceofactiontokens
+turalinnovationsindraftmodeling,achievingsupe- A = {a 0 ,...,a L } which represent the actions at
+riorspeedupratiosviahigh-qualitydrafttokengen- each timestep. Using VLM inference, the model
+eration. Recently,theEagle-3(Lietal.,2025)and autoregressivelypredictssevenactiontokenstode-
+HASS(Zhangetal.,2024b)havefurtherimproved fineacontrolaction,including“∆pos x ”,“∆pos y ”
+thegenerationcapabilitiesbyemployingatraining- ,“∆pos z ”, “∆rot x ” , “∆rot y ”, “∆rot z ” and “grip-
+timetestingstrategy. Theframeworkhaveshown per_extension”. Specifically, they utilize greedy
+remakablesuperiorityforLLMacclleration(3.2× decoding,predictingthemostprobableactionto-
+- 5.6×), compared with Jacobi-Decoding (2.5× - ken a i based on the previously predicted tokens
+3.0×) (Kou et al., 2024) and Early-Exit Decod- a 0:i−1 ,visualobservationso,languageinstruction
+ing(1.9×-1.8×)(Liuetal.,2024a). promptsp,andthelearnablemodelparametersθ.
+Recent works have further extended SD appli-
+a = argmax[P(a | a , o, p, θ)] (1)
+cationstoemergingscenarios,includingretrieval- i i 0:i−1
+ai
+argumented generation (Wang et al., 2024) and
+long-contextgeneration(Yangetal.,2025). How- Duetothesubstantialparametersizeofcontempo-
+ever,empiricalvalidationremainsinsufficientfor raryVLAmodelsandtheirARpredictionstrategy,
+multimodalgenerationcontexts. Initialinvestiga- theactionspeedofrobotisinherentlylimited.
+tions by Jang et al. (2024) demonstrated signifi-
+3.2 SpeculativeDecodingFramework
+cantperformancedegradationwhenapplyingexist-
+ingSDframeworkstovisualARgenerationtasks. The SD framework utilizes an efficient draft
+Gagranietal.(2024)conductedsystematicanaly- model M to produce initial draft tokens and
+D
+=== Page 4 ===
+f p a 0 a 1 a 2 a 3 a 4
+OpenVLA-7B
+Relaxed
+Acceptance
+𝒂̇ 𝒂̇ 𝒂̇ 𝒂̇
+𝟏 𝟐 𝟑 𝟒
+Vision Encoder +
+Tokenizer
+Projector Draft Model
+Language Instruction
+𝑓 ! 𝑒 " 𝑓 " 𝑒 # 𝑓 # 𝑒 $ 𝑓 $ 𝑒 %
+“Open the
+middle drawer
+of the cabinet”
+a 0 𝒂̇ 𝟏 𝒂̇ 𝟐 𝒂̇ 𝟑
+De-Tokenizer
+Action
+Figure2: TheoverallSpec-VLAframework. ThedraftmodelpredictsactiontokensthroughARdecodingwiththe
+fusedtextualandvisualfeatures. Duringverification,arelaxedacceptancemechanismisadoptedtobroadlyretain
+high-qualityoutputs. Thismechanismallowssynonymtobeaccepted,whilemaintainingthesuccessrateofaction
+generation,achievingoptimalbalancebetweencaptionaccuracyandefficiency.
+∆𝑧 During the verification phase, the verification
+model M ensures the generation quality of the
+V
+∆R𝑜𝑡𝑧 drafttokensbycorrectingthemispredictedtokens
+∆R𝑜𝑡𝑥 𝑏+𝑟
+fromthedraftmodel. Whenconductingagreedy
+𝑏
+search,thedrafttokena˙ willbeacceptedonlyif
+i
+∆𝑥 𝑏−𝑟 it strictly matches the token a predicted by the
+i
+verificationmodel.
+∆R𝑜𝑡𝑦
+Expanded
+(cid:0) (cid:1)
+a = M a ∼ aˆ , p, θ ,
+∆𝑦 Acceptance Area i V 1 i−1
+(cid:40)
+Accept, a == aˆ ,
+i i
+Figure 3: Illustration of relaxation of the acceptance (3)
+criteria. Insteadofstrictlyacceptingthepredictedver- Resampleaˆ i = a i , a i ̸= aˆ i .
+ifytokena ,theverificationmodelM acceptaction
+i V
+tokenswithinapredefinedmargin. Noticeably, the tokens subsequent to the first re-
+jectedtokena willbeabandoned. Thus,the
+(i+1:L)
+acceptancelengthiscriticalfortheSDsystemasit
+concurrently verifies these tokens using a veri- determinesthenumberoftokenstobepredictedin
+fication model M V . The Eagle framework (Li asingleforwardpass.
+et al., 2024c) incorporates a Llama layer as the
+draftmodel,whichpredictsmultipledrafttokens 4 Spec-VLAFramework
+a autoregressively, conditioned on the previous
+i
+In this section, we provide a detailed description
+drafttokenstatesaˆ ,hiddenstatesandtoken
+t+1:i−1
+oftheSpec-VLAframeworkandourexploration
+embeddingsfromverificationmodelf ande .
+1:t 0:t
+oftheadaptationofspeculativeexecutionforVLA
+Itisnoteworthythattheoutputstatesofthedraftto-
+predictiontasks.
+kensalsoassistincalculations,andforthesakeof
+simplicity,weusethenotationaˆ t+1:i−1 todenote 4.1 OverallFramework
+bothembeddingsandhiddenfeatures.
+The Spec-VLA framework incorporates a Llama
+decoder layer (Touvron et al., 2023) as its draft
+aˆ = M (f ,e ,aˆ ) (2)
+i D 1:t 0:t t+1:i−1 generator model. It incorporates a linear layer to
+=== Page 5 ===
+AR Spec-VLA Spec-VLA(relaxed)
+Dataset
+SR Length Speedup SR Length Speedup SR
+LIBERO-Goal 78.0% 2.04 1.09× 74.2% 2.94 1.42× 74.4%
+LIBERO-Object 89.0% 1.75 1.15× 89.0% 2.38 1.38× 85.0%
+LIBERO-Spatial 85.0% 1.59 1.08× 83.8% 2.14 1.28× 85.8%
+LIBERO-Long 52.0% 1.67 1.13× 50.8% 2.10 1.22× 55.0%
+Table1: ExperimentalresultsoftheSpec-VLAframeworkontheLIBERO-Goal,Object,Spatial,Longdataset.
+‘SR’denotestheSuccessRateofthecontrolpolicy, ‘Length’indicatesthenumberoftokenspredictedineach
+forwardpass,and‘Speedup’reflectsthegenerationspeedascomparedtotheARbaseline.
+integratefeature-levelandtoken-levellossdataef- tweendrafttokensa˙ andtheverificationmodel’s
+i
+fectively. During the prefill stage, the draft gen- predictionsa . Often,allowingforsynonymtokens
+i
+eratorreceiveshiddenstatesfromtheverification couldimprovegenerationspeedwithoutcompro-
+model, alongside textual and visual embeddings mising quality. Building upon prior research, we
+fromthetextualtokenizerandvisualencoder, re- proposerelaxingtheacceptancecriteriawithinthe
+spectively. Mirroring the OpenVLA model, the Spec-VLAframeworkbyallowingtheacceptance
+visualembeddingse andtextualembeddingse oftop-ksimilartokensintheactionspace.
+v T
+areconcatenated,collectivelyprovidingthefeature-
+levelinformationforthedraftmodel. 4.3 RelaxationofAcceptance
+WeintroducetheRelaxationThresholdr tofacili-
+aˆ = M (f ,concat(e ,e ),aˆ )) (4)
+i D 1:t v p t+1:i−1
+tateacceptancerelaxation,quantifyingthepermis-
+Inthedraftpredictionphase,thedraftgenerator sibledistancebetweenthedraftactiontokenaˆ i and
+modelpredictstheactiontokena i conditionedon the predicted action token a i . The draft token aˆ i
+previoushiddenstates,embeddings,andactionto- willbeacceptedifthedistanceD betweenaˆ i and
+kens. Weemploythedynamicdrafttreestrategyof a i isnotlargerthanthresholdr.
+Eagle-2(Lietal.,2024c),wheretheTop-Kpredic-
+tionsfromthedraftgeneratorM D arerecordedand a i = M V (cid:0) a 1 ∼ aˆ i−1 , p, θ (cid:1) ,
+subsequently form a tree structure with multiple (cid:40)
+Accept, D(a ,aˆ ) ≤ r
+i i
+paths. Thesepathsarethenverifiedinparallelby (5)
+Resampleaˆ = a , D(a ,aˆ ) > r.
+theverificationmodel. i i i i
+4.2 ProblembyDirectApplication VLAmodels,notablyOpenVLAandRT-2,dis-
+However, directly implementing the SD frame- cretize continuous dimensions into 256 bins and
+workyieldsonlyminorspeedimprovements,from mapthemto256actiontokenstopredictactionse-
+1.08× to 1.15× (as shown in Table 1). Surpris- quences. TheVLAtokenrepresentationinherently
+ingly,intheVLApredictiontask,thedraftgenera- providesinformationontokensimilarity,wherethe
+tormodelsfailtopredicttheinitialdrafttokensin distance between tokens can be directly inferred
+abouthalfofthesamples(refertoTable2). fromtheabsolutedifferencebetweenbinIDs. For
+In natural language generation tasks, the draft instance,thetokenarepresentsbinbandthetoken
+generatoroftheSDframeworktypicallyproduces aˆrepresentsbin ˆb,thedistancebetweenaandaˆcan
+commonwordsandpunctuation. Conversely,the bedirectlydeterminedbytheabsolutedifference
+VLAdraftmodelmustunderstandmultiplemodali- betweenbinIDsband ˆb. Thetokenacceptancearea
+tiesandpredictroboticmotionsinVLAprediction willbewidenedfromstrictlybto ˆb ∈ (b−r,b+r),
+tasks. Intuitively, the VLA prediction task poses enabling the acceptance of the top 2 × r similar
+a greater complexity for the draft generator than tokens.
+languagegeneration. By utilizing this characteristic, our proposed
+Moreover,VLAmodelssuchasOpenVLAand method eliminates the need for additional token
+RT-2incorporategreedydecodingduringthedraft- similaritycalculationsfromtokenembeddings,in-
+ingphase. Thissetuprequiresanexactmatchbe- troducingvirtuallynocomputationaloverhead.
+=== Page 6 ===
+4.0
+3.5
+3.0
+2.5
+2.0
+1.5
+0 5 10 15 20 25 30
+Relaxation Threshold
+htgneL
+tpeccA
+LIBERO-Goal
+2.8
+Accept Length
+Success Rate
+2.5
+2.2
+1.9
+1.6
+1.3
+0 5 10 15 20 25 30
+Relaxation Threshold
+htgneL
+tpeccA
+LIBERO-Spatial
+Accept Length
+Success Rate
+3.2
+2.8
+2.4
+2.0
+1.6
+1.2
+0 5 10 15 20 25 30
+Relaxation Threshold
+htgneL
+tpeccA
+LIBERO-Object
+2.7
+2.4
+2.1
+1.8
+1.5
+Accept Length
+Success Rate
+1.2
+0 5 10 15 20
+Relaxation Threshold
+htgneL
+tpeccA
+0.9 0.9
+0.8 0.8
+0.7 0.7
+0.6 0.6
+0.5 0.5
+0.4 0.4
+LIBERO-Long
+0.9 0.7
+Accept Length
+Success Rate
+0.8 0.6
+0.7 0.5
+0.6 0.4
+0.5 0.3
+0.4 0.2
+Figure4:AcceptanceLengthandSuccessRateoftheSpec-VLAframeworkontheLIBERO-Goal,LIBERO-Spatial,
+LIBERO-Object,andLIBERO-Longdatasets. AnincreaseintheRelaxationThresholdshowsaminorimpacton
+theSuccessRatewhilesignificantlyboostingtheAcceptanceLength.
+5 Experiment number of tokens predicted in each forward pass
+andspeedupcomparedtoARdecoding.
+5.1 MainResult ThemainresultsarereportedinTable1. Firstly,
+the results validate the effectiveness of the SD
+FollowingOpenVLA,weevaluatedtheSpec-VLA
+framework in VLA prediction scenarios. Apply-
+framework on the LIBERO simulation bench-
+ingtheEagleframeworkachievesanacceleration
+mark(Liuetal.,2023). Weutilizedfourtasksuites:
+ratio ranging from 1.08× to 1.15× without sac-
+LIBERO-Object,LIBERO-Spatial,LIBERO-Goal,
+rificing generation quality. Secondly, the relaxed
+and LIBERO-Long, each providing 10 tasks and
+acceptance mechanism further enhances the gen-
+500expertdemonstrations. Weemployedthefine-
+erationspeedoftheSDframework,increasingthe
+tunedOpenVLAastheverificationmodelandused
+acceptancelengthby25%to44%,demonstrating
+thismodeltoregeneratethedatasetfortrainingthe
+thepotentialfordevelopingspecializedSDmecha-
+draftmodel. Weconducted50trialsoneachtask
+nismsintheVLAscenario.
+withourSDframeworksfortestingscenarios. The
+trainingwascompletedin6hoursusing4×Tesla
+5.2 AblationsonRelaxationThreshold
+A100(80G)GPU,withabatchsizeof16. Wein-
+herenttheimplementationofdraftmodelstructure This section further analyzes the relationship
+and tree decoding mechenism from Eagle-2 (Li between the relaxation threshold, success rate,
+etal.,2024c). Fortree-decoding,wesetthemax- and acceptance length (as shown in Figure 4).
+imum nodes to 50, tree depth to 4, and used the We conducted analyses on the LIBERO-Goal,
+top8tokenstoconstructthedrafttree. Drawingon LIBERO-Spatial,LIBERO-Object,andLIBERO-
+priorworksinSD(Jangetal.,2024),wereportthe Longbenchmarks,eachcontaining10tasks,with
+=== Page 7 ===
+AcceptanceLength
+Dataset Relaxed
+0 1 2 3 4 5
+× 50.24% 33.28% 13.96% 2.23% 0.19% 0.00%
+Libero-Goal
+✓ 23.01% 18.98% 39.99% 15.41% 2.53% 0.08%
+× 47.93% 34.72% 12.72% 4.07% 0.56% 0.00%
+Libero-Object
+✓ 28.23% 37.62% 17.29% 10.11% 6.22% 0.53%
+× 55.96% 31.52% 9.90% 2.46% 0.16% 0.00%
+Libero-Spatial
+✓ 37.07% 33.52% 19.15% 8.23% 1.99% 0.03%
+× 55.08% 28.77% 11.30% 4.30% 0.50% 0.05%
+Libero-Long
+✓ 42.39% 28.57% 16.65% 8.84% 3.35% 0.20%
+Table2: AcceptancelengthdistributionontheLIBERO-Goal,LIBERO-Object,LIBERO-Spatial,andLIBERO-
+Longdatasetsundernon-relaxedandrelaxedsettings. Eachrowreportstheproportionoftrialsthatsucceeded
+with a specific acceptance length. The threshold for relaxation is 9 for LIBERO-Goal, LIBERO-Object, and
+LIBERO-Spatial,and5forLIBERO-Long.
+10trialsperformedforeachtask. Wetestedstarting ification model invariably emits an accept length
+fromarelaxationthresholdof0,whichcorresponds of1,whichcarriesnodiscriminativeinformation;
+tostrictmatchingacceptance. ouranalysishereconsidersonlytheacceptlengths
+First, Relaxation of acceptance criteria effec- produced by the draft model. Once verification
+tively enhances the acceptance length, boosting outputsareexcluded,theminimumacceptlength
+the generation speed of the VLA models. The becomes0(indicatingnospeculativetokenswere
+increase in relaxation distance can enhance the accepted), so the average accept length on each
+acceptance length by 50% to 70% across various positioncanlegitimatelyfallbelow1.
+datasets. Moreover, we surprisingly found that
+theOpenVLAmodeldisplayshighrobustnesson 6.1 AcceptanceLengthProportion
+theLIBERO-Goal,LIBERO-Object,andLIBERO-
+Table 2 quantifies the distribution of acceptance
+Spatialdatasets. Therelaxationthresholdcouldbe
+lengths (0–5) under the Spec-VLA framework,
+relaxedfrom5to9withoutsacrificingthesuccess
+comparing non-relaxed and relaxed conditions
+rateoftheVLAmodel.
+across four datasets. The data reveals a dis-
+Additionally, the better a model performs in a
+tinct trend: non-relaxed acceptance dispropor-
+scenario,thelargertherelaxationthresholditcan
+tionately favors shorter sequences (lengths 0–1),
+tolerate. In the LIBERO-Long dataset, the suc-
+with proportions sharply declining for longer
+cess rate drops significantly when the relaxation
+lengths(2–5),whereasrelaxedacceptanceexhibits
+thresholdexceeds5. However, inLIBERO-Goal,
+a more balanced distribution. The dominance of
+thesuccessrateremainsstableevenwiththerelax-
+shortsequencesundernon-relaxedconditions(e.g.,
+ationthresholdsetto15. Thisanalysisverifiesthe
+50.24% at length 0) highlights a critical ineffi-
+effectivenessofourproposedrelaxedacceptance
+ciency: models prioritize ‘safe’ short predictions
+strategyandalsohighlightsthehighpotentialfor
+toavoidconstraintviolations. Thisartificiallylow
+speculativeexecutionwithintheVLAframework.
+conversionrateforlongersequencesimpliesthat
+strictconstraintsactasabottleneckpreventingthe
+6 Analysis
+modelfrompredictinglongeractionsequence. The
+This section provides an analysis of the Spec- mostpronouncedcontrastoccursinLibero-Object
+VLA framework under non-relaxed and relaxed at length 4: non-relaxed acceptance plummets to
+acceptance conditions, focusing on acceptance 0.56%versus6.22%underrelaxedconditions—an
+lengthdistributionpatternsandpredictionperfor- 11-fold relative increase. Similarly, Libero-Long
+manceacrossdistinctactiontokensonfourbench- exhibitsdramaticdivergenceatlength4(0.50%vs.
+markdatasets(Libero-Goal,Libero-Object,Libero- 3.35%, 6.7× improvement) and Libero-Spatial at
+Spatial, andLibero-Long). Considerthatthever- length 3 (2.46% vs. 8.23%, 3.3× improvement).
+=== Page 8 ===
+Position
+Dataset Relaxed
+0 1 2 3 4 5
+× 0.47 0.30 0.73 0.78 1.13 0.98
+Libero-Goal
+✓ 1.44 1.36 2.18 2.13 1.76 0.98
+× 0.60 0.64 1.02 0.67 0.88 0.99
+Libero-Object
+✓ 1.39 2.09 1.66 1.46 1.40 0.99
+× 0.36 0.50 0.88 0.72 0.70 0.96
+Libero-Spatial
+✓ 0.89 1.39 1.55 1.56 1.20 0.98
+× 0.79 0.42 1.19 0.87 0.65 0.64
+Libero-Long
+✓ 1.27 0.94 1.70 1.35 1.12 0.72
+Table3:Averageacceptancelengthsateachposition(0–5)ontheLIBERO-Goal,LIBERO-Object,LIBERO-Spatial,
+andLIBERO-Longdatasetsundernon-relaxedandrelaxedconditions. Eachentryreportstheaverageacceptance
+lengthobservedatthegiventokenposition. TherelaxedsettingisconsistentwithTable2.
+Even at maximum length 5, relaxed acceptance strictverificationmodel(Non-Relaxed),theseries
+achievesnon-zeroproportions(e.g.,0.53%forre- appends only those candidate tokens that satisfy
+laxedinLibero-Objectvs. 0%non-relaxed). These a stringent acceptability threshold, resulting in a
+disparities highlight a critical limitation of strict gradual accretion of the action sequence. For in-
+constraints: theydisproportionatelypenalizelonger stance, Action 1 extends from a solitary context
+sequences. Relaxation alleviates this by allow- token [137] to the fully verified sequence [137,
+ingsemanticallycompatibledrafttokenstobeac- 128, 128, 109, 98, 82, 256] over four iterative re-
+cepted,therebyincreasingsequencediversitywith- finementsteps. Incontrast,byrelaxedacceptance,
+outcompromisingtasksuccessrates. the relaxed criterion admits a broader spectrum
+ofdraftproposalsatanearlierstage; Action1al-
+6.2 AcceptanceLengthonMultiplePositions readyincorporatesthetokens[119,121,109]inits
+initialiterationandfurtheraugmentsthissetwith
+Weperformfurtheranalysistoevaluatetheaccep-
+[98, 77, 256] in the second iteration. The same
+tancelengthineachstartingposition. Asshownin
+pattern holds for the other cases. Action 3, for
+Table3,relaxedacceptanceconsistentlyachieves
+example, reaches the whole sequence [191, 121,
+longeraveragelengthsthannon-relaxedacceptance
+123,109,79,69,256]inonlythreeiterationsunder
+acrossallpositions. ForLibero-Object,acceptance
+the relaxed acceptance, whereas the non-relaxed
+lengthatposition1surgesfrom0.64(non-relaxed)
+acceptance requires five iterations. These results
+to 2.09 under relaxation (3.3× improvement), re-
+show that relaxing the acceptance threshold sig-
+flectingreducedbiastowardshort-termpredictions.
+nificantlyreducesthenumberofiterationsneeded
+Similarly, Libero-Goal shows a 3.1× increase at
+position0(0.47→1.44),highlightingthemodel’s forplangenerationwhilestillpreservingthequal-
+ity of the final action sequences. This relaxation
+willingnesstoexploreinitialreasoningstepswhen
+also accelerates the action sequence completion
+constraints are loosened. Libero-Spatial also ex-
+hibitsa2.2×gainatposition3(0.72→1.56),re- process,reducingthenumberofiterationswithout
+compromisingfunctionalvalidity.
+vealingthatrelaxationmitigatesprematuretrunca-
+tionofvalidactionsequences,whereasrelaxation
+7 Conclusion
+balancesriskandexplorationtounlockthepoten-
+tialforlongeractionsequencegeneration. These
+Inthisstudy,weexploretheapplicationoftheSD
+resultsalignwithfindingsinTable2.
+frameworkinVLApredictiontasks. Wepropose
+Spec-VLA,whichenhancestheEagleframework
+6.3 CaseStudy
+for VLA predictions. To further boost the gen-
+Thissectionprovidesarepresentativecasetoshow erationspeedoftheframework,weintroducethe
+theeffectivenessofourproposedrelaxationofac- distance-sensitiverelaxationoftheacceptancestrat-
+ceptancemethod. AsshowninFigure5,underthe egy,whichutilizesthetokenrepresentationofVLA
+=== Page 9 ===
+Non-Relaxed Relaxed
+Iteration 1:[137]
+Iteration 1:[137,119,121,109]
+Language Instruction Iteration 2:[137,128,128,109]
+“Push the plate Iteration 3:[137,128,128,109,98] Iteration 2:[137,119,121,109,98,77,256]
+to the front of
+Iteration 4:[137,128,128,109,98,82,256]
+the stove”
+1#
+noitcA
+2#
+noitcA
+Iteration 1:[191]
+Iteration 1:[146,116,123,109]
+Iteration 2:[191,128,128,109]
+Iteration 2:[146,116,123,109,98,69,256]
+Iteration 3:[137,128,128,109,84,69,256]
+3#
+noitcA
+Iteration 1:[205]
+Iteration 2:[205,128,128] Iteration 1:[191,121,123]
+Iteration 3:[205,128,128,107] Iteration 2:[191,121,123,109,79,69]
+Iteration 4:[205,128,128,107,103] Iteration 3:[191,121,123,109,79,69,256]
+Iteration 5:[205,128,128,107,103,52,256]
+Figure5: Illustrationofactionsequencegenerationcasesundernon-relaxedandrelaxedacceptanceconditionsin
+theSpec-VLAframework. Threerepresentativeactiontrajectoriesarejuxtaposedforsystematiccomparisonacross
+bothconditions. Graydenotescontexttokens. Bluerepresentsverificationmodeloutputs. Greenindicatesdraft
+modeloutputs.
+modelstoeffectivelyidentifythedistancebetween CooperationProjectGrantNo. 2022YFE0204900),
+action tokens and relax the acceptance threshold theScienceandTechnologyDevelopmentFundof
+withintheSDframework. Experimentalresultsver- MacauSAR(GrantNo. FDCT/060/2022/AFJ,Na-
+ifytheeffectivenessoftheSpec-VLAframework, tionalNaturalScienceFoundationofChinaGrant
+wheretherelaxationofacceptancecriteriafurther No. 62261160648), the UM and UMDF (Grant
+booststheacceptancelengthby25%to44%with- Nos. MYRG-GRG2023-00006-FST-UMDF,
+outcompromisingthesuccessrate. Ourfindingson MYRG-GRG2024-00165-FST-UMDF, EF2024-
+therelaxationofacceptanceshowhighrobustness 00185-FST), and the National Natural Science
+oftheVLAmodels,demonstratingthepotentialof FoundationofChina(GrantNo. 62266013).
+speculativesystemsintheVLApredictiondomain.
+References
+Limitations
+Fengshuo Bai, Runze Liu, Yali Du, Ying Wen, and
+ThisworkexploresspeculativedecodinginVLA Yaodong Yang. 2025. Rat: Adversarial attacks on
+prediction tasks. Due to time and resource con- deep reinforcement agents for targeted behaviors.
+Proceedings of the AAAI Conference on Artificial
+straints, experiments were not conducted in real-
+Intelligence,39(15):15453–15461.
+worldroboticsettings. Additionally,duetolimita-
+tions of the verification model, Action Chunking Fengshuo Bai, Hongming Zhang, Tianyang Tao, Zhi-
+wasnotexplored. Futureworkcouldincorporate heng Wu, Yanna Wang, and Bo Xu. 2023. Picor:
+Multi-taskdeepreinforcementlearningwithpolicy
+additionalmethodologiesintotheSDframework
+correction. ProceedingsoftheAAAIConferenceon
+forVLAmodels. ArtificialIntelligence,37(6):6728–6736.
+FengshuoBai,RuiZhao,HongmingZhang,SijiaCui,
+Acknowledgements
+YingWen,YaodongYang,BoXu,andLeiHan.2024.
+Efficient preference-based reinforcement learning
+This work was supported in part by the Science
+via aligned experience estimation. arXiv preprint
+andTechnologyDevelopmentFundofMacauSAR arXiv:2405.18688.
+(Grant No. FDCT/0007/2024/AKP), the Science
+AnthonyBrohan,NoahBrown,JusticeCarbajal,Yevgen
+and Technology Development Fund of Macau
+Chebotar,XiChen,KrzysztofChoromanski,Tianli
+SAR (Grant No. FDCT/0070/2022/AMJ, China
+Ding,DannyDriess,AvinavaDubey,ChelseaFinn,
+StrategicScientificandTechnologicalInnovation and 1 others. 2023. Rt-2: Vision-language-action
+=== Page 10 ===
+models transfer web knowledge to robotic control. vision-language-action model. arXiv preprint
+arXivpreprintarXiv:2307.15818. arXiv:2409.19590.
+AnthonyBrohan,NoahBrown,JusticeCarbajal,Yev- YuhuiLi, FangyunWei, ChaoZhang, andHongyang
+genChebotar,JosephDabis,ChelseaFinn,Keerthana Zhang.2024c. Eagle-2: Fasterinferenceoflanguage
+Gopalakrishnan,KarolHausman,AlexHerzog,Jas- models with dynamic draft trees. arXiv preprint
+mineHsu,and1others.2022. Rt-1: Roboticstrans- arXiv:2406.16858.
+formerforreal-worldcontrolatscale. arXivpreprint
+YuhuiLi, FangyunWei, ChaoZhang, andHongyang
+arXiv:2212.06817.
+Zhang. 2024d. Eagle: Speculative sampling re-
+TianleCai,YuhongLi,ZhengyangGeng,HongwuPeng, quiresrethinkingfeatureuncertainty. arXivpreprint
+Jason D Lee, Deming Chen, and Tri Dao. 2024. arXiv:2401.15077.
+Medusa: Simple llm inference acceleration frame-
+YuhuiLi, FangyunWei, ChaoZhang, andHongyang
+workwithmultipledecodingheads. arXivpreprint
+Zhang.2025. Eagle-3: Scalingupinferenceacceler-
+arXiv:2401.10774.
+ationoflargelanguagemodelsviatraining-timetest.
+Chi-LamCheang,GuangzengChen,YaJing,TaoKong,
+arXivpreprintarXiv:2503.01840.
+HangLi,YifengLi,YuxiaoLiu,HongtaoWu,Jiafeng
+HaokunLin,HaoliBai,ZhiliLiu,LuHou,MuyiSun,
+Xu, YichuYang, and1others.2024. Gr-2: Agen-
+LinqiSong,YingWei,andZhenanSun.2024. Mope-
+erativevideo-language-actionmodelwithweb-scale
+clip: Structuredpruningforefficientvision-language
+knowledge for robot manipulation. arXiv preprint
+modelswithmodule-wisepruningerrormetric. In
+arXiv:2410.06158.
+ProceedingsoftheIEEE/CVFConferenceonCom-
+puterVisionandPatternRecognition,pages27370–
+Charlie Chen, Sebastian Borgeaud, Geoffrey Irving,
+27380.
+Jean-Baptiste Lespiau, Laurent Sifre, and John
+Jumper. 2023. Accelerating large language model
+BoLiu,YifengZhu,ChongkaiGao,YihaoFeng,Qiang
+decodingwithspeculativesampling. arXivpreprint
+Liu, Yuke Zhu, and Peter Stone. 2023. Libero:
+arXiv:2302.01318.
+Benchmarkingknowledgetransferforlifelongrobot
+learning. AdvancesinNeuralInformationProcess-
+MukulGagrani, RaghavvGoel, WonseokJeon, Juny-
+ingSystems,36:44776–44791.
+oungPark,MinguLee,andChristopherLott.2024.
+On speculative decoding for multimodal large lan-
+Fangcheng Liu, YehuiTang, ZhenhuaLiu, Yunsheng
+guagemodels. InProceedingsoftheIEEE/CVFCon-
+Ni, Kai Han, and Yunhe Wang. 2024a. Kangaroo:
+ferenceonComputerVisionandPatternRecognition,
+Losslessself-speculativedecodingviadoubleearly
+pages8285–8289. exiting. arXivpreprintarXiv:2404.18911.
+Doohyuk Jang, Sihwan Park, June Yong Yang, Yeon- Jiaming Liu, Mengzhen Liu, Zhenyu Wang, Pengju
+sungJung,JihunYun,SouvikKundu,Sung-YubKim, An,XiaoqiLi,KaichenZhou,SenqiaoYang,Renrui
+andEunhoYang.2024. Lantern: Acceleratingvisual Zhang,YandongGuo,andShanghangZhang.2024b.
+autoregressive models with relaxed speculative de- Robomamba:Efficientvision-language-actionmodel
+coding. arXivpreprintarXiv:2410.03355. forroboticreasoningandmanipulation. Advancesin
+NeuralInformationProcessingSystems,37:40085–
+Moo Jin Kim, Chelsea Finn, and Percy Liang.
+40110.
+2025. Fine-tuning vision-language-action models:
+Optimizing speed and success. arXiv preprint JijiaLiu,FengGao,BingwenWei,XinleiChen,Qing-
+arXiv:2502.19645. min Liao, Yi Wu, Chao Yu, and Yu Wang. 2025.
+Whatcanrlbringtovlageneralization? anempirical
+Moo Jin Kim, Karl Pertsch, Siddharth Karamcheti, study. arXivpreprintarXiv:2505.19789.
+Ted Xiao, Ashwin Balakrishna, Suraj Nair, Rafael
+Rafailov, Ethan Foster, Grace Lam, Pannag San- YueenMa,ZixingSong,YuzhengZhuang,JianyeHao,
+keti, and 1 others. 2024. Openvla: An open- andIrwinKing.2024. Asurveyonvision-language-
+sourcevision-language-actionmodel. arXivpreprint action models for embodied ai. arXiv preprint
+arXiv:2406.09246. arXiv:2405.14093.
+SiqiKou,LanxiangHu,ZhezhiHe,ZhijieDeng,and Oier Mees, Dibya Ghosh, Karl Pertsch, Kevin Black,
+Hao Zhang. 2024. Cllms: Consistency large lan- HomerRichWalke,SudeepDasari,JoeyHejna,To-
+guage models. In Forty-first International Confer- biasKreiman,CharlesXu,JianlanLuo,and1others.
+enceonMachineLearning. 2024. Octo: Anopen-sourcegeneralistrobotpolicy.
+In First Workshop on Vision-Language Models for
+M.Li,X.Chen,A.Holtzman,andetal.2024a. Nearest NavigationandManipulationatICRA2024.
+neighborspeculativedecodingforllmgenerationand
+attribution. 37:80987–81015. NeurIPS2024. SeongminPark,HyungminKim,WonseokJeon,Juy-
+oung Yang, Byeongwook Jeon, Yoonseon Oh, and
+ShunleiLi,JinWang,RuiDai,WanyuMa,WingYin JungwookChoi.2024. Quantization-awareimitation-
+Ng,YingbaiHu,andZhengLi.2024b. Robonurse- learningforresource-efficientroboticcontrol. arXiv
+vla: Robotic scrub nurse system based on preprintarXiv:2412.01034.
+=== Page 11 ===
+Sihwan Park, Doohyuk Jang, Sungyub Kim, Souvik Li,andTaoKong. Unleashinglarge-scalevideogen-
+Kundu, and Eunho Yang. 2025. Lantern++: En- erativepre-trainingforvisualrobotmanipulation. In
+hancedrelaxedspeculativedecodingwithstatictree The Twelfth International Conference on Learning
+drafting for visual auto-regressive models. arXiv Representations.
+preprintarXiv:2502.06352.
+H. Xia, T. Ge, P. Wang, and et al. 2022. Speculative
+Karl Pertsch, Kyle Stachowicz, Brian Ichter, Danny decoding: Exploiting speculative execution for ac-
+Driess,SurajNair,QuanVuong,OierMees,Chelsea celeratingseq2seqgeneration. ComputingResearch
+Finn, and Sergey Levine. 2025. Fast: Efficient ac- Repository,arXiv:2203.16487.
+tiontokenizationforvision-language-actionmodels.
+arXivpreprintarXiv:2501.09747. PenghuiYang,CunxiaoDu,FengzhuoZhang,Haonan
+Wang, Tianyu Pang, Chao Du, and Bo An. 2025.
+TalSchuster,AdamFisch,JaiGupta,MostafaDehghani, Longspec: Long-contextspeculativedecodingwith
+DaraBahri,VinhTran,YiTay,andDonaldMetzler. efficient drafting and verification. arXiv preprint
+2022. Confident adaptive language modeling. Ad- arXiv:2502.17421.
+vances in Neural Information Processing Systems,
+Shu-AngYu,FengGao,YiWu,ChaoYu,andYuWang.
+35:17456–17472.
+2025. D3p: Dynamic denoising diffusion pol-
+WenxuanSong,JiayiChen,PengxiangDing,HanZhao, icy via reinforcement learning. arXiv preprint
+Wei Zhao, Zhide Zhong, Zongyuan Ge, Jun Ma,
+arXiv:2508.06804.
+andHaoangLi.2025. Acceleratingvision-language-
+YangYue,YulinWang,BingyiKang,YizengHan,Shen-
+action model integrated with action chunking via
+zhiWang,ShijiSong,JiashiFeng,andGaoHuang.
+paralleldecoding. arXivpreprintarXiv:2503.02310.
+2024. Deer-vla: Dynamicinferenceofmultimodal
+largelanguagemodelsforefficientrobotexecution.
+Mitchell Stern, Noam Shazeer, and Jakob Uszkoreit.
+AdvancesinNeuralInformationProcessingSystems,
+2018. Blockwiseparalleldecodingfordeepautore-
+37:56619–56643.
+gressive models. Advances in Neural Information
+ProcessingSystems,31.
+JiachengZhang,YangJiao,ShaoxiangChen,Jingjing
+Chen,andYu-GangJiang.2024a. Eagle: Towards
+Hugo Touvron, Louis Martin, Kevin Stone, Peter Al-
+efficientarbitraryreferringvisualpromptscompre-
+bert, Amjad Almahairi, Yasmine Babaei, Nikolay
+hensionformultimodallargelanguagemodels. arXiv
+Bashlykov,SoumyaBatra,PrajjwalBhargava,Shruti
+preprintarXiv:2409.16723.
+Bhosale,and1others.2023. Llama2: Openfoun-
+dation and fine-tuned chat models. arXiv preprint
+JunZhang,JueWang,HuanLi,LidanShou,KeChen,
+arXiv:2307.09288.
+Gang Chen, and Sharad Mehrotra. 2023. Draft
+& verify: Lossless large language model accelera-
+QuanVuong,SergeyLevine,HomerRichWalke,Karl
+tion via self-speculative decoding. arXiv preprint
+Pertsch, Anikait Singh, Ria Doshi, Charles Xu,
+arXiv:2309.08168.
+Jianlan Luo, Liam Tan, Dhruv Shah, and 1 oth-
+ers. 2023. Open x-embodiment: Robotic learning
+LefanZhang,XiaodanWang,YanhuaHuang,andRui-
+datasets and rt-x models. In Towards Generalist
+wen Xu. 2024b. Learning harmonized represen-
+Robots: LearningParadigmsforScalableSkillAc-
+tations for speculative sampling. arXiv preprint
+quisition@CoRL2023.
+arXiv:2408.15766.
+ZilongWang,ZifengWang,LongLe,HuaixiuSteven Yuan Zhang, Chun-Kai Fan, Junpeng Ma, Wenzhao
+Zheng, Swaroop Mishra, Vincent Perot, Yuwei Zheng,TaoHuang,KuanCheng,DenisGudovskiy,
+Zhang,AnushMattapalli,AnkurTaly,JingboShang, TomoyukiOkuno,YoheiNakata,KurtKeutzer,and1
+and1others.2024. Speculativerag: Enhancingre- others.2024c. Sparsevlm:Visualtokensparsification
+trievalaugmentedgenerationthroughdrafting. arXiv forefficientvision-languagemodelinference. arXiv
+preprintarXiv:2407.08223. preprintarXiv:2410.04417.
+JunjieWen,YichenZhu,JinmingLi,MinjieZhu,Zhibin
+Tang,KunWu,ZhiyuanXu,NingLiu,RanCheng,
+ChaominShen,and1others.2025. Tinyvla:Towards
+fast,data-efficientvision-language-actionmodelsfor
+roboticmanipulation. IEEERoboticsandAutoma-
+tionLetters.
+Zhuofan Wen, Shangtong Gui, and Yang Feng. 2024.
+Speculativedecodingwithctc-baseddraftmodelfor
+llminferenceacceleration. AdvancesinNeuralInfor-
+mationProcessingSystems,37:92082–92100.
+Hongtao Wu, Ya Jing, Chilam Cheang, Guangzeng
+Chen,JiafengXu,XinghangLi,MinghuanLiu,Hang
+=== Page 12 ===
+Parameter Value
+LearningRate 5e-5
+BatchSize 16 Dataset OpenVLA
+WarmupSteps 2000
+p 0.1 Precision Speedup
+w
+v 1.0
+w
+GradiantClipping 0.5 LIBERO-Goal bf16 1.00×
+int8 0.24×
+Top-k 8
+TreeDepth 5 int4 0.61×
+MaxNodes 50
+LIBERO-Object bf16 1×
+Table4: ParameterSettingsofSpec-VLAFramework. int8 0.21×
+int4 0.59×
+A ParameterSettings LIBERO-Spatial bf16 1×
+int8 0.23×
+This section details the parameter settings of the
+int4 0.55×
+Spec-VLA model. Table 4 presents the training
+LIBERO-Long bf16 1×
+andinferenceparametersoftheSpec-VLAframe-
+int8 0.23×
+work. For LIBERO-Goal, LIBERO-Spatial, and
+int4 0.57×
+LIBERO-Object,therelaxationthresholdissetat9,
+whileforLIBERO-Long,itissetat5. Theparame-
+tersp andv representtheweightsoftheCross- Table5: SpeedupofthequantilizedOpenVLAmodel
+w w
+EntropylossandRegressionloss,respectively,as on the LIBERO-Goal, Object, Spatial, Long dataset.
+The‘Precision’showsthequantizationprecision,and
+implementedintheEagleconfiguration(Lietal.,
+‘Speedup’reflectsthegenerationspeedcomparedtothe
+2024d).
+bf16baseline.
+B Spec-VLADecodingAlgorithm
+Toenhancetheunderstandingofthedecodingpro-
+cess within the Spec-VLA framework, we pro-
+videpseudocodethatillustratesSpec-VLAdecod-
+Dataset SpecVLA
+ing with relaxed acceptance, as outlined in Algo-
+rithm1. Precision Speedup
+LIBERO-Goal bf16 1.42×
+C AccellerationforQuantilizedModels
+int8 1.61×
+ToillustrateSD’scomplementarypotential,weex- int4 1.34×
+ploredfurtherbycombiningSpeculativeDecoding
+LIBERO-Object bf16 1.38×
+withquantization.
+int8 1.41×
+WecomparedinferencespeedsfortheOpenVLA
+int4 1.33×
+modelusingint8,int4quantization,andBF16rep-
+resentations on the Tesla A100 (80G) GPU. We LIBERO-Spatial bf16 1.28×
+observed that the int8 and int4 quantization lead int8 1.31×
+to decreased inference speed (Table 5). This re- int4 1.29×
+sult may be attributed to the additional overhead
+LIBERO-Long bf16 1.22×
+incurredbythequantizationoperation,consistent
+int8 1.32×
+withtheanalysisofOpenVLA(Kimetal.,2024).
+int4 1.15×
+Additionally,weacceleratedthequantizedmodel
+usingtheSpec-VLAframework,discoveringthat
+Table6: SpeedupofthequantilizedSpecVLAframe-
+SDcouldspeedupthequantizedverificationmodel.
+work on the LIBERO-Goal, Object, Spatial, Long
+ItachievesasignificantspeedupcomparedwithAR
+dataset. The‘Precision’showsthequantilizationpre-
+decoding(Table6).
+cision,‘Speedup’reflectsthegenerationspeedascom-
+paredtotheOpenVLAARbaseline.
+=== Page 13 ===
+Algorithm1Spec-VLADecoding
+1: Input: Prompt p, Observation o, Verification Model M V , Draft Model M D , Verification model
+hiddenstatesf ,Visualandtextualembeddingse ,SearchDepthd,TargetLengthL,Relaxation
+1:t 0:t
+Thresholdr
+2: initn ←− t
+3: whilen < Ldo
+4: foriin{1,...,d}do
+5: SampledraftinARmanneraˆ i = M D (f 1:t ,e 0:t ,aˆ t+1:i−1 )
+6: endfor
+7: Computethereferencetokenseta t+1:t+1+d inparallel: a i = M V (aˆ t+1:i−1 ,o,p)
+8: foriin{t+1,...,t+1+d}do
+9: ifD(a i ,aˆ i )<=rthen
+10: Seta i ← aˆ i
+11: else
+12: a i ← a i
+13: break
+14: endif
+15: endfor
+16: ifalldraftsaccepted,sampleanextratokena t+d+2 = M V (a t+1:t+d+1 ,o,p)
+17: endwhile
+18: returna t+1:t+d+1 ora t+1:t+d+2

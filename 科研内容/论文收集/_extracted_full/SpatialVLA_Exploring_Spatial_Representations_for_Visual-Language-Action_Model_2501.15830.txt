@@ -1,0 +1,1373 @@
+=== Page 1 ===
+SpatialVLA: Exploring Spatial Representations
+for Visual-Language-Action Model
+Delin Qu∗1,2, Haoming Song∗1,3, Qizhi Chen∗1,4, Dong Wang†1, Yuanqi Yao1, Xinyi Ye1, Yan Ding1,
+Zhigang Wang1 Jiayuan Gu5, Bin Zhao†1,6, Xuelong Li1,6
+1Shanghai AI Laboratory, 2Fudan University, 3Shanghai Jiao Tong University, 4Zhejiang University,
+5ShanghaiTech University, 6Northwestern Polytechnical University
+https://spatialvla.github.io
+SimulationGoogleRobotMatch SpatialVLA
+Setup
+Model Inference Speed (hz)
+GoogleRobot GoogleRobot
+MatchTuning Agg 20.1
+PaliGemma 2 Auto Regression
+SpatialVLA
+6.5 5.2 OpenVLA
+TraceVLA
+WidowX WidowX 5.0 RT-2-X
+Match Robot
+Tuning Zero-shot
+RealRobot 0 2 1 4 2 0 1 Tran spatial
+Setup raw action 7 G R r o ip t id 3
+WidowXBridge FrankaRobot
+Match Multi-tasks
+"pick lemonto…" Ego3DPositionEncoding Adaptive ActionGrids Speedupwith SpatialAction Tokens
+LIBERO
+SpatialVLA (Ours) OpenVLA RT-1-X OCTO
+RoboVLM TraceVLA RT-2-X Diffusion Policy
+1.1MillionRobot
+Episodes
+Large-ScaleCross-Embodiment 3D Scene Spatial Zero-Shot in-Distribution
+EfficientAdaptionPost-Training
+Dataset Understanding Generalization
+Fig. 1: We present SpatialVLA, a spatial-enhanced vision-language-action model that is trained on 1.1 Million real robot
+episodes. The model is equipped with Ego3D Position Encoding and Adaptive Action Grids to explore spatial representations
+for generalist robot policies, achieving superior 3D scene spatial understanding, zero-shot in-distribution generalization, and
+efficient adaption to new robot setups. The model achieves state-of-the-art performance across a diverse range of evaluations
+and shows significantly faster inference speed with fewer tokens per action.
+Abstract—Inthispaper,weclaimthatspatialunderstandingis and real-world setups, where the pre-learned action grids are
+the keypoint in robot manipulation, and propose SpatialVLA to re-discretized to capture robot-specific spatial action movements
+explore effective spatial representations for the robot foundation of new setups. The superior results from extensive evaluations
+model. Specifically, we introduce Ego3D Position Encoding to demonstrate the exceptional in-distribution generalization and
+inject 3D information into the input observations of the visual- out-of-distributionadaptationcapability,highlightingthecrucial
+language-actionmodel,andproposeAdaptiveActionGridstorep- benefit of the proposed spatial-aware representations for gener-
+resent spatial robot movement actions with adaptive discretized alist robot policy learning. All the details and codes are open-
+actiongrids,facilitatinglearninggeneralizableandtransferrable sourced.
+spatial action knowledge for cross-robot control. SpatialVLA is
+first pre-trained on top of a vision-language model with 1.1 I. INTRODUCTION
+Million real-world robot episodes, to learn a generalist manip-
+ulation policy across multiple robot environments and tasks. Generalistrobotpoliciesthatarecapableofinteractingwith
+After pre-training, SpatialVLA is directly applied to perform the physical environment, adapting to various embodiments,
+numerous tasks in a zero-shot manner. The superior results in and performing complex tasks have been a long-standing
+bothsimulationandreal-worldrobotsdemonstrateitsadvantage
+pursuit in robotics [6, 3, 16, 8, 65]. Recent advances in
+of inferring complex robot motion trajectories and its strong in-
+Vision-Language-Action (VLA) models [7, 30, 5, 33] show a
+domain multi-task generalization ability. We further show the
+proposed Adaptive Action Grids offer a new and effective way to promisingparadigminbuildingsuchgeneralistpolicybyfine-
+fine-tune the pre-trained SpatialVLA model for new simulation tuning the pre-trained Vision-Language Models (VLMs) [1,
+55, 50, 37] on diverse robot data [13, 29, 18]. The key to the
+success of this paradigm lies in adapting the generalization
+∗ Authors contributed equally: dlqu22@m.fudan.edu.cn. † Corre-
+spondingauthors:dongwang.dw93@gmail.com. powerofVLMstonumerousrobotmanipulationtasks,aswell
+5202
+yaM
+91
+]OR.sc[
+5v03851.1052:viXra
+=== Page 2 ===
+asspecificarchitecturaldesignsthatsynergizetheVLMback- both simulation and real-world, including 24 real-robot tasks
+boneandrobotactionoutputhead.Nonetheless,existingVLA and 3 simulation environments. To broadly test SpatialVLA
+models are primarily confined to 2D observation inputs and as a generalist robot policy, we examine the model’s abilities
+lackpreciseperceptionandcomprehensionofthe3Dphysical in zero-shot in-distribution robot control and new robot setup
+world—wherehumansinstinctivelyconstructrich,structured adaption abilities with instruction following, 3D scene struc-
+mental representations of space, effortlessly aligning objects tureunderstanding,andfine-tuningtonewrobotenvironments.
+within a canonical, intuitive, and even personally tailored The evaluation setups include view/texture/lighting change,
+workspaceformanipulation[20,40,52,63,67].Therefore,an unseen objects, unseen robot environment, and challenging
+essentialquestionforthefieldnowishow to effectively equip spatial layout changes in robot setups and environments,
+the VLA models with a profound spatial understanding of demonstrating remarkable generalizability and transferability
+the 3D physical world? ofSpatialVLAwithspatial-awarerepresentations.Insummary,
+However,developingsuchgeneralistrobotpolicieswith3D the contributions of this work consist of a novel generalist
+spatial intelligence encounters two primary challenges in the robot policy that explores spatial representations for robot
+aspects of robot observation and action. Firstly, the observa- foundation models, sophisticated designs on Ego3D Posi-
+tions from different robot embodiments are not 3D-aligned, tion Encoding and Adaptive Action Grids for effective 3D-
+becausethecamerasensorsofdifferentrobotsarevariousand awareness injection, and superior evaluation results across
+mounted at different places (e.g. wrist and/or third-person), various robot setups and tasks.
+resulting in non-calibrated 3D observation spaces. Secondly,
+II. RELATEDWORK
+differentrobotshavedifferentactionmovementcharacteristics
+to accomplish diverse tasks, due to different degrees of free- Generalist Robot Polices. Recent advances in robotics have
+dom, motion controllers, workspace configurations, and task witnessed a trend towards developing multi-task ”generalist”
+complexity, leading to significant difficulty in learning gen- robot policies to perform diverse tasks, rather than one spe-
+eralizable spatial actions. Despite some attempts in generalist cific task. Some early works [49, 57, 21, 6, 61, 76, 22]
+policy learning across heterogeneous robots [48, 13, 30, 65], achievegreatsuccessinlearningalanguage-conditionedvisual
+advancement in 3D spatial understanding abilities of gener- multi-task policy on a single embodiment with pre-trained
+alist policy has significantly lagged behind. This is largely visual/text encoder, thereby lacking the ability to adapt new
+attributed to the heterogeneity in robot observation and action robot embodiment. More recent efforts [48, 39, 65] explore
+information. The solutions to the above challenges require to use large-scale, cross-embodiment robot datasets [13] for
+spatial-alignedrobotobservationandactionrepresentationsfor generalistpolicespre-training,supportingeffectivefine-tuning
+cross-embodiment control and adaptation in the universal 3D to new robot setups. Notably, Octo [48] proposes a flexible
+physical world. transformer-basedarchitecturetounifydifferentconfigurations
+Inthiswork,asillustratedinFig.1,weproposeageneralist in Open X-Embodiment (OXE) dataset [13], and the trained
+robot policy SpatialVLA, which equips the VLA model with policy can solve a variety of in-domain tasks in zero-shot
+3D spatial intelligence by exploring aligned spatial represen- andachievesstrongperformanceinthenewembodimentafter
+tations of robot observation and action signals. SpatialVLA fine-tuning. With the same cross-embodiment robot datasets,
+perceives 3D world through Egocentric 3D (Ego3D) Posi- RDT[39]pre-trainsa1.2B-parameterdiffusion-basedgeneral-
+tion Encoding to integrate 3D spatial context with semantic istmodelandfine-tunesitforcomplexbimanualmanipulation.
+features. This position encoding is derived in the egocentric Moreover, HPT [65] proposes a modular architecture to align
+camera frame that eliminates the need for specific robot- data across heterogeneous embodiments into a shared repre-
+camera calibration, which is universally applicable to various sentationviaembodiment-specificstemmodule,embracingthe
+robot embodiments. As for robot actions, SpatialVLA unifies heterogeneity in data through pre-training.
+the action space of various robots via Adaptive Action Grids, Vision-Language-Action Models. Recently, several stud-
+which discretizes the continuous robot actions into adaptive ies [34, 7, 30, 31, 71, 33, 70, 51] propose to build generalist
+spatial grids according to statistical action distributions on the robot policies by extending pre-trained VLMs with ability
+wholerobotepisodesandlearnsspatialactiontokensonthese to robot action generation. As a pioneer, RT-2 [7] fine-
+grids to align cross-robot actions with the 3D spatial struc- tune VLM PaLI-X [11] on both large-scale vision-language
+ture of the physical world. Crucially, after pre-training, the data and robot demonstration data via autoregressive next
+learned spatial action grids demonstrate a superior capability token prediction, where robot actions are discretized into 256
+in adapting to new robot environments via adaptively grid re- bins and represented as separate tokens analogous to text
+discretization, providing a flexible and effective approach to tokens. OpenVLA [30] adopts a similar action discretization
+robot-specific post-training. We find that the proposed model approach and fine-tune Prismatic VLM [28] only on the OXE
+SpatialVLAbridgesobservationinputsandactionoutputsina dataset [13], which consists of robot data from 22 different
+universal robot-agnostic manner, which explores powerful 3D robot embodiments across 21 institutions. CogACT [31] and
+spatial-aware representations to enhance the VLA model. TraceVLA [71] continue to fine-tune the trained OpenVLA
+We extensively evaluate and ablate SpatialVLA on diverse model with the new attached diffusion action module and
+robot manipulation tasks and different robot embodiments in visual trace prompting separately. Moreover, π [5] adapts
+0
+=== Page 3 ===
+PaliGemma 2
+extract
+SigLip
+noitcejorP
+Auto Regression 20 HZ
+Ego3D Position Encoding
+EP
+D3ogE
+3D Gaussian Distribution
+z/yaw
+frequency Language Spatial
+encoding Embedding Embedding
+y/pitch
+x/roll
+encode action
+0 2 1 4 2 0 1 discretize
+Adaptive SpatialAction SpatialEmbedding
+Grids Adaption
+stoboRsuoenegoreteH
+query
+L: "pick lemonto…"
+Action Spatial
+Grids Embedding
+ΔT ΔR G
+Fig. 2: Overview of SpatialVLA. Given an image observation o and a task instruction L, the model processes the image
+t
+using Ego3D Position Encoding and auto-regressively predicts spatial action tokens, which are then de-tokenized to generate
+continuous actions A for robot control. The model comprises three key components: (1) SigLIP vision encoder extracts 2D
+t
+semantic features, which are then infused with 3D spatial context via Ego3D Position Encoding; (2) continuous 7D actions
+∆T,∆R,G are translated to 3 spatial action tokens by querying Adaptive Action Grids and auto-regressively predicted
+and de-tokenized for robot control; (3) in post-training, action grids and spatial embeddings are adapted from new Gaussian
+distributions to facilitate effective transfer to new robot setups.
+PaliGemmaVLMtorobotcontrolbyaddingaseparateaction to learn generalizable knowledge with large-scale cross-robot
+expert module that produces continuous actions via flow dataandthegoalofpost-trainingistoadaptpre-trainedmodel
+matching, and the model can then be prompted for zero-shot to specific downstream robot embodiments and tasks.
+control or fine-tuned on high-quality data to enable complex
+dexterous manipulation tasks. Notably, while these models A. The SpatialVLA Model Architecture
+benefit from VLMs’ capabilities and show some zero-shot
+As illustrated in Fig. 2, SpatialVLA is developed based
+capabilities, a sophisticated fine-tuning step with new data is
+on a vision-language model to inherit the general world
+essential and required for complex tasks or new robot setups.
+knowledge. Formally, SpatialVLA takes image observations
+3D Foundation Models for Robotics. Some researches [73, o ={I1,..,In} and a natural language task instruction L as
+t t t
+10,19,24,53,25,69]havefocusedonextendingthegeneralist
+inputs, and then learns a mapping function τ(·) to generate
+ability of LLMs and VLMs from language-vision towards the
+a sequence of robot actions A = [a ,a ,...,a ],
+t t t+1 t+H−1
+3D world. 3D-LLM [24] integrates a 3D feature extractor
+i.e., A = F(o ,L). To empower SpatialVLA with 3D
+t t
+with 2D VLMs backbone and train 3D-LLMs on a wide
+spatial intelligence, we augment the VLM backbone with
+variety of tasks, including dense captioning, 3D question
+robotics-specific3D-awareinputsandoutputs,namely,Ego3D
+answering, task decomposition, 3D grounding, 3D-assisted
+Position Encoding and Adaptive Action Grids. The ego3D
+dialog, navigation, and so on. LLaVA-3D [10] extends the
+position encoding representation O aims to capture 3D
+3d
+2D LLaVA’s capabilities with the proposed 3D patches to
+scenestructureviaintegrating3Dspatialinformationwith2D
+bridge 2D features within a 3D space for 3D spatial under-
+semantic features. The adaptive action grids are designed to
+standing.Similarly,LEO[25]trainsanembodiedmulti-modal
+represent the continuous distribution of robot actions a with a
+generalist agent that can take egocentric 2D images, 3D point set of discrete spatial action tokens a = {a1,...,aV}. During
+clouds, and texts as task input and handle comprehensive
+training, SpatialVLA model is trained to take the ego3D
+tasks within the 3D environment. Moreover, 3D-VLA [69]
+position encoding representation O and natural language
+3d
+builds a generative world model on top of 3D-based LLM
+task instruction L as inputs, and autoregressively generate
+to perform 3D reasoning and localization, multimodal goal
+spatial action tokens a˜ using the cross-entropy objective L,
+t
+generation, and embodied action planning. LEO and 3D-VLA
+are closely related to our work, but their attention is on 3D L(θ)=E L(a ,a˜ )), (1)
+p(At|ot) t t
+world understanding and prediction, ignoring the 3D spatial
+characteristics in the robot action space. where the predicted action tokens a˜ t = τ(O 3d ,L) is the de-
+tokenized into continuous action signals a for robot control.
+t
+III. METHODOLOGY
+More details of the model architecture and action encoding
+In this section, we describe SpatialVLA model and its can be found in Appendix. B.
+training framework in detail. Our model with the proposed Ego3D Position Encoding. The proposed Ego3D position
+Ego3D position encoding and adaptive action grids to capture encoding integrates depth information from the camera frame
+andlearn3Dspatialknowledgeforgeneralizablerobotcontrol, and image pixels to construct an egocentric 3D coordinate
+which we describe in Sec. III-A. Next, we detail the training system, which eliminates the need for robot-camera extrinsic
+procedure of SpatialVLA that consists of a pre-training stage calibrationandisagnostictospecificrobotsetups.Specifically,
+and a post-training stage in Sec. III-B. The pre-training aims we use ZoeDepth [4] to estimate depth map D and obtain
+=== Page 4 ===
+As illustrated in Fig. 3, for tokenizing continuous trans-
+lation and rotation movements, we first normalize each ac-
+tion variable into [−1,1] for each robot environment and
+statistic the translation and rotation movements ∆R =
+{roll, pitch, yaw}, ∆T = {ϕ,θ,r} on the whole dataset
+a) Action DistributionofΔRandΔT b) Action Grid Split from Distribution
+mixture (see Appendix. G), following with a parameterized
+Δyaw Δr Gaussian distribution fitting N(µa,Σa). Then, the continu-
+ous actions are split into M intervals G = {[a =
+i=1,..,M 1
+−1,a ),...,[a ,a = 1]} with equal probability 1/M on
+2 M-1 M
+each normalized action variable, i.e.,
+(cid:90) ai+1
+a ,...,a =argmin f(x)dx−1/M, i=1,...,M (4)
+2 M
+Δpitch Δφ a2,...,aM ai
+Δroll Δθ where f(x) is the probability density function of Gaussian
+c) ActionGridsofΔRandΔT distribution N(µa,Σa). Note that we split more grids on
+{ϕ,θ} to capture fine-grained movement direction other than
+Fig. 3: Illustration of adaptive action grids. (a) Statistics of movement distance r. Suppose M , M , M are the numbers
+ϕ θ r
+translation and rotation action movements on the whole pre- of the discrete bins on variable (ϕ,θ,r), then the translation
+training mixture, (b) grids are split on each action variable space consists of M = M · M · M discrete spatial
+trans ϕ θ r
+accordingtotheprobabilitydensityfunctionoffittedGaussian grids a
+trans
+= {a1,...,aMtrans}. Similarly, there are M
+rot
+=
+distribution, and (c) the obtained adaptive action grids in M
+roll
+· M
+pitch
+· M
+yaw
+3D discrete grids a
+rot
+= {a1,...,aMrot}
+translation and rotation action spaces. in rotation 3D spatial space. Then, the associated learnable
+spatial action token embeddings are defined as follows,
+E ={E , E , E }, (5)
+pixel’s 3D position p = {x,y,z} in the egocentric 3D coor- a trans rot grip
+dinate system via back-projection π−1 with camera intrinsic where E
+trans
+∈ Rd×Mtrans, E
+rot
+∈ Rd×Mrot, E
+grip
+∈ Rd×2
+parameters. Then, as illustrated in Fig. 2, we first employ
+denote the translation, rotation, and gripper actions, and the
+SigLIP [68] visual encoder to extract 2D semantic visual
+total number of action tokens is V = M + M + 2.
+featuresX∈Rd×h×w toinheritthealignmentbetweenvision trans rot
+After training, these learned spatial action tokens capture
+and language, and calculate their corresponding 3D positions
+general robot action knowledge and show a surprising ability
+P ∈ R3×h×w in the egocentric 3D coordinate system. The
+innewrobotembodimentadaption,asdiscussedinSec.III-B.
+egocentric 3D positions P are then encoded into 3D position
+Moreover, it is worth noting that the model only needs to
+embeddings P′ ∈Rd×h×w through a sinusoidal function γ(·)
+generate 3 tokens for one-step robot actions rather than 7
+following by a learnable MLP. The egocentric 3D spatial
+tokens as in RT-1 [6], RT-2 [7] and OpenVLA [30], achieving
+representations O ∈ Rd×h×w are obtained by adding 3D
+3d in fast model inference speed.
+positionembeddingP′ and2DpathvisualtokensX,depicted
+as follows, B. The Pre-training and Post-training Scheme
+′ To obtain a generalist robot policy model, the training pro-
+O =X+P =X+MLP(γ(P)). (2)
+3d cedure of SpatialVLA consists of pre-training stage and post-
+AdaptiveActionGrids.Inordertoauto-regressivelygenerate training stage. Pre-training stage aims to learn generalizable
+continuous robot actions with pre-trained VLM backbone, we knowledge across diverse tasks and robots from a large-scale
+design Adaptive Action Grids to translate continuous robot dataset mixture, while the post-training stage adapts the pre-
+actions to discrete grids that are represented as tokenized trained model into new robot embodiments or new tasks. In
+classes for prediction. Specifically, for a single-arm robot, the following, we discuss the dataset mixture and key designs
+its actions consist of seven dimensions for movement a = for implementing this two-stage training procedure.
+{x, y, z, roll, pitch, yaw, grip}, and are split into three parts Pre-training Procedure. We train SpatialVLA from
+as follows, Paligemma2 backbone [62] on a cross-robot dataset mixture
+with 1.1 Million real robot demonstrations {ζ ,...,ζ },
+a={a , a , a }, (3) 1 n
+trans rot grip
+covering a diverse range of robot embodiments, scenes, and
+where a = {x, y, z} represents translation movements tasks. This pre-training dataset mixture consists of a subset
+trans
+∆T, a = {roll, pitch, yaw} denotes rotation movements of OXE [13] and the RH20T dataset [18] and we modify
+rot
+∆R, and a = {grip} consists of two discrete tokens the mixture weights from OpenVLA [30] according to the
+grip
+that represent opening and closing gripper actions. Moreover, real-wordtestingperformanceofindividualdataset,whichare
+we transform the translation movements (x, y, z) into polar exhibited in Appendix. A. At the beginning of pre-training,
+coordinates (ϕ,θ,r) to disentangle movement direction (ϕ,θ) the embeddings E of spatial action tokens and parameters
+a
+and distance r. of MLP in egocentric 3D spatial representation are randomly
+=== Page 5 ===
+initialized,andthentheyareoptimizedduringtraining,aswell both simulation and real-world. SpatialVLA is compared to
+as the parameters of vision encoder and LLM backbone. At previous state-of-the-art robot foundation models and alterna-
+eachtrainingstep,abatchofdatapairsisextractedatrandom tivedesignsinspatialrepresentations.Concretely,experiments
+timesteps t ,...,t from shuffled demonstrations {ζ ,...,ζ }, seek to answer the following research questions:
+1 B i j
+i.e., a batch of tuple [(o t1 ,A t1 ,L i ),...,(o tB ,A tB ,L j )], and 1) HowwelldoesSpatialVLAdirectlyperformonavariety
+then SpatialVLA is trained with a standard auto-regressive of in-distribution tasks after pre-training on large-scale
+next-token prediction objective in eq. (1). Importantly, the robotic data mixture?
+embeddings of text tokens E text are frozen to maintain 2) Can SpatialVLA be effectively fine-tuned on new robot
+the general world knowledge in pre-trained VLM, and the setup and task?
+experimental results show this frozen operation is beneficial 3) How well does SpatialVLA perform in scenarios that
+for the instruction following ability. Moreover, as discussed require spatial understanding?
+in OpenVLA [30], DROID dataset [29] are removed from the 4) TowhatextentdoEgocentric3DSpatialRepresentations
+data mixture for the final third of pre-training to improve the and Adaptive Spatial Action Grids improve the perfor-
+quality of the pre-trained SpatialVLA model. mance of SpatialVLA?
+Post-training Designs. In the post-training stage, we fine- To answer these questions, as shown in Fig. 4, we evaluate
+tune our model with robot-specific demonstrations to adapt SpatialVLA’scapabilitiesacrossarepresentativespectrumof7
+it to new tasks and robot setups. Prior works have mainly different robot learning scenarios with 24 real-robot tasks and
+focused on fine-tuning pre-trained VLA models using full- 3simulationenvironments.Firstly,weevaluateSpatialVLAin
+parameter or LoRA fine-tuning, with little attention to ef- both SimplerEnv [35] simulation and the real-world WidowX
+fective techniques for the post-training stage. In this paper, robot platform (BridgeV2 [64] [64] setups), testing its out-
+we investigate the potentials of the proposed spatial action of-the-box control capabilities on different robots with setups
+tokenizer for quick adaption to new robot setups, namely matching the pre-training dataset. Second, we assess the
+Spatial Embedding Adaption, providing a new and effective fine-tuning efficacy of our method in both simulation and
+way for useful post-training. In detail, we fit a new Gaussian real-world settings, including LIBERO [36] and new Franka
+distribution N(µ new ,Σ new ) for each action variable on post- robot setups, to adapt to new robot environments and tasks.
+training datasets and create discrete spatial action grids G new Then, we design 4 special tasks that require precise spatial
+in translation and rotation movement to construct action grids understanding in 2 different real-world robot environments to
+G new and tokens a new , where the embeddings of new spatial testtheeffectivenessofspatialrepresentationsofSpatialVLA.
+action tokens E anew are initialized by trilinear interpolation Finally, we conduct comprehensive ablation studies on a
+with pre-trained action tokens E a . These action token em- mixtureofFractal[6]andBridgeV2[64]datasetstoverifyour
+beddings E anew and model parameters are then optimized with designdecisionsinSpatialVLA.Formoredetailsonevaluation
+the next-token prediction objective. setups, see Appendix. E.
+Formally, for new spatial action grids G new , suppose i- Implementation Details. The SpatialVLA model is pre-
+th 3D grid Gi new in translation space an tr e a w ns with centroid trained with 1.1 Million real-robot demonstrations from the
+(ϕi new , θ n i ew , r n i ew ) and its adjacent 3D grids from the pre- OXE [13] and RH20T dataset [18] on a cluster of 64 A100
+trainedactiongridsareGadj ={G1,...,GK}.Theembedding
+GPUsfor10days,usingabatchsizeof2048.Forinputrobot
+of new i-th action token ei anew are initialized by trilinear observation, the SpatialVLA policy is only conditioned on
+interpolation with Gadj, as follows, one third-person camera and takes one image for constructing
+egocentric3Dspatialrepresentations.Foroutputrobotactions,
+K
+(cid:88)
+ei = w ej, (6) the SpatialVLA policy predicts a chunk of T = 4 future
+anew j
+actions (12 spatial action tokens from total V =8194 tokens)
+j=1
+and executes the ensemble actions before predicting the next
+where ej ∈ Rd are the embeddings of the pre-trained action
+a chunk. During inference, SpatialVLA requires 8.5GB of GPU
+grids,w istheweightscalculatedbythenormalizeddistances
+j memory and runs at approximately 20Hz on one NVIDIA
+between centroid (ϕi , θi , ri ) and adjacent centroids.
+new new new RTX4090GPUtorunevaluationsinbothsimulationandreal-
+NotethatthenewactiontokensofrotationEnew areinitialized
+arot world.Formoredetailsaboutmodeltraininganddeployment,
+in the same way. With this embedding initialization, the new
+please refer to the Appendix. D.
+action tokenizer is capable of effectively transferring pre-
+trained spatial action knowledge to new robot setups. A. Performing Zero-shot Robot Control
+EvaluationSetupsandBaselines.Toassesstherobustness
+IV. EXPERIMENT
+ofSpatialVLAindiverseenvironmentalvariations,weemploy
+The goal of our experimental evaluations is to test Spa- the SimplerEnv simulation benchmark [35] to evaluate visual
+tialVLA’s ability to serve as a generalist robot control policy matchingandvariantaggregationmetrics.SimplerEnvfeatures
+out of the box, as well as be a good initialization for fine- WidowX and Google Robot setups, providing diverse ma-
+tuning to new robot tasks. Our extensive experiments consist nipulation scenarios with varied lighting, color, textures, and
+of zero-shot evaluations and adaption to downstream tasks in robot camera pose conditions, bridging the visual appearance
+=== Page 6 ===
+LIBERO
+SimplerEnv WidowXRobot FrankaMulti-tasks LIBERO FrankaandWidowX LIBEROSpatial SimplerEnv
+#APerforming Zero-shot Robot #BEffectively Adapting to New Robot #CEvaluating Spatial Understanding #DAblations on Design
+Control Setups Capability Decisions
+Fig. 4: Experiment Setup. We evaluate SpatialVLA across 7 robot learning scenarios, 16 real-robot tasks, and 48 simulation
+setups,focusingonthreekeyaspects:zero-shotcontrol,adaptabilitytonewsetups,andspatialunderstanding.Wealsoconduct
+a thorough ablation study on a mixed Fractal and Bridge dataset to verify our design decisions.
+TABLE I: SimplerEnv evaluation across different policies on Google Robot tasks. The zero-shot and fine-tuning results
+denote performance of OXE dataset [13] pre-trained models and Fractal dataset [6] fine-tuned models, respectively.
+VisualMatching VariantAggregation
+Model
+PickCokeCan MoveNear Open/CloseDrawer #Average PickCokeCan MoveNear Open/CloseDrawer #Average
+RT-1[6](Begin) 2.7% 5.0% 13.9% 6.8% 2.2% 4.0% 6.9% 4.2%
+RT-1[6](15%) 71.0% 35.4% 56.5% 60.2% 81.3% 44.6% 26.7% 56.2%
+RT-1[6](Converged) 85.7% 44.2% 73.0% 74.6% 89.8% 50.0% 32.3% 63.3%
+HPT[65] 56.0% 60.0% 24.0% 46.0% ————– ————– ————– ————–
+TraceVLA[71] 28.0% 53.7% 57.0% 42.0% 60.0% 56.4% 31.0% 45.0%
+RT-1-X[13] 56.7% 31.7% 59.7% 53.4% 49.0% 32.3% 29.4% 39.6%
+RT-2-X[13] 78.7% 77.9% 25.0% 60.7% 82.3% 79.2% 35.3% 64.3%
+Octo-Base[48] 17.0% 4.2% 22.7% 16.8% 0.6% 3.1% 1.1% 1.1%
+OpenVLA[30] 16.3% 46.2% 35.6% 27.7% 54.5% 47.7% 17.7% 39.8%
+RoboVLM(zero-shot)[32] 72.7% 66.3% 26.8% 56.3% 68.3% 56.0% 8.5% 46.3%
+RoboVLM(fine-tuning)[32] 77.3% 61.7% 43.5% 63.4% 75.6% 60.0% 10.6% 51.3%
+π∗(BF16uniform)[5] 88.0% 80.3% 56.0% 70.1%
+0
+SpatialVLA(zero-shot) 81.0% 69.6% 59.3% 71.9% 89.5% 71.7% 36.2% 68.8%
+SpatialVLA(fine-tuning) 86.0% 77.9% 57.4% 75.1% 88.0% 72.7% 41.8% 70.7%
+π∗:Theresultsarereferredfromopen-pi-zero.
+0
+TABLE II: SimplerEnv evaluation across different policies on WidowX Robot tasks. The zero-shot and fine-tuning results
+denote the performance of OXE dataset [13] pre-trained models and BridgeData V2 [64] fine-tuned models, respectively.
+PutSpoononTowel PutCarrotonPlate StackGreenBlockonYellowBlock PutEggplantinYellowBasket #Overall
+Model
+GraspSpoon Success GraspCarrot Success GraspGreenBlock Success GraspEggplant Success Average
+RT-1-X[13] 16.7% 0% 20.8% 4.2% 8.3% 0% 0.0% 0% 1.1%
+Octo-Base[48] 34.7% 12.5% 52.8% 8.3% 31.9% 0% 66.7% 43.1% 16.0%
+Octo-Small[48] 77.8% 47.2% 27.8% 9.7% 40.3% 4.2% 87.5% 56.9% 30.0%
+OpenVLA[30] 4.1% 0% 33.3% 0% 12.5% 0% 8.3% 4.1% 1.0%
+RoboVLM(zero-shot)[32] 37.5% 20.8% 33.3% 25.0% 8.3% 8.3% 0.0% 0% 13.5%
+RoboVLM(fine-tuning)[32] 54.2% 29.2% 25.0% 25.0% 45.8% 12.5% 58.3% 58.3% 31.3%
+SpatialVLA(zero-shot) 25.0% 20.8% 41.7% 20.8% 58.3% 25.0% 79.2% 70.8% 34.4%
+SpatialVLA(fine-tuning) 20.8% 16.7% 29.2% 25.0% 62.5% 29.2% 100.0% 100.0% 42.7%
+gap between real and simulated environments. We compare rollouts. A more detailed breakdown of all tasks and policy
+our model with the latest state-of-the-art generalist manipula- settings can be found in the Appendix. E.
+tion policies, including RT-1 [6], RT-1-X [13], RT-2-X [13],
+SimplerEnv Evaluation of Google Robot and WidowX.
+Octo [48], OpenVLA [30], HPT [65], TraceVLA [71], and
+Tab. I summarizes the zero-shot and fine-tuning results across
+RoboVLM [32]. Where RT-1-X, RT-2-X, Octo, OpenVLA,
+different manipulation policies on the Google Robot setup.
+HPT, TraceVLA, and RoboVLM are trained with mixtures
+On average, SpatialVLA achieves the highest overall visual
+of OXE dataset [13]. Since RT-1 is trained with the Google
+matching and variant aggregation performance with a sig-
+Fractal Dataset [6], we also compare RT-1 with our method
+nificant margin. Our SpatialVLA model yields 71.9% and
+fine-tuned on the Google Fractal and BridgeData V2 [64].
+75.1% Visual Matching scores in zero-shot and fine-tuning
+For a more comprehensive evaluation, we conduct exper- settings, surpassing the second-best policy, RoboVLM, by
+iments on a real-world WidowX robot platform from the +15.6%and+11.7%margins.Notably,ourmodeltrainedfrom
+BridgeData V2 evaluation [64]. As shown in Fig. 5, we scratch on OXE mixture with RH20T surpasses the state-of-
+design seven task suites for the WidowX robot, encompassing the-art closed-source model RT-2-X [13], achieving superior
+languagegrounding,semanticunderstanding(unseenback- performanceinVisualMatching(71.9%vs60.7%)andVariant
+ground and poses), and motion distractors (manually move Aggregation(68.8%vs64.3%),whileusingsignificantlyfewer
+the object). All generalist manipulation policies, including model parameters (3.5B vs 55B). Qualitatively, we find that
+Octo,RT-1-X,OpenVLA,andRoboVLM,areevaluatedacross SpatialVLA exhibits greater generalizability and robustness
+7 task suites with 11 trials each, resulting in a total of 77 across diverse robotic manipulation tasks and environmental
+=== Page 7 ===
+#1 #2
+#1 close microwave #3 put the carrot in the #4 put the eggplant in the #5put purple cup on the #6putgreencupon #7 putpurplecuponthepink
+#2lift red chilipepper plate basket white plate thepinkcloth cloth
+%etarsseccus
+sksat
+Octo RT-1-X RoboVLM OpenVLA SpatialVLA(Ours)
+100100
+unseen background unseen object pose motiondistractors language grounding
+Fig. 5: Zero-shot Robot Control Evaluation on WidowX Robot. We evaluate SpatialVLA across 7 task suites to explore the
+language grounding, semantic understanding, and motion sensing capabilities, with varying backgrounds, poses, and motion
+distractors. SpatialVLA achieves the highest average success rate, outperforming all generalist manipulation policies.
+conditions,characterizedbyvaryingvisualappearances,which comprising 10 tasks with 50 human-teleoperated demonstra-
+is further supported by its superior performance in variant tions. These suites evaluate the model’s understanding of spa-
+aggregation.Inparticular,SpatialVLAalsomatchesoroutper- tial relationships (LIBERO-Spatial), object types (LIBERO-
+formsthelatestSOTAmodelπ .Tab.IIsummarizestheresults Object), task-oriented behaviors (LIBERO-Goal), and its
+0
+across different manipulation policies on the WidowX setup. ability to generalize to long-horizon tasks with diverse ob-
+Our model surpasses the state-of-the-art RoboVLM policy, jects, layouts, and goals (LIBERO-Long). We compare our
+achieving overall success rates of 34.4% and 42.7%. Fine- approach to several generalist manipulation policy methods,
+tuningontheBridgeV2yieldsaremarkable100%successrate including Diffusion Policy [12], Octo [48], OpenVLA [30],
+inthe“PutEggplantinYellowBasket”task,demonstratingthe and TraceVLA [71]. SpatialVLA is fine-tuned on the cor-
+model’s exceptional zero-shot manipulation capability. responding dataset for 200 epochs using LoRA (r = 32,
+Real-world WidowX Evaluation. Fig. 5 presents the re- α = 32), which incorporates spatial embedding adaption
+sults of the real-world “out-of-the-box” evaluation in Wid- in Sec. III-B from new Gaussian distribution.
+owX robot platform. We observe that, in simple single- To facilitate a more comprehensive evaluation, 13 Franka
+task scenarios (#1 close microwave), all the policies exhibit tasks are established to validate the model’s manipulation
+somegeneralizability,successfullycompletingtasksinunseen performance, as shown in Fig. 6. The evaluation consists of
+environments. However, in moderately complex tasks (#3-7), three setups: Single Task, which includes four basic tasks:
+most policies, such as RT-1-X, Octo, and RoboVLM struggle pick,place,push,andclose;InstructionFollowing,whichin-
+with manipulation, frequently encountering issues like object volves manipulating different objects in the same scene based
+misidentification and grasp failures. Compared to OpenVLA, on language instructions; and Multi-tasks, which involves
+our method demonstrates superior robustness in handling mo- training on a mixture of all four single-task data and tested
+tion disturbances (human-induced dynamic object movement on these tasks. We compare SpatialVLA with mainstream
+in tasks #3 and #4), successfully tracking and grasping carrot policies, including Diffusion Policy, Octo, and OpenVLA.
+and eggplant. Furthermore, in the instruction-following tasks More details can be found in the Appendix. E.
+(#5-7), our method demonstrates strong instruction-following Evaluation Results. Tab. III present the LIBERO [36] exper-
+ability, accurately executing tasks like picking up a green cup imental results. Notably, we observe that SpatialVLA can be
+and placing it on a white plate, not a pink one, based on effectivelyadaptedtotasksintheLIBEROenvironments,asit
+color descriptions in the prompts, outperforming OpenVLA obtainsthehighestaveragesuccessrateof78.1%andthefirst
+and other generalist policies. Overall, SpatialVLA achieves rankacrossallthepolicies.Inparticular,SpatialVLAachieves
+a higher average success rate, showcasing robust and gen- a remarkable88.2% successrate onthe LIBERO-Spatialtask,
+eralizable operation capabilities in unseen scenarios, objects, which consists of different object layouts, demonstrating the
+language grounding, and dynamic motions. model’s strong understanding of spatial relationships. In most
+tasks, SpatialVLA outperforms the state-of-the-art generalist
+B. Adapting to New Robot Setups
+manipulation policies but struggles with long-horizon tasks
+Evaluation Setup and Comparisons. We present the eval- in LIBERO-Long, due to the lack of architecture design for
+uation of SpatialVLA on the LIBERO simulation bench- long-horizon observation.
+mark [36], which consists of a set of diverse robotic ma- Fig.6summarizestheresultsoftheFrankarobotfine-tuning
+nipulation tasks in simulated environments. Following Open- evaluation. In single-task tests, SpatialVLA and Diffusion
+VLA [30], we conduct experiments on four task suites, each Policy show similar accuracy (82% vs 81%), outperforming
+=== Page 8 ===
+SingleTasks Instruction Following
+#1 push the teapot handle #2place the white pot on the #3put the banana in #4close the wooden tawny #5-7place red/blue/green #6-7 graspthe
+aside cutting board the basket drawer cube on green car orange/croissantin the plate
+#8-11 multi-taskof push/place/put/close #Single-tasksSuccess #Instruction Success #Multi-tasksSuccess #Overall Success
+Multi-tasks DiffusionPolicy Octo OpenVLA SpatialVLA(Ours)
+Fig. 6: Adapting to New Robot Setups on Franka Robot. SpatialVLA serves as a generalist robot control policy, achieving
+better performance across multiple setups, and can be effectively used as an initialization for fine-tuning to new robot tasks.
+TABLE III: LIBERO Simulation Benchmark Results. We present the success rate (SR) and standard error for each method
+across four task suites, which are averaged over three random seeds with 500 trials. Fine-tuned SpatialVLA models achieve
+the highest average success rate and ranking, followed by fine-tuned OpenVLA [30] and Octo [48].
+LIBERO-Spatial LIBERO-Object LIBERO-Goal LIBERO-Long Average
+SR(↑) Rank(↓) SR(↑) Rank(↓) SR(↑) Rank(↓) SR(↑) Rank(↓) SR(↑) Rank(↓)
+DiffusionPolicyfromscratch 78.3±1.1% 5 92.5±0.7% 1 68.3±1.2% 5 50.5±1.3% 5 72.4±0.7% 5
+Octofine-tuned 78.9±1.0% 4 85.7±0.9% 4 84.6±0.9% 1 51.1±1.3% 4 75.1±0.6% 3
+OpenVLAfine-tuned 84.7±0.9% 2 88.4±0.8% 3 79.2±1.0% 2 53.7±1.3% 3 76.5±0.6% 2
+TraceVLAfine-tuned 84.6±0.2% 3 85.2±0.4% 5 75.1±0.3% 4 54.1±1.0% 2 74.8±0.5% 4
+SpatialVLAfine-tuned 88.2±0.5% 1 89.9±0.7% 2 78.6±0.6% 3 55.5±1.0% 1 78.1±0.7% 1
+%etarsseccus
+DiffusionPolicy Octo RT-1-X RoboVLM OpenVLA SpatialVLA(Ours)
+#1place plush toy #2 put green cup on the #3 put green cup on the #4 put the carrot in the
+closest to robot on car pink cloth pink cloth plate
+(cupheight change) (cupheight change) (potheight change)
+sksat
+of SpatialVLA through on three robot setups: Franka Robot
+fine-tuning, WidowX Robot zero-shot, and Libero-Spatial
+fine-tuning. The tasks exhibit varying spatial complexities,
+with the Franka task involving prompt understanding (e.g.,
+FrankaFine-tune WidowXZero-shot #1 place plush toy closest to robot on car), the WidowX
+task featuring explicit height changes (e.g., #2 put green cup
+on the pink cloth), and the LIBERO-Spatial task involving
+object layout variations. Seven mainstream policies, namely
+Diffusion Policy, Octo, RT-1-X, OpenVLA, TraceVLA, and
+RoboVLM, are employed for comparison.
+Evaluation Results. Compared to existing policies, Spa-
+Fig. 7: Spatial Understanding Capability Evaluation. Ben-
+tialVLA shows superior spatial understanding, achieving 73%
+efiting from the proposed Ego3D Position Encoding, Spa-
+accuracy in Franka task #1, which involves spatial prompts,
+tialVLA exhibits superior performance in understanding spa-
+andsignificantlyimprovingmanipulationcapabilitiesforcom-
+tial prompts and complex spatial layout tasks.
+plex positional changes in the out-of-distribution WidowX
+Zero-shot tasks #2-4. Similar results are observed in the
+OpenVLA and Octo. However, in the instruction following LIBERO-Spatial task suite (88.2% success rate). Policies like
+tasks, SpatialVLA improves by +12% over OpenVLA, while Octo, Diffusion Policy, and OpenVLA, which lack integrated
+Diffusion Policy struggles with a 26% success rate. In multi- depth information, face significant challenges in adapting to
+tasks, SpatialVLA leverages its pre-training on OXE and spatial layout changes, yielding a success rate consistently
+3D perception capabilities to achieve a 57% accuracy rate, lower than 50%. Consequently, we suggest integrating 3D
+surpassing other generalist policies. In summary, SpatialVLA information (Sec. III), including depth or point cloud, into
+demonstratesitsversatilityasageneralistrobotcontrolpolicy, the VLA framework to improve the model’s adaptability and
+achieving better performance across various tasks, and can be robustness in spatial layout variations.
+effectively used as an initialization for new robot tuning.
+D. Ablations on Design Decisions
+C. Evaluating Spatial Understanding Capability
+In this section, we conduct ablation studies to investigate
+Evaluation Setup and Comparisons. As shown in Fig. 7 the effectiveness of the proposed 3D Spatial Presentation in
+andTab.III,weevaluatethespatialunderstandingcapabilities both pre-training and post-training stages.
+=== Page 9 ===
+TABLE IV: Pre-training Ablations on the Mixture Dataset of Google Fractal and BridgeData V2. Initializing a high-
+resolution action grid from the data distribution and 3D position encoding enhances the model’s generalization capability.
+PickCokeCan MoveNear PutCarrotonPlate PutEggplantinYellowBasket
+#setting
+variantaggregation visualmatching variantaggregation visualmatching graspcarrot success graspeggplant success
+#All [1].SpatialVLA 81.6% 70.7% 79.2% 85.4% 41.7% 33.3% 91.7% 87.5%
+LinearDiscretization [2].∼linear256bins 40.7% 19.0% 47.1% 52.9% 41.7% 33.3% 87.5% 70.8%
+Distribution [3].∼uniformdistribution 77.9% 28.0% 64.2% 55.0% 45.8% 12.5% 79.2% 54.2%
+[4].resolution1026 74.4% 67.3% 59.1% 54.2% 45.8% 25.0% 66.7% 54.2%
+ActionGrids [5].resolution4610 76.7% 68.0% 69.8% 79.2% 41.7% 33.3% 83.3% 75.0%
+Resolution [6].resolution6166 80.9% 74.0% 74.0% 79.2% 41.7% 33.3% 95.8% 87.5%
+[7].resolution8194 81.6% 70.7% 79.2% 85.4% 41.7% 33.3% 91.7% 87.5%
+[8].−ego3dencoding 68.9% 70.3% 66.7% 62.0% 54.2% 12.5% 75.0% 37.5%
+Encoding
+[9].−freezellmembedding 70.2% 50.7% 63.1% 62.5% 33.3% 20.8% 95.8% 79.2%
+TABLE V: Fine-tuning Ablations in Domain Datasets. Pretrained models are full parameter fine-tuned in individual Google
+Fractual and Bridge V2 Dataset. In LIBERO tasks, both full-tuning and LoRA-tuning are applied. fine-tuned with Gaussian
+adaptationfromnewdatasetdistributionhelpsalignspatialgridfeaturesandimproveinitializationandacceleratingconvergence.
+PickCokeCan MoveNear PutCarrotonPlate PutEggplantinYellowBasket
+#setting
+variantaggregation visualmatching variantaggregation visualmatching graspcarrot success graspeggplant success
+[1].fullparamstuning 88.0% 77.0% 72.7% 75.0% 29.2% 20.8% 100% 91.7%
+[2].+Gaussianadaption 90.1% 86.0% 74.6% 77.9% 29.2% 25.0% 100% 100%
+#setting LIBERO-Spatial LIBERO-Object LIBERO-Goal LIBERO-Long
+[3].Fullparamstuning 77.7±0.4% 73.3±0.4% 78.5±0.5% 43.9±0.8%
+[4].LoRAtuning 83.6±0.7% 84.8±0.9% 76.4±0.2% 50.1±0.3%
+[5].+Spatialembeddingadaption 88.2±0.5% 89.9±0.7% 78.6±0.6% 55.5±1.0%
+further improves its generalization capabilities.
+Compared to 1026-resolution action grids (#1v.s.#4), where
+M = M = 512,M = 2, SpatialVLA with 8194-
+trans trans grip
+resolution action grids (M = M = 4096,M = 2)
+trans trans grip
+achievessignificantperformanceboosts,particularlyin“move
+near” and “put eggplant in yellow basket” tasks, with success
+rate increments of +31.2% and +33.3%. Additionally, we find
+EmbeddingPretrained Embeddingwith EmbeddingFine-tuned
+onOXE FeatureAdaption onLIBERO-Spatial that lower-resolution models tend to learn smaller actions,
+causingslowmotionissues,andhigh-resolutionmodelsexhibit
+Fig. 8: Cross-sectional features visualization in spatial grids.
+improved transfer performance in the fine-tuning stage.
+The proposed spatial embedding adaptation aligns the pre-
+trained spatial grid features with those of the target fine-tuned According to the ablation results (#1v.s.#8), the proposed
+model, improving initialization and accelerating convergence. egocentric 3D position encoding (ego3d), incorporating 3D
+pointcloudfeatures,helpsthemodelovercomevariedlighting,
+color, textures, and camera poses, yielding stronger general-
+Pre-training in Mixture Dataset. The pre-training ablations
+izability in diverse manipulation scenarios. Models w/o ego3d
+in Tab. IV are conducted on a mixture dataset that combines
+suffer a significant performance drop in variant aggregation,
+Google Fractal [6] and BridgeData V2 [64]. All the models
+from 81.6% and 79.2% to 68.9% and 66.7%, due to their in-
+are trained from scratch on 8 A100 GPUs with 128 batch
+abilitytoadapttoscenechanges.Duringpre-training,wealso
+size for 120k steps. We select four tasks from the SimplerEnv
+observe from (#1v.s.#9) that freezing the language embedding
+benchmark [35], namely “Pick Coke Can” and “Move Near”
+and sharing a trainable spatial embedding helps to improve
+on the Google Robot, as well as “Put Carrot on Plate” and
+themodel’smanipulationcapabilities,whichisalsobeneficial
+“Put Eggplant in Yellow Basket” on the WidowX Robot, to
+for faster training and instruction following.
+dissect the model’s component-wise performance.
+In contrast to the conventional linear 256-bin action space Post-training in Domain Dataset. We conduct post-training
+discretization[6,13,30](#1v.s.#2),theproposedadaptivespa- ablations in Tab. V, separately fine-tuning on large-scale
+tial action grids exhibits significant advantages, particularly datasets Google Fractal and BridgeData V2 and BridgeData
+in the Google Robot task, with the promotion of +36.5% and V2, and comparing full fine-tuning and LoRA-tuning on the
++42.1% in variant aggregation and visual matching success small-scale LIBERO datasets [36]. The spatial embedding
+rates,respectively.Duringmodeltraining,wealsoobservethat adaption denotes partitioning spatial grids from the new
+models using linear 256-bin discretization converge slower, dataset Gaussian distribution and updating the spatial feature
+despiteachievinglowerL1Loss.Anothersuggestionistoini- embedding with the grids.
+tialize the grid partitioning based on the dataset distribution, On large-scale datasets (#1v.s.#2), models fine-tuned with
+rather than using a uniform grid (#1v.s.#3), which enables the spatialembeddingadaptationyieldmarginalgainsof+2.9%in
+modeltofocusonhigh-frequencyactionspacesadaptivelyand visualmatchingonMoveNear),asthelarge-scaledatasetdis-
+=== Page 10 ===
+tributioncloselymatchesthepre-trainingdistribution,allowing diffusiondecoding[5,12,32],whichdecodestokensintomul-
+the model to learn fine-grained features thereby limiting the tiple consecutive actions. In the future, integrating diffusion
+benefits of the adaption. While, on the LIBERO small dataset decoding with spatial grid action presentation and exploring
+tasks (#4v.s.#5), initializing the feature grid with the new dis- dynamic token numbers for action mapping will be valuable.
+tributionboostsmodelperformanceby+4.6%,+5.1%,+2.2%, Furthermore, as the model relies solely on current frame
+and +5.4% on LIBERO-Spatial, LIBERO-Object, LIBERO- observations and history tokens for action prediction, it faces
+Goal, and LIBERO-Long, respectively. As shown in Fig. 8, challengesinlong-horizontasks,similartoothergeneralizable
+featureadaptationfromthenewdistributionalignspre-trained policies [12, 48]. Future work should focus on designing effi-
+spatial features with the target fine-tuned model, improving cienthistoricalinformationperceptionmechanismstoenhance
+initialization and accelerating convergence. Moreover, LoRA the model’s long-sequence modeling capabilities, enabling
+fine-tuning outperforms full-parameter fine-tuning on small seamless task switching in real-time manipulation scenarios.
+dataset tasks (#3v.s.#4), making LoRA the preferred method Higher-Quality Diverse Data. SpatialVLA is pre-trained
+for small datasets. on OXE and RH20T, but the variable quality of OXE data
+can hinder training. Therefore, future work exploring optimal
+V. DISCUSSION,LIMITATIONS,ANDFUTUREWORK
+data composition and distilling high-quality subsets from the
+In this paper, we present SpatialVLA, an innovative vision-
+heterogeneous robot data collections is vital for boosting
+language-action model to explore efficient spatial represen-
+model efficiency and generalizability.
+tations for generalist robot policy. SpatialVLA introduces
+Acknowledgements. This work is supported by the Shanghai AI
+Ego3D position encoding and adaptive action grids to inject
+Laboratory and the National Natural Science Foundation of China
+3Dawarenessintorobotobservationrepresentationandspatial
+(624B2044).
+action tokenization through robot-agnostic designs, equipping
+the VLA models with the spatial understanding ability of the
+REFERENCES
+3D physical world. After pre-training on large-scale hetero-
+geneous robot datasets, we find that SpatialVLA is a more [1] Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, An-
+generalizable and transferrable generalist policy for zero- toineMiech,IainBarr,YanaHasson,KarelLenc,Arthur
+shot robot control. Our extensive real-world and simulated Mensch, Katherine Millican, Malcolm Reynolds, et al.
+robot experiments show that SpatialVLA leads to dramati- Flamingo:avisuallanguagemodelforfew-shotlearning.
+cally improved performance over the previous VLA models, In Proceedings of the Conference on Neural Information
+especially on tasks that require precise spatial understanding. Processing System (NeurIPS), 2022.
+We also show that the pre-trained SpatialVLA model can [2] SuneelBelkhale,YuchenCui,andDorsaSadigh. Hydra:
+effectivelyadapttonewrobotsetupsandtasksviaactiongrids Hybrid robot actions for imitation learning. In Proceed-
+re-discretization, which offers a new way for robot-specific ingsoftheConferenceonRobotLearning(CoRL),2023.
+post-training. In the following, we discuss our limitations of [3] Homanga Bharadhwaj, Jay Vakil, Mohit Sharma, Ab-
+SpatialVLA and potential solutions, hoping to inspire further hinav Gupta, Shubham Tulsiani, and Vikash Kumar.
+innovative works. Roboagent:Generalizationandefficiencyinrobotmanip-
+More Generalizable Distribution Fitting. In this paper, ulationviasemanticaugmentationsandactionchunking.
+SpatialVLA fits action signals with Gaussian distributions In Proceedings of the IEEE International Conference on
+to encode actions as spatial grids, demonstrating remarkable Robotics and Automation (ICRA), 2024.
+generalizability and flexible adaptation to new robot setups [4] Shariq Farooq Bhat, Reiner Birkl, Diana Wofk, Pe-
+through re-initialized grids and token embeddings. However, ter Wonka, and Matthias Mu¨ller. Zoedepth: Zero-shot
+thisraisesacrucialquestion:Ismodelingdatadistributionsas transfer by combining relative and metric depth. arXiv
+Gaussian optimal? We argue that Gaussian modeling is sub- preprint arXiv:2302.12288, 2023.
+optimal,asitcanleadtogridclusteringonspecificcoordinate [5] Kevin Black, Noah Brown, Danny Driess, Adnan Es-
+axes in extreme robot operation scenarios, such as single- mail, Michael Equi, Chelsea Finn, Niccolo Fusai, Lachy
+axis motion, resulting in lost motion capabilities on other Groom,KarolHausman,BrianIchter,etal. π :Avision-
+0
+axes. Moreover, dataset noises can further distort the spatial language-action flow model for general robot control.
+grid distribution. One future solution is to combine implicit arXiv preprint arXiv:2410.24164, 2024.
+data distribution modeling techniques, such as Variational [6] Anthony Brohan, Noah Brown, Justice Carbajal, Yev-
+Auto-Encoder-basedhigh-dimensionalfeaturespacemapping, gen Chebotar, Joseph Dabis, Chelsea Finn, Keerthana
+with explicit grid partitioning, enhancing action presentation Gopalakrishnan, Karol Hausman, Alex Herzog, Jasmine
+efficiency and noise robustness. Hsu, et al. Rt-1: Robotics transformer for real-world
+More Flexible VLA architectures. In our implementation, control at scale. arXiv preprint arXiv:2212.06817, 2022.
+we predict spatial action tokens through the autoregressive [7] Anthony Brohan, Noah Brown, Justice Carbajal, Yevgen
+paradigm and further decode them into actions, resulting in Chebotar,XiChen,KrzysztofChoromanski,TianliDing,
+each action being represented by 3 tokens. Although Spa- DannyDriess,AvinavaDubey,ChelseaFinn,etal. Rt-2:
+tialVLA achieves 21Hz inference speed, it is slower than Vision-language-action models transfer web knowledge
+=== Page 11 ===
+to robotic control. arXiv preprint arXiv:2307.15818, Junbo Wang, Haoyi Zhu, and Cewu Lu. Rh20t: A
+2023. comprehensive robotic dataset for learning diverse skills
+[8] Chi-Lam Cheang, Guangzeng Chen, Ya Jing, Tao Kong, inone-shot. InRSS2023WorkshoponLearningforTask
+Hang Li, Yifeng Li, Yuxiao Liu, Hongtao Wu, Jiafeng and Motion Planning, 2023.
+Xu, Yichu Yang, et al. Gr-2: A generative video- [19] RaoFu,JingyuLiu,XilunChen,YixinNie,andWenhan
+language-action model with web-scale knowledge for Xiong. Scene-llm: Extending language model for 3d
+robot manipulation. arXiv preprint arXiv:2410.06158, visual understanding and reasoning. arXiv preprint
+2024. arXiv:2403.11401, 2024.
+[9] Lawrence Yunliang Chen, Simeon Adebola, and Ken [20] Charles R Gallistel. The organization of learning. The
+Goldberg. Berkeley UR5 demonstration dataset. https: MIT Press, 1990.
+//sites.google.com/view/berkeley-ur5/home. [21] Siddhant Haldar and Lerrel Pinto. Polytask: Learning
+[10] Sijin Chen, Xin Chen, Chi Zhang, Mingsheng Li, Gang unified policies through behavior distillation. arXiv
+Yu,HaoFei,HongyuanZhu,JiayuanFan,andTaoChen. preprint arXiv:2310.08573, 2023.
+Ll3da: Visual interactive instruction tuning for omni-3d [22] Siddhant Haldar, Zhuoran Peng, and Lerrel Pinto. Baku:
+understanding reasoning and planning. In Proceedings An efficient transformer for multi-task policy learning.
+of the IEEE/CVF Conference on Computer Vision and In Proceedings of the Conference on Neural Information
+Pattern Recognition (CVPR), 2024. Processing System (NeurIPS), 2024.
+[11] XiChen,JosipDjolonga,PiotrPadlewski,BasilMustafa, [23] MinhoHeo,YoungwoonLee,DoohyunLee,andJosephJ
+Soravit Changpinyo, Jialin Wu, Carlos Riquelme Ruiz, Lim. Furniturebench: Reproducible real-world bench-
+SebastianGoodman,XiaoWang,YiTay,etal. Pali-x:On mark for long-horizon complex manipulation. In Pro-
+scaling up a multilingual vision and language model. In ceedings of Robotics: Science and Systems (RSS), 2023.
+Proceedings of the IEEE/CVF Conference on Computer [24] Yining Hong, Haoyu Zhen, Peihao Chen, Shuhong
+Vision and Pattern Recognition (CVPR), 2024. Zheng, Yilun Du, Zhenfang Chen, and Chuang Gan. 3d-
+[12] Cheng Chi, Zhenjia Xu, Siyuan Feng, Eric Cousineau, llm: Injecting the 3d world into large language models.
+YilunDu,BenjaminBurchfiel,RussTedrake,andShuran In Proceedings of the Conference on Neural Information
+Song. Diffusion policy: Visuomotor policy learning via Processing System (NeurIPS), 2023.
+actiondiffusion. InProceedingsofRobotics:Scienceand [25] Jiangyong Huang, Silong Yong, Xiaojian Ma, Xiongkun
+Systems (RSS), 2023. Linghu, Puhao Li, Yan Wang, Qing Li, Song-Chun
+[13] Open X-Embodiment Collaboration, Abby O’Neill, Ab- Zhu, Baoxiong Jia, and Siyuan Huang. An embodied
+dul Rehman, Abhiram Maddukuri, Abhishek Gupta, Ab- generalist agent in 3d world. In Proceedings of the
+hishek Padalkar, Abraham Lee, Acorn Pooley, Agrim International Conference on Machine Learning (ICML),
+Gupta, Ajay Mandlekar, Ajinkya Jain, et al. Open x- 2024.
+embodiment: Robotic learning datasets and rt-x models. [26] Eric Jang, Alex Irpan, Mohi Khansari, Daniel Kappler,
+In Proceedings of the IEEE International Conference on FrederikEbert,CoreyLynch,SergeyLevine,andChelsea
+Robotics and Automation (ICRA), 2024. Finn. Bc-z: Zero-shot task generalization with robotic
+[14] Zichen Jeff Cui, Yibin Wang, Nur Muhammad Mahi imitation learning. In Proceedings of the Conference on
+Shafiullah, and Lerrel Pinto. From play to policy: Robot Learning (CoRL), 2022.
+Conditional behavior generation from uncurated robot [27] Dmitry Kalashnikov, Alex Irpan, Peter Pastor, Julian
+data. In Proceedings of International Conference on Ibarz, Alexander Herzog, Eric Jang, Deirdre Quillen,
+Learning Representations (ICLR), 2023. Ethan Holly, Mrinal Kalakrishnan, Vincent Vanhoucke,
+[15] Shivin Dass, Jullian Yapeter, Jesse Zhang, Jiahui Zhang, et al. Qt-opt: Scalable deep reinforcement learning for
+Karl Pertsch, Stefanos Nikolaidis, and Joseph J. Lim. vision-basedroboticmanipulation. InProceedingsofthe
+Clvr jaco play dataset, 2023. URL https://github.com/ Conference on Robot Learning (CoRL), 2018.
+clvrai/clvr jaco play dataset. [28] Siddharth Karamcheti, Suraj Nair, Ashwin Balakrishna,
+[16] Ria Doshi, Homer Walke, Oier Mees, Sudeep Dasari, Percy Liang, Thomas Kollar, and Dorsa Sadigh. Pris-
+and Sergey Levine. Scaling cross-embodied learning: matic vlms: Investigating the design space of visually-
+Onepolicyformanipulation,navigation,locomotionand conditioned language models. In Proceedings of the
+aviation. In Proceedings of the Conference on Robot International Conference on Machine Learning (ICML),
+Learning (CoRL), 2024. 2024.
+[17] Frederik Ebert, Yanlai Yang, Karl Schmeckpeper, [29] Alexander Khazatsky, Karl Pertsch, Suraj Nair, Ash-
+Bernadette Bucher, Georgios Georgakis, Kostas Dani- win Balakrishna, Sudeep Dasari, Siddharth Karam-
+ilidis, Chelsea Finn, and Sergey Levine. Bridge data: cheti, Soroush Nasiriany, Mohan Kumar Srirama,
+Boosting generalization of robotic skills with cross- Lawrence Yunliang Chen, Kirsty Ellis, et al. Droid: A
+domain datasets. In Proceedings of Robotics: Science large-scale in-the-wild robot manipulation dataset. arXiv
+and Systems (RSS), 2022. preprint arXiv:2403.12945, 2024.
+[18] Hao-Shu Fang, Hongjie Fang, Zhenyu Tang, Jirong Liu, [30] Moo Jin Kim, Karl Pertsch, Siddharth Karamcheti, Ted
+=== Page 12 ===
+Xiao, Ashwin Balakrishna, Suraj Nair, Rafael Rafailov, 2024.
+EthanFoster,GraceLam,PannagSanketi,etal.Openvla: [42] Jianlan Luo, Charles Xu, Fangchen Liu, Liam Tan,
+An open-source vision-language-action model. arXiv Zipeng Lin, Jeffrey Wu, Pieter Abbeel, and Sergey
+preprint arXiv:2406.09246, 2024. Levine. Fmb: a functional manipulation benchmark for
+[31] Qixiu Li, Yaobo Liang, Zeyu Wang, Lin Luo, Xi Chen, generalizableroboticlearning. TheInternationalJournal
+Mozheng Liao, Fangyun Wei, Yu Deng, Sicheng Xu, of Robotics Research, 2024.
+Yizhong Zhang, et al. Cogact: A foundational [43] Corey Lynch, Ayzaan Wahid, Jonathan Tompson, Tianli
+vision-language-action model for synergizing cognition Ding, James Betker, Robert Baruch, Travis Armstrong,
+and action in robotic manipulation. arXiv preprint andPeteFlorence.Interactivelanguage:Talkingtorobots
+arXiv:2411.19650, 2024. in real time. IEEE Robotics and Automation Letters,
+[32] Xinghang Li, Peiyan Li, Minghuan Liu, Dong Wang, 2023.
+Jirong Liu, Bingyi Kang, Xiao Ma, Tao Kong, Hanbo [44] Ajay Mandlekar, Yuke Zhu, Animesh Garg, Jonathan
+Zhang, and Huaping Liu. Towards generalist robot Booher, Max Spero, Albert Tung, Julian Gao, John
+policies:Whatmattersinbuildingvision-language-action Emmons,AnchitGupta,EmreOrbay,etal. Roboturk:A
+models. arXiv preprint arXiv:2412.14058, 2024. crowdsourcingplatformforroboticskilllearningthrough
+[33] Xinghang Li, Peiyan Li, Minghuan Liu, Dong Wang, imitation. In Proceedings of the Conference on Robot
+Jirong Liu, Bingyi Kang, Xiao Ma, Tao Kong, Hanbo Learning (CoRL), 2018.
+Zhang, and Huaping Liu. Towards generalist robot [45] Oier Mees, Jessica Borja-Diaz, and Wolfram Burgard.
+policies:Whatmattersinbuildingvision-language-action Grounding language with visual affordances over un-
+models. arXiv preprint arXiv:2412.14058, 2024. structureddata. InProceedingsoftheIEEEInternational
+[34] Xinghang Li, Minghuan Liu, Hanbo Zhang, Cunjun Yu, Conference on Robotics and Automation (ICRA), 2023.
+Jie Xu, Hongtao Wu, Chilam Cheang, Ya Jing, Weinan [46] Russell Mendonca, Shikhar Bahl, and Deepak Pathak.
+Zhang, Huaping Liu, et al. Vision-language foundation Structured world models from human videos. In Pro-
+models as effective robot imitators. In Proceedings of ceedings of the Conference on Robot Learning (CoRL),
+International Conference on Learning Representations 2023.
+(ICLR), 2024. [47] SoroushNasiriany,TianGao,AjayMandlekar,andYuke
+[35] Xuanlin Li, Kyle Hsu, Jiayuan Gu, Karl Pertsch, Oier Zhu. Learning and retrieval from prior data for skill-
+Mees,HomerRichWalke,ChuyuanFu,IshikaaLunawat, based imitation learning. In Proceedings of the Confer-
+Isabel Sieh, Sean Kirmani, Sergey Levine, Jiajun Wu, ence on Robot Learning (CoRL), 2023.
+Chelsea Finn, Hao Su, Quan Vuong, and Ted Xiao. [48] Octo Model Team, Dibya Ghosh, Homer Walke, Karl
+Evaluatingreal-worldrobotmanipulationpoliciesinsim- Pertsch, Kevin Black, Oier Mees, Sudeep Dasari, Joey
+ulation. In Proceedings of the Conference on Robot Hejna, Charles Xu, Jianlan Luo, Tobias Kreiman, You
+Learning (CoRL), 2024. Liang Tan, Lawrence Yunliang Chen, Pannag Sanketi,
+[36] Bo Liu, Yifeng Zhu, Chongkai Gao, Yihao Feng, Qiang QuanVuong,TedXiao,DorsaSadigh,ChelseaFinn,and
+Liu, Yuke Zhu, and Peter Stone. Libero: Benchmarking Sergey Levine. Octo: An open-source generalist robot
+knowledge transfer for lifelong robot learning. arXiv policy. In Proceedings of Robotics: Science and Systems
+preprint arXiv:2306.03310, 2023. (RSS), 2024.
+[37] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae [49] Emilio Parisotto, Jimmy Lei Ba, and Ruslan Salakhut-
+Lee. Visual instruction tuning. In Proceedings of the dinov. Actor-mimic: Deep multitask and transfer re-
+Conference on Neural Information Processing System inforcement learning. In Proceedings of International
+(NeurIPS), 2024. Conference on Learning Representations (ICLR), 2016.
+[38] Huihan Liu, Soroush Nasiriany, Lance Zhang, Zhiyao [50] Zhiliang Peng, Wenhui Wang, Li Dong, Yaru Hao,
+Bao, and Yuke Zhu. Robot learning on the job: Human- Shaohan Huang, Shuming Ma, and Furu Wei. Kosmos-
+in-the-loop autonomy and learning during deployment. 2: Grounding multimodal large language models to the
+In Proceedings of Robotics: Science and Systems (RSS), world. arXiv preprint arXiv:2306.14824, 2023.
+2023. [51] Karl Pertsch, Kyle Stachowicz, Brian Ichter, Danny
+[39] SongmingLiu,LingxuanWu,BangguoLi,HengkaiTan, Driess, Suraj Nair, Quan Vuong, Oier Mees, Chelsea
+Huayu Chen, Zhengyi Wang, Ke Xu, Hang Su, and Jun Finn, and Sergey Levine. Fast: Efficient action tokeniza-
+Zhu. Rdt-1b: a diffusion foundation model for bimanual tion for vision-language-action models. arXiv preprint
+manipulation. arXiv preprint arXiv:2410.07864, 2024. arXiv:2501.09747, 2025.
+[40] Robert H Logie. Visuo-spatial working memory. Psy- [52] JeanPiaget.Child’sConceptionofSpace:SelectedWorks
+chology Press, 2014. vol 4. Routledge, 2013.
+[41] Jianlan Luo, Charles Xu, Xinyang Geng, Gilbert Feng, [53] Delin Qu, Qizhi Chen, Pingrui Zhang, Xianqiang Gao,
+KuanFang,LiamTan,StefanSchaal,andSergeyLevine. Junzhe Li, Bin Zhao, Dong Wang, and Xuelong Li.
+Multi-stage cable routing through hierarchical imitation Livescene: Language embedding interactive radiance
+learning. IEEETransactionsonRobotics,40:1476–1491, fields for physical scene rendering and control. arXiv
+=== Page 13 ===
+preprint arXiv:2406.16038, 2024. (NeurIPS), 2024.
+[54] Gabriel Quere, Annette Hagengruber, Maged Iskandar, [66] Ge Yan, Kris Wu, and Xiaolong Wang. ucsd kitchens
+Samuel Bustamante, Daniel Leidner, Freek Stulp, and dataset. https://github.com/geyan21/rlds dataset builder/
+Jo¨rn Vogel. Shared control templates for assistive tree/main/ucsd kitchens, 2023.
+robotics. In Proceedings of the IEEE International [67] JihanYang,ShushengYang,AnjaliWGupta,RilynHan,
+Conference on Robotics and Automation (ICRA), 2020. Li Fei-Fei, and Saining Xie. Thinking in space: How
+[55] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya multimodal large language models see, remember, and
+Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, recall spaces. arXiv preprint arXiv:2412.14171, 2024.
+Amanda Askell, Pamela Mishkin, Jack Clark, et al. [68] XiaohuaZhai,BasilMustafa,AlexanderKolesnikov,and
+Learning transferable visual models from natural lan- Lucas Beyer. Sigmoid loss for language image pre-
+guage supervision. In Proceedings of the International training. In Proceedings of the IEEE/CVF International
+Conference on Machine Learning (ICML), 2021. Conference on Computer Vision (ICCV), 2023.
+[56] Erick Rosete-Beas, Oier Mees, Gabriel Kalweit, Joschka [69] HaoyuZhen,XiaowenQiu,PeihaoChen,JinchengYang,
+Boedecker, and Wolfram Burgard. Latent plans for task- Xin Yan, Yilun Du, Yining Hong, and Chuang Gan.
+agnostic offline reinforcement learning. In Proceedings 3d-vla: A 3d vision-language-action generative world
+of the Conference on Robot Learning (CoRL), 2022. model. In Proceedings of the International Conference
+[57] Andrei A Rusu, Sergio Gomez Colmenarejo, Caglar on Machine Learning (ICML), 2024.
+Gulcehre,GuillaumeDesjardins,JamesKirkpatrick,Raz- [70] JinliangZheng,JianxiongLi,DongxiuLiu,YinanZheng,
+vanPascanu,VolodymyrMnih,KorayKavukcuoglu,and Zhihao Wang, Zhonghong Ou, Yu Liu, Jingjing Liu, Ya-
+Raia Hadsell. Policy distillation. In Proceedings of Qin Zhang, and Xianyuan Zhan. Universal actions for
+International Conference on Learning Representations enhanced embodied foundation models. arXiv preprint
+(ICLR), 2016. arXiv:2501.10105, 2025.
+[58] Saumya Saxena, Mohit Sharma, and Oliver Kroe- [71] RuijieZheng,YongyuanLiang,ShuaiyiHuang,Jianfeng
+mer. Multi-resolution sensing for real-time control with Gao, Hal Daume´ III, Andrey Kolobov, Furong Huang,
+vision-language models. In Proceedings of the Confer- and Jianwei Yang. Tracevla: Visual trace prompting en-
+ence on Robot Learning (CoRL), 2023. hances spatial-temporal awareness for generalist robotic
+[59] Nur Muhammad Mahi Shafiullah, Anant Rai, Haritheja policies. arXiv preprint arXiv:2412.10345, 2024.
+Etukuru,YiqianLiu,IshanMisra,SoumithChintala,and [72] Gaoyue Zhou, Victoria Dean, Mohan Kumar Srirama,
+Lerrel Pinto. On bringing robots home. arXiv preprint Aravind Rajeswaran, Jyothish Pari, Kyle Hatch, Aryan
+arXiv:2311.16098, 2023. Jain, Tianhe Yu, Pieter Abbeel, Lerrel Pinto, et al. Train
+[60] Rutav Shah, Roberto Mart´ın-Mart´ın, and Yuke Zhu. offline, test online: A real robot learning benchmark. In
+Mutex: Learning unified policies from multimodal task Proceedings of the IEEE International Conference on
+specifications. In Proceedings of the Conference on Robotics and Automation (ICRA), 2023.
+Robot Learning (CoRL), 2023. [73] Chenming Zhu, Tai Wang, Wenwei Zhang, Jiangmiao
+[61] Mohit Shridhar, Lucas Manuelli, and Dieter Fox. Pang, and Xihui Liu. Llava-3d: A simple yet effective
+Perceiver-actor:Amulti-tasktransformerforroboticma- pathway to empowering lmms with 3d-awareness. arXiv
+nipulation. In Proceedings of the Conference on Robot preprint arXiv:2409.18125, 2024.
+Learning (CoRL), 2022. [74] Xinghao Zhu, Ran Tian, Chenfeng Xu, Mingxiao Huo,
+[62] Andreas Steiner, Andre´ Susano Pinto, Michael Tschan- Wei Zhan, Masayoshi Tomizuka, and Mingyu Ding.
+nen, Daniel Keysers, Xiao Wang, Yonatan Bitton, Fanucmanipulation:Adatasetforlearning-basedmanip-
+Alexey Gritsenko, Matthias Minderer, Anthony Sher- ulation with fanuc mate 200id robot. https://sites.google.
+bondy, Shangbang Long, et al. Paligemma 2: A com/berkeley.edu/fanuc-manipulation, 2023.
+family of versatile vlms for transfer. arXiv preprint [75] Yifeng Zhu, Peter Stone, and Yuke Zhu. Bottom-up
+arXiv:2412.03555, 2024. skill discovery from unsegmented demonstrations for
+[63] Edward C Tolman. Cognitive maps in rats and men. long-horizon robot manipulation. IEEE Robotics and
+Psychological review, 55(4):189, 1948. Automation Letters, 7(2):4126–4133, 2022.
+[64] HomerWalke,KevinBlack,AbrahamLee,MooJinKim, [76] Yifeng Zhu, Zhenyu Jiang, Peter Stone, and Yuke
+Max Du, Chongyi Zheng, Tony Zhao, Philippe Hansen- Zhu. Learning generalizable manipulation policies with
+Estruch, Quan Vuong, Andre He, Vivek Myers, Kuan object-centric 3d representations. In Proceedings of the
+Fang, Chelsea Finn, and Sergey Levine. Bridgedata v2: Conference on Robot Learning (CoRL), 2023.
+A dataset for robot learning at scale. In Proceedings of [77] YifengZhu,AbhishekJoshi,PeterStone,andYukeZhu.
+the Conference on Robot Learning (CoRL), 2023. Viola: Imitation learning for vision-based manipulation
+[65] Lirui Wang, Xinlei Chen, Jialiang Zhao, and Kaiming with object proposal priors. In Proceedings of the
+He. Scaling proprioceptive-visual learning with hetero- Conference on Robot Learning (CoRL), 2023.
+geneous pre-trained transformers. In Proceedings of the
+Conference on Neural Information Processing System
+=== Page 14 ===
+TABLE VI: SpatialVLA Dataset Mixtures Details.
+SpatialVLA: Exploring Spatial
+Dataset Weight trajectory sample
+Representations for
+Bridge[64,17] 15.34% 60064 2135463
+Visual-Language-Action Model Fractal[6] 14.71% 87212 3786400
+Droid[29] 11.66% 92233 27044326
+BC-Z[26] 8.64% 43264 6015535
+Supplementary Material Kuka[27] 7.06% 209880 2455879
+RH20T[18] 5.67% 104392 52644433
+StanfordHydra[2] 5.15% 570 358234
+LanguageTable[43] 5.06% 442226 7045476
+APPENDIX
+TacoPlay[56,45] 3.42% 3603 237798
+A. Dataset Mixture Details FurnitureBench[23] 2.84% 5100 3948057
+Roboturk[44] 2.69% 1995 187507
+Fig. 9 illustrates the dataset mixture for SpatialVLA. The UtaustinMutex[60] 2.60% 1500 361883
+training dataset is primarily composed of: Bridge (15.34%), AustinSailor[47] 2.54% 240 353094
+AustinSirius[38] 2.01% 559 279939
+Fractal (14.71%), Droid (11.66%), BC-Z (8.64%), Kuka DobbE[59] 1.64% 5208 1139911
+(7.06%), RH20T (5.67%), Stanford Hydra (5.15%) and Lan- FMBDataset[42] 1.63% 8612 1137459
+guageTable(5.06%).WeextendedOpenVLA’sdatamixingby BerkeleyAutolabUR5[9] 1.41% 1000 97939
+Toto[72] 1.17% 1003 325699
+adding RH20T [18] and training/testing individual datasets on Viola[77] 1.10% 150 76324
+a real robot evaluation, down-weighting Kuka, Toto, Berkeley IAMLabCMUPickupInsert[58] 1.05% 631 146241
+Fanuc Manipulation, and FMB Dataset [42]. Notably, we NYUFranka[14] 0.97% 456 44875
+JacoPlay[15] 0.56% 1085 77965
+found that an excessive proportion of the FMB Dataset led to BerkeleyCableRouting[41] 0.30% 1647 42328
+a significant rightward bias in the robot, and the Kuka dataset AustinBuds[75] 0.25% 50 34112
+lacked clear prompts. BerkeleyFanucManipulation[74] 0.22% 415 62613
+CMUStretch[46] 0.18% 135 25016
+DLREDANSharedControl[54] 0.06% 104 8928
+UCSDKitchen[66] 0.06% 150 3970
+into16,32,and8bins,respectively,withintheircorresponding
+√
+ranges of [0,π], [−π,π], and [0, 3]. Similarly, roll, pitch,
+28Datasets
+and yaw are each divided into 16 bins within the range
+1.1MillionEpisodes
+of [−1,−1]. Then, we calculate the cumulative probability
+density (CDF) and compute the percent point function (PPF)
+to achieve an exact grid discretization. Notably, we linearize
+the action spatial grid into V = 8194 spatial action token
+embeddings, sharing parameters with the LLM embedding, to
+enable seamless model training. During encoding, we digitize
+Fig. 9: SpatialVLA Training Dataset Mixture Visualization. rotational and translational actions and compute linear grid
+indices,whicharethenqueriedtoretrievefeaturesfortraining.
+B. Model Architecture Details
+Conversely, in decoding, we gridify the inferred indices into
+Model Architecture. Tab. VII provides a detailed illustration 3D positions and unnormalize them into continuous actions.
+of the model components and inputoutput of SpatialVLA.
+C. More Discussion
+SpatialVLA employsPaligemma2 as thebackbone, consisting
+of Siglip Vision Tower, SpatialVLA MultiModal Projector, Q1. Advantage and limitation of spatial discretization?
+Gemma2Model, Vision Zoe Model, Ego3D Position Embed- ▷Autoregressive paradigm with discretized action token has
+ding MLP, and Spatial Embedding. The input RGB image been widely adopted in existing VLAs [7, 30, 31], demon-
+of shape 224×224 is separately fed into Siglip Vision Tower strating significant advantages in large-scale training, seam-
+and Vision Zoe Model to extract visual features and predict less LLM integration, and instruction-following capabilities.
+depth, respectively. Subsequently, we back-project the depth The proposed Adaptive Action Grids adaptively align het-
+intothepointcloud,computetheaveragehigh-frequencypoint erogeneous robotic actions to 3D space (Fig. 2), delivering
+cloud encoding per sub-patch, and project it onto the Siglip notable strengths in efficient action representation (Fig. 3),
+imagepatchdimensionwithEgo3DPositionEmbeddingMLP, fasttokendecoding(Fig.1),andflexiblepost-trainingtransfer
+followed by addition. (Sec. III-B). ▷A key concern is whether discretization limits
+ActionGridsEncodingandDecoding.Weencodetheaction precision. As shown in Tab. VIII, experiments across four
+space into adaptive action grids with Gaussian distributions grid resolutions demonstrate that performance improves from
+and decode the action tokens from the grids. algorithm 1 1026to8194,butthereafterexhibitsagradualplateauoreven
+outlines the construction of SpatialVLA’s action grid and the a decline, beyond 6166. Notably, our method outperforms the
+action encoding-decoding pipeline. We discretize θ, ϕ, and r 8196uniformpartitions#1U8196withonlyhalfpartitions#3
+=== Page 15 ===
+Algorithm 1 Python pseudocode for SpatialVLA action encoding and decoding.
+# N: Number of Grid Intervals (e.g., 8)
+# R: Range for Grids (e.g., [0, pi])
+# P: Probability of Each Grids
+# G: Adaptive Action Grids with Embedding of Size E
+# cdf: Cumulative Distribution Function
+# ppf: Percent Point Function
+# create adptive action grids from gaussian distributions
+for gaussians, grid_params in GS(theta, phi, r, roll, pitch, yaw):
+for (mu, sigma), (R, N) in gaussians, grid_params:
+P = linspace(cdf(R, mu, sigma), cdf(R, mu, sigma), N + 1)
+G.x = ppf(P, mu, sigma) # coordinates
+G.fea = Embedding(N, E) # features
+G.add_gripper() # add gripper 2 grids
+# linearization 3d grids to share parameters with llm embedding
+# trans: [N_theta * N_phi * N_r], rot: [N_roll * N_pitch * N_yaw]
+# gripper: [N_gripper]
+G.linearization()
+# T: Number of Timesteps
+# D: Dataset
+for t in range(0, T):
+# if encode
+a = D(t) # normalized action [theta, phi, r, roll, pitch, yaw, gripper]
+# digitize continuous actions to 3d grids
+d_theta, d_phi, d_r = digitize(G, theta, phi, r) # trans
+d_roll, d_pitch, d_yaw = digitize(G, roll, pitch, yaw) # rot
+# linearization
+id_trans = linearize(d_theta, d_phi, d_r)
+id_rot = linearize(d_roll, d_pitch, d_yaw)
+id_gripper = 1 if gripper > 0.5 else 0 # gripper
+token_trans, token_rot, token_gripper = G.fea(id_trans, id_rot, id_gripper)
+# if decode
+(id_trans, id_rot, id_gripper) = SpatialVLA([image], prompt) # predict 3 action token id
+d_theta, d_phi, d_r = gridification(G, id_trans)
+d_roll, d_pitch, d_yaw = gridification(G, id_rot)
+gripper = id_gripper
+a = unnomalize(d_theta, d_phi, d_r, d_roll, d_pitch, d_yaw, gripper)
+TABLE VII: Model Architecture of SpatialVLA.
+Module Layer Type Layer Num Input Shape Output Shape
+Siglip Vision Tower
+SiglipVisionEmbeddings 1 (B, 3, H, W) (B, 1152, H/14, W/14)
+SiglipVisionTransformer SiglipEncoderLayer 27 (B, N, 1152) (B, N, 1152)
+LayerNorm 1 (B, N, 1152) (B, N, 1152)
+SpatialVLAMultiModalProjector
+Linear Linear 1 (B, N, 1152) (B, N, 2304)
+Gemma2Model
+Embed Tokens Embedding 1 (B, T) (B, T, 2304)
+Layers Gemma2DecoderLayer 26 (B, S, 2304) (B, S, 2304)
+Norm Gemma2RMSNorm 1 (B, S, 2304) (B, S, 2304)
+Spatial Embedding
+Spatial Embedding Embedding 1 (B, T) (B, T, 2304)
+Vision Zoe Model
+Vision Zoe Model ZoeDepthForDepthEstimation 1 (B, 3, H, W) (B, 1, H, W)
+Ego3DPositionEmbeddingMLP
+Linear 1 (B, 204) (B, 1152)
+LayerNorm 1 (B, 1152) (B, 1152)
+position embedding head
+ReLU 1 (B, 1152) (B, 1152)
+Linear 1 (B, 1152) (B, 1152)
+reso4610,whichisattributedtoouradaptivegridpartitioning For the simplerenv [35] evaluation in ??, SpatialVLA also
+strategy based on Gaussian probability density, allowing the matches or outperforms the latest SOTA model π . ▷ How-
+0
+model to concentrate on high-probability, fine-grained action ever, higher-resolution or higher-dimensional action space
+spaces,asdepictedinFig.3.Moreover,additionalexperiments introduces additional parameters to the 128k vocabulary,
+in Fig. 10 and Tab. IX show that SpatialVLA with discrete necessitatingatrade-offbetweenprecisionandefficiency.The
+action space can handle fine-grained manipulation effectively. model may incur parameter overhead for humanoid robots
+=== Page 16 ===
+TABLE IX: Fine-grained manipulation and depth ablations.
+with higher degrees of freedom. A flexible solution is to
+#setting(D:depth) cleantable push-T insertcharger maketea avg
+share action grids among embodiments like dexterous hands,
+OpenVLA[30] 72.7% 72.7% 18.2% 54.5% 54.5%
+bimanual arms, and legs, to be explored in future work. SpatialVLAw/oD 63.6% 54.5% 9.1% 54.5% 45.4%
+SpatialVLAsensorD 90.9% 81.8% 27.3% 81.8% 70.5%
+SpatialVLAzoeD 90.9% 90.9% 27.3% 81.8% 72.7%
+TABLE VIII: Action discretization ablations on sim-
+plerenv [35].
+robot demonstrations, covering a diverse range of robot em-
+#setting pickcokecan movenear putcarrot puteggplant
+aggregation matching aggregation matching partial success partial success bodiments, scenes, and tasks. Our framework is built entirely
+[1].U8196 77.9% 28.0% 64.2% 55.0% 45.8% 12.5% 79.2% 54.2% on top of the HuggingFace Transformers, with DeepSpeed
+[2].reso1026 74.4% 67.3% 59.1% 54.2% 45.8% 25.0% 66.7% 54.2%
+[3].reso4610 76.7% 68.0% 69.8% 79.2% 41.7% 33.3% 83.3% 75.0% integration for memory-efficient and fast-distributed training,
+[4].reso6166 80.9% 74.0% 74.0% 79.2% 41.7% 33.3% 95.8% 87.5%
+[5].reso8194 81.6% 70.7% 79.2% 85.4% 41.7% 33.3% 91.7% 87.5%
+utilizingZeROstage1.Themodelinputconsistsofa224×224
+image and language instruction, and the output for each
+Q2. Handle more complex task beyond pick-and-place?
+inference is 4 actions with 12 tokens. SpatialVLA training
+▷ To address reviewers’ concerns on generalizability and
+involves two stages. The first stage trains the model on the
+fine-grained tasks, we evaluate SpatialVLA with four new
+full dataset for 160k steps, achieving 90% accuracy. After
+dexterity tasks in Fig. 10 and Tab. IX. SpatialVLA performs
+removing the DROID dataset in stage 2, the model is fine-
+well even in complex fine-grained manipulation, significantly
+tuned for 40k steps, reaching over 95% accuracy. Fig. 12
+outperformingOpenVLA[13](72.7%vs54.5%).Asdiscussed
+shows the training curves, demonstrating a notable accuracy
+earlier, this shows the action grid resolution is not a critical
+boost and loss reduction after removing DROID. Notably,
+limiting factor, benefiting from its probability-adaptive grids.
+data augmentation, including random crop and color jitter, is
+critical in enhancing the model’s performance, particularly in
+the SimplerEnv and WidowX Bridge zero-shot tasks, and real
+robot post-training tasks.
+Deployment. We deploy SpatialVLA on the BridgeData V2
+#1 Clean Table #2 Push T #3 Insert charger #4 Make Tea
+Fig. 10: Fine-grained manipulation beyond pick-and-place. WidowX and Franka robots. The model operates at approxi-
+mately20HzonasingleNVIDIARTX4090GPUwith8.5GB
+Q3. Complexity and noise analysis of ZoeDepth model? ▷
+memoryconsumptionforbothsimulationandreal-worldeval-
+We must emphasize that ZoeDepth is used because depth is
+uations. We implement ensemble actions with horizons of 1
+unavailable for all 28 datasets in OXE [13] and RH20T [18].
+or 4 as needed, and optimize the gripper’s stick step from 1
+In pretraining, we utilize ZoeDepth to predict depth and
+to 15 - a critical adjustment for real-world deployment. For
+ensure feasibility. In contrast, downstream fine-tuning allows
+the BridgeV2 WidowX setup, we utilize a WidowX 250 robot
+for either ZoeDepth or sensor-captured depth in Tab. IX.
+equipped with a statically-mounted Realsense D435 camera
+Visualization results show that sensor depth is noisy and
+providing input images. The hardware configuration strictly
+disruptive, while ZoeDepth provides smoother inputs. Our
+follows Bridge DATA V2 [64] specifications, particularly
+model with ZoeDepth achieves 72.7% ACC, surpassing mod-
+regardingtheD435camera’spositioningrelativetotherobotic
+elswithsensordepth(70.5%)andwithoutdepth(45.4%).This
+arm. Since Bridge DATA V2 does not specify exact relative
+confirmsthesignificantbenefitsofEgo3DPEwithZoeDepth,
+positions between the robot base and manipulated objects,
+whichcapturesrelativespatiallayouts,renderingprecisescale
+we meticulously calibrated the robot arm’s placement in the
+unnecessary.Notably,ZoeDepthremainsfixedduringtraining,
+workspace by referencing scenario images from the Bridge-
+occupying only 8.6% of parameters and 0.06s per action time
+DATA V2 dataset to ensure maximal environmental consis-
+cost,makingitanefficientsolution.Additionally,LayerNorm
+tency. For real-world fine-tuning tasks, we employ a Franka
+andzeroweightinitializationofEgo3DPEhelpmitigatenoise
+Emika Panda robot with impedance control capabilities [77].
+issues.
+During inference, scene perception relies solely on a tripod-
+mounted Realsense D435 camera. All fine-tuning datasets are
+collectedviahumanteleoperationusingaSpacemousedevice,
+sampled at 10Hz.
+E. Detailed Evaluation Setup
+RGB realsense d435i Zoedepth L1 error In this section, we provide comprehensive details on
+Fig. 11: Depth across sensor, Zoe, and L1 (avg≤0.2). the evaluation setups for real-world experiments using
+BridgeData V2 WidowX and Franka robots, as discussed
+D. Model Pre-training and Deployment.
+in Sec. IV-A, Sec. IV-C, and Sec. IV-B.
+Pre-training. SpatialVLA was pre-trained on 64 A100 GPUs 1.Zero-shotRobotControlEvaluationonWidowXRobot.
+for 10 days, with a batch size of 2048, using AdamW with a As described in IV-A, we conducted extensive evaluations
+learning rate of 2e-5, and a linear scheduler, with no weight of 5 generalist robot manipulation policies across 7 zero-
+decay and a 0.005 warm-up ratio. The model is initialized shot tasks, with 11 trials per task on a real-world BridgeV2
+fromPaligemma2backbone[62]andfitswith1.1Millionreal WidowX Robot. The specific task settings are:
+=== Page 17 ===
+0.98
+0.96
+0.94
+0.92
+0.9
+0.88
+0.86
+0.84
+0.82
+0.8
+0.78
+0.76 0 20k 40k 60k 80k 100k 120k 140k 160k 180k 200k 22
+1.2
+1.1
+1
+0.9
+0.8
+0.7
+0.6
+0.5
+0.4
+0.3
+0.2
+0.1-20k 0 20k 40k 60k 80k 100k 120k 140k 160k 180k 200k 22
+Fig. 12: Accuracy (top) and loss (bottom) curves of SpatialVLA during training in stage 1 (orange) and stage 2 (green).
+• Closemicrowave:Therobotmustcloseatoymicrowave tests the manipulation of revolute joints and includes 50
+doorpositionedatvariousangles(30°,45°,60°,and90°), human demonstrations.
+testing the model’s capability to manipulate articulated • Place the white pot on the cutting board: A pick-and-
+objects in different configurations. placetaskrequiringtherobottograspawhitebowlfrom
+• Lift red chili pepper: A basic pick task requiring the therightsideofthetableandplaceitonacuttingboard,
+robot to grasp and lift a red pepper from the sink, trained with 100 human demonstrations.
+designed to evaluate the model’s object localization ac- • Put the banana in the basket: Another pick-and-place
+curacy. task where the robot must transfer a banana from the
+• Put carrot in the plate: The robot needs to perform a table to a basket. With only 50 human demonstrations,
+pick-and-placetaskbygraspingacarrotfromthesinkand this task evaluates model performance with limited data.
+placing it on a plate, assessing both grasping precision • Closethedrawer:Teststherobot’sabilitytomanipulate
+and placement accuracy. objects with prismatic joints, trained on 100 human
+• Put eggplant in the basket: A complex task requiring demonstrations.
+the robot to identify and pick an eggplant from a sink • Placered/blue/greencubeongreencar:Aninstruction-
+containing multiple vegetables, then place it in a yellow following task where the robot must identify and place
+basket. This task evaluates object discrimination and a specifically colored cube (red, green, or blue) onto a
+spatial awareness. green car. Training included 50 demonstrations for each
+• Put purple cup on white plate: The robot must identify color, totaling 150.
+and transfer a purple cup to a white plate within a sink • Grasp the orange/croissant in the plate: Another
+containing multiple plates, testing color recognition and instruction-following task requiring the robot to transfer
+precise manipulation. eitheracroissant(left)oranorange(right)toacentrally-
+• Put green cup on pink cloth: A task involving grasping placed plate, based on verbal commands. Trained with
+agreencupfromthestoveandplacingitonapinkcloth, 200 total demonstrations (100 per object).
+serving as a baseline for spatial understanding evaluation • Multi-task of push/place/put/close: A comprehensive
+in Sec. IV-C. evaluation combining the previous manipulation tasks,
+• Put purple cup on pink cloth: Similar to the previous testing the model’s ability to handle diverse object inter-
+task but with a purple cup in the sink, this variation actions and spatial relationships. This extends the carrot
+tests the model’s ability to generalize manipulation skills placement task from Sec. IV-A by varying target heights
+across different object positions and contexts. and positions.
+2. Adapting to New Robot Setups on Franka Robot. As 3.SpatialUnderstandingCapabilityEvaluationonFranka
+described in Sec. IV-B, we evaluated the performance of four and WidowX Robot. Following Sec. IV-C, we conducted a
+methods - Diffusion Policy [12], Octo [48], OpenVLA [30], comprehensiveevaluationofspatialunderstandingcapabilities
+andSpatialVLA-across13real-worldtasksonaFrankaPanda through 3 zero-shot tasks on the BridgeData V2 WidowX
+Emika robot, with 11 trials per task. While Diffusion Policy Robot and 1 efficient-finetuning task on the Franka Robot.
+was trained from scratch, Octo, OpenVLA and SpatialVLA The detailed task specifications are:
+were fine-tuned on the specified tasks. The detailed task
+• Place plush toy closest to robot on car:Inthisefficient
+settings are:
+fine-tuning task, the robot must identify and grasp the
+• Push the teapot handle aside: The robot must push a nearest plush toy among two options and place it on a
+teapothandlefromaperpendiculartoaaparallelposition green car. To rigorously assess spatial understanding, we
+relative to the desktop, using its gripper tip. This task systematicallyvarytherelativepositionsoftheplushtoys
+=== Page 18 ===
+during testing. Octo and OpenVLA. These results highlight the competitive
+• Put green cup on the pink cloth: This task suite performance of SpatialVLA in single-task scenarios while
+comprises two scenarios testing vertical spatial under- revealing areas for potential improvement.
+standing.Inthefirstscenario,therobotgraspsagreencup
+Tab. XIII showcases the comparative analysis of all four
+positionedeitheronastoveorelevatedonayellowblock.
+models in multi-task fine-tuning settings. Notably, in these
+In the second scenario, the cup is placed either at the
+more challenging scenarios requiring generalization across
+bottom of a sink or elevated on a bowl. This variation in
+multiple tasks, the Diffusion Policy trained from scratch ex-
+object heights challenges the model’s ability to adapt its
+hibitedasignificantperformancedegradation.Thisobservation
+manipulationstrategyaccordingtospatialconfigurations.
+alignswithfindingsreportedin[30],whichindicatethatgener-
+• Put carrot in the plate: Building upon the task
+alist robot operation policies consistently outperform scratch-
+in Sec. IV-A, we modify the target plate’s position
+trainedDiffusionPolicyinmulti-taskevaluations.SpatialVLA
+from the sink bottom to an elevated position on a pan.
+demonstrated remarkable performance, achieving the highest
+This modification specifically tests the model’s spatial
+success rate in 3 out of 4 tasks, with only a marginal perfor-
+awareness and precision in object placement, requiring
+mance gap compared to OpenVLA in the ”Place the White
+accurate perception of the plate’s pose and appropriate
+Pot on the Cutting Board” task. These results underscore
+adjustment of the placement trajectory.
+SpatialVLA’s robust generalization capabilities across diverse
+F. More Detailed Evaluation Results. manipulation scenarios.
+1. SimplerEnv Evaluation. Tab. XIV presents a detailed evaluation of the models’
+Tab. X presents the evaluation results of the simpler env performance in instruction-following fine-tuning tasks, which
+on the Google robotic task, encompassing tasks such as Coke require both physical manipulation skills and language under-
+can manipulation (horizontal and vertical picking) and drawer standing capabilities. In this challenging domain, SpatialVLA
+operations (opening and closing). On average, SpatialVLA exhibited exceptional performance, achieving the highest suc-
+achievesthehighestoverallvisualmatchingandvariantaggre- cess rate in 3 out of 5 tasks. This stands in stark contrast
+gation performance with a significant margin, demonstrating to the Diffusion Policy trained from scratch, which showed
+more generalist manipulation capabilities. significant performance deterioration and demonstrated an
+2.Zero-shotRobotControlEvaluationonWidowXRobot. inabilitytoexecutetasksbasedonlanguageinstructionseffec-
+Tab. XI presents a comprehensive comparison of five gen- tively. These results highlight SpatialVLA’s superior ability to
+eralistrobotmanipulationpolicies’zero-shotperformance,in- integrate language understanding with physical manipulation,
+cluding SpatialVLA, in real-world scenarios. For fundamental a crucial capability for real-world robotic applications.
+taskssuchas”Closethemicrowave”,wereporttheoveralltask
+4.SpatialUnderstandingCapabilityEvaluationonFranka
+completionsuccessrate.Formoresophisticatedtaskslike”Lift
+and WidowX Robot
+theredchilipepper”,weprovidedetailedperformancemetrics
+byseparatelyevaluatingboththegraspingsuccessrateandthe Tab. XV presents a comprehensive evaluation of spatial
+complete task execution success rate. Across all seven real- understanding capabilities across different models and task
+world evaluation tasks, SpatialVLA consistently demonstrated scenarios. The evaluation consists of one fine-tuning task,
+superior performance, achieving the highest success rates in ”Place Plush Toy Closest to Robot on Car”, and three zero-
+task completion. shot tasks designed to test spatial reasoning abilities. In the
+3. Adapting to New Robot Setups on Franka Robot. fine-tuningscenario,wecomparedSpatialVLAagainstseveral
+Tab. XII Tab. XIII and Tab. XIV present comprehensive state-of-the-art baselines: the Diffusion Policy trained from
+evaluationresultscomparingtheperformanceoffourstate-of- scratch, the fine-tuned Octo-Base model, and the fine-tuned
+the-art approaches: Diffusion Policy [12], Octo [48], Open- OpenVLA system. For zero-shot evaluation, we benchmarked
+VLA [30], and our proposed SpatialVLA on the Franka SpatialVLA against pre-trained versions of RT-1-X, Octo-
+Panda Emika robot. For systematic analysis, we categorize Base, RoboVLM, and OpenVLA. The results demonstrate
+the evaluation results into three distinct scenarios: single-task thatSpatialVLAconsistentlyoutperformsallbaselinemethods
+fine-tuning, multi-task fine-tuning, and instruction-following across every spatial understanding task. This superior perfor-
+fine-tuning tasks. mance can be attributed to two key architectural innovations:
+Tab. XII details the model performance in single-task fine- (1)theincorporationofegocentric3DSpatialRepresentations,
+tuning scenarios. Our proposed SpatialVLA achieved state- which enables better understanding of spatial relationships
+of-the-art performance on 2 out of 4 tasks, demonstrating in the robot’s environment, and (2) the implementation of
+its strong capability in individual task adaptation. While it Adaptive Spatial Action Grids, which allows for more precise
+performed marginally behind the Diffusion Policy (trained and context-aware action generation. These components work
+from scratch) on the ”Close the Drawer” task, SpatialVLA inconcerttoenableSpatialVLAtoachievethehighestsuccess
+showed superior performance compared to Diffusion Policy rates across all evaluated tasks that demand sophisticated
+on the challenging ”Push the Teapot Handle Aside” task, spatial reasoning capabilities, from basic object manipulation
+though slightly trailing behind the fine-tuned versions of to complex spatial relationship understanding.
+=== Page 19 ===
+TABLE X: SimplerEnv evaluation results across different policies on Google Robot tasks.
+PickCokeCan MoveNear Open/CloseDrawer #Overall
+GoogleRobot
+Policy
+EvaluationSetup Horizontal Vertical
+Standing Average Average Open Close Average Average
+Laying Laying
+RT-1(begin) 2.2% 1.3% 03.1% 02.2% 04.0% 00.5% 13.2% 06.9% 04.2%
+RT-1(15%) 92.0% 70.4% 81.3% 81.3% 44.6% 21.2% 32.3% 26.7% 56.2%
+RT-1(converged) 96.9% 76.0% 96.4% 89.8% 50.0% 27.0% 37.6% 32.3% 63.3%
+TraceVLA — — — 60.0% 56.4% — — 31.0% 45.0%
+Variant
+RT-1-X 56.9% 20.4% 69.8% 49.0% 32.3% 06.9% 51.9% 29.4% 39.6%
+Aggregation
+RT-2-X 82.2% 75.4% 89.3% 82.3% 79.2% 33.3% 37.2% 35.3% 64.3%
+Octo-Base 0.5% 00.0% 01.3% 00.6% 03.1% 00.0% 02.1% 01.1% 01.1%
+OpenVLA 71.1% 27.1% 65.3% 54.5% 47.7% 15.8% 19.5% 17.7% 39.8%
+RoboVLM(zero-shot) 77.8% 48.0% 79.1% 68.3% 56.0% 01.6% 15.3% 08.5% 46.3%
+RoboVLM(fine-tuning) 93.8% 49.8% 83.1% 75.6% 60.0% 02.6% 18.5% 10.6% 51.3%
+SpatialVLA(zero-shot) 93.3% 83.1% 92.0% 89.5% 71.7% 23.3% 49.2% 36.2% 68.8%
+SpatialVLA(fine-tuning) 93.3% 78.2% 92.4% 88.0% 72.7% 28.6% 55.0% 41.8% 70.7%
+RT-1(Begin) 5.0% 00.0% 03.0% 02.7% 05.0% 00.0% 27.8% 13.9% 06.8%
+RT-1(15%) 86.0% 79.0% 48.0% 71.0% 35.4% 46.3% 66.7% 56.5% 60.2%
+RT-1(Converged) 96.0% 90.0% 71.0% 85.7% 44.2% 60.1% 86.1% 73.0% 74.6%
+HPT — — — 56.0% 60.0% — — 24.0% 46.0%
+TraceVLA — — — 28.0% 53.7% — — 57.0% 42.0%
+Visual RT-1-X 82.0% 33.0% 55.0% 56.7% 31.7% 29.6% 89.1% 59.7% 53.4%
+Matching RT-2-X 74.0% 74.0% 88.0% 78.7% 77.9% 15.7% 34.3% 25.0% 60.7%
+Octo-Base 21.0% 21.0% 09.0% 17.0% 04.2% 00.9% 44.4% 22.7% 16.8%
+OpenVLA 27.0% 03.0% 19.0% 16.3% 46.2% 19.4% 51.8% 35.6% 27.7%
+RoboVLM(zero-shot) 85.0% 43.0% 90.0% 72.7% 66.3% 28.7% 25.0% 26.8% 56.3%
+RoboVLM(fine-tuning) 94.0% 47.0% 91.0% 77.3% 61.7% 33.3% 53.1% 43.5% 63.4%
+SpatialVLA(zero-shot) 70.0% 82.0% 91.0% 81.0% 69.6% 49.1% 69.4% 59.3% 71.9%
+SpatialVLA(fine-tuning) 85.0% 76.0% 97.0% 86.0% 77.9% 50.0% 64.8% 57.4% 75.1%
+TABLE XI: Detailed evaluation results on BridgeV2 WidowX zero-shot tasks. SpatialVLA achieves SOTA performance
+on all 7 real-world BridgeV2 WidowX zero-shot tasks, fully demonstrating that SpatialVLA can obtain a large amount of
+pre-training knowledge on heterogeneous embodiment data.
+Puteggplantinthebasket Putpurplecuponwhiteplate
+Models Closethemicrowave Lifttheredchilipepper
+Graspeggplant Success Grasppurplecup Success
+RT-1-X[13] 54.55% 36.36% 45.45% 0.00% 18.18% 9.09%
+Octo-Base[48] 54.55% 45.45% 36.36% 9.09% 0.00% 0.00%
+RoboVLM[32] 72.73% 0.00% 27.27% 9.09% 45.45% 27.27%
+OpenVLA[30] 100.00% 72.72% 63.63% 63.63% 63.63% 18.18%
+SpatialVLA 100.00% 72.72% 81.81% 72.72% 54.54% 45.45%
+Putgreencuponthepinkcloth(cuponstove) Putpurplecuponpinkcloth(cupinsink) Putthecarrotintheplate
+Models
+Graspgreencup Success Grasppurplecup Success Graspcarrot Success
+RT-1-X[13] 18.18% 18.18% 9.09% 0.00% 9.09% 9.09%
+Octo-Base[48] 18.18% 9.09% 27.27% 18.18% 27.27% 0.00%
+RoboVLM[32] 27.27% 18.18% 18.18% 9.09% 45.45% 27.27%
+OpenVLA[30] 36.36% 36.36% 63.63% 54.54% 63.63% 18.18%
+SpatialVLA 81.81% 81.81% 90.90% 90.90% 54.54% 45.45%
+G. Visulizatiob of Dataset Statistic. the most accurate, we adopt them in this paper for the sake
+of generality and simplicity, rather than using kernel density
+Fig. 13 shows the normalized action visualization of Spa-
+estimations (KDE).
+tialVLApre-trainingdataset,wherethetranslationandrotation
+scatter plots form an ellipsoidal shape, clustering around the
+center. Furthermore, the X-Y and roll-pitch projection plots
+reveal that almost all data samples cluster within the 2-sigma
+action space, radiating outward. This suggests that uniform
+encoding of the entire [-1,1] range is unnecessary. Instead,
+adaptive division of the action space based on sampling prob-
+ability can efficiently encode fine-grained operations while
+reducing encoding costs. Additionally, as discussed in the
+LimitationsSec. V, while Gaussian distributions may not be
+=== Page 20 ===
+TABLE XII: Detailed evaluation results on single-task fine-tuning. On 2 of 4 single-task fine-tuning tasks tested on Franka
+Emika Panda, SpatialVLA achieves SOTA performance, even surpassing the Diffusion Policy [12] trained from scratch.
+PushtheTeapotHandleAside PlacetheWhitePotontheCuttingBoard PuttheBananaintheBasket ClosetheDrawer
+Models
+Success Grasppot Success Graspbanana Success Success
+DiffusionPolicy[12] 72.72% 81.81% 72.72% 72.72% 72.72% 100.00%
+Octo[48] 100.00% 72.72% 63.63% 0.00% 0.00% 100.00%
+OpenVLA[30] 100.00% 63.63% 54.54% 81.81% 54.54% 81.81%
+SpatialVLA 81.81% 72.72% 72.72% 100.00% 100.00% 72.72%
+TABLE XIII: Detailed evaluation results on multi-task fine-tuning. On 3 of 4 multi-task fine-tuning tasks tested on Franka
+Emika Panda, SpatialVLA achieves SOTA performance, improving its powerful multi-task learning capabilities.
+PushtheTeapotHandleAside PlacetheWhitePotontheCuttingBoard PuttheBananaintheBasket ClosetheDrawer
+Models
+Success Grasppot Success Graspbanana Success Success
+DiffusionPolicy[12] 18.18% 36.36% 27.27% 27.27% 27.27% 27.27%
+Octo[48] 27.27% 36.36% 36.36% 45.45% 36.36% 27.27%
+OpenVLA[30] 54.54% 72.72% 54.54% 81.81% 63.63% 36.36%
+SpatialVLA 63.63% 54.54% 36.36% 81.81% 81.81% 45.45%
+TABLE XIV: Detailed evaluation results on instruction following fine-tuning tasks. On 3 of 5 instruction following fine-
+tuning tasks tested on Franka Emika Panda, SpatialVLA achieves SOTA performance, improving its powerful instruction
+following capabilities.
+PutRedCubeonGreenCar PutGreenCubeonGreenCar PutBlueCubeonGreenCar GrasptheOrangeinthePlate GrasptheCroissantinthePlate
+Models
+Graspredcube Success Graspgreencube Success Graspbluecube Success Grasporange Success Graspcroissant Success
+DiffusionPolicy[12] 18.18% 9.09% 0.00% 0.00% 0.00% 0.00% 27.27% 18.18% 27.27% 9.09%
+Octo[48] 63.63% 63.63% 0.00% 0.00% 45.45% 45.45% 72.72% 63.63% 27.27% 18.18%
+OpenVLA[30] 54.54% 54.54% 54.54% 36.36% 45.45% 27.27% 36.36% 27.27% 45.45% 36.36%
+SpatialVLA 63.63% 54.54% 45.45% 45.45% 72.72% 63.63% 63.63% 54.54% 54.54% 54.54%
+TABLE XV: Detailed evaluation results on spatial understanding capabilities on fine-tuning and zero-shot tasks.
+SpatialVLA achieved SOTA performance in the first fine-tuning task and the three subsequent zero-shot tasks, fully
+demonstrating the model’s powerful spatial understanding capabilities with the help of egocentric 3D Spatial Representations
+and Adaptive Spatial Action Grids.
+PlacePlushToyClosesttoRobotonCar PutGreenCuponPinkCloth(Stove) PutGreenCuponPinkCloth(Sink) PutCarrotinPlate
+Models
+Graspplushtoy Success Graspgreencup Success Graspgreencup Success Graspcarrot Success
+DiffusionPolicy[12] 45.45% 27.27% — — — — — —
+RT-1-X[13] — — 18.18% 9.09% 18.18% 0.00% 9.09% 0.00%
+Octo-Base[48] 63.63% 27.27% 9.09% 9.09% 18.18% 18.18% 18.18% 9.09%
+RoboVLM[32] — — 9.09% 0.00% 9.09% 9.09% 9.09% 0.00%
+OpenVLA[30] 45.45% 45.45% 36.36% 27.27% 54.54% 45.45% 54.54% 54.54%
+SpatialVLA 72.72% 63.63% 81.81% 72.72% 81.81% 81.81% 72.72% 63.63%
+X-Y Projection Trans-X Distribution
+z
+y
+x
+yaw
+pitch
+roll
+Roll-Pitch Projection Rot-Roll Distribution
+tnuoC
+noitcA
+tnuoC
+noitcA
+Density
+Density
+ΔTDistribution
+ΔRDistribution
+Fig. 13: SpatialVLA Training Dataset Statistic.

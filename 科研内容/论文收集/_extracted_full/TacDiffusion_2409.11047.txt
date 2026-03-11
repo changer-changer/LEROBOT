@@ -1,0 +1,694 @@
+=== Page 1 ===
+TacDiffusion: Force-domain Diffusion Policy for Precise Tactile
+Manipulation
+Yansong Wu1*, Zongxie Chen1*, Fan Wu1†, Lingyun Chen1,2, Liding Zhang1,
+Zhenshan Bing1,4, Abdalla Swikir1,3, Sami Haddadin1,3, Alois Knoll1
+Robot Control Interface Observation: Diffusion Policy
+Predicted Action:
+Behavior Tree
+Diffusion Policy
+Model Output:
+Hz Denoising Diffusion
+Dynamic system based filter
+Filtered Feedforward Force Hz
+Robot State
+Impedance control with
+Hz Feed-forward Force
+Torque
+Fig. 1: Framework Overview: TacDiffusion processes observations o, including both tactile and spatial information, to
+generate 6D wrench F . It addresses the frequency misalignment between the diffusion model and the real-time controller
+df
+through a dynamic system-based filter, and regulates robot’s force and motion behavior using impedance control with feed-
+forward force F .
+ff
+Abstract—Assembly is a crucial skill for robots in both and part holders are often not viable [2]. Achieving both
+modern manufacturing and service robotics. However, master- broad transferability and precise control capabilities in these
+ing transferable insertion skills that can handle a variety of conditions remains a significant challenge. Human workers,
+high-precision assembly tasks remains a significant challenge.
+on the other hand, demonstrate exceptional dexterity in
+This paper presents a novel framework that utilizes diffusion
+modelstogenerate6Dwrenchforhigh-precisiontactilerobotic assembling diverse objects with tight-clearance components,
+insertion tasks. It learns from demonstrations performed on a primarily by leveraging tactile feedback from their fingertips
+single task and achieves a zero-shot transfer success rate of throughout the process [3], [4]. Similarly, a versatile high-
+95.7% across various novel high-precision tasks. Our method precision robotic assembly system must exhibit both task-
+effectively inherits the self-adaptability demonstrated by our
+leveltransferability—generalizingacrossawiderangeofob-
+previous work. In this framework, we address the frequency
+misalignment between the diffusion policy and the real-time jects and parts—and control-level self-adaptability, enabling
+control loop with a dynamic system-based filter, significantly it to respond to environmental changes often sensed through
+improving the task success rate by 9.15%. Furthermore, we tactile feedback [5], [6].
+provide a practical guideline regarding the trade-off between
+Throughout the history of robotics research, the impor-
+diffusion models’ inference ability and speed.
+tanceof tactilefeedbackandforce controlforhigh-precision
+I. INTRODUCTION assembly has been consistently recognized [5], [7]–[13].
+Assemblytasksarecrucialinrobotics,servingastheback- However, several challenges persist in precise force control,
+bone of modern manufacturing and service applications [1]. including the difficulty of accessing to appropriate robot
+As the demand for flexible manufacturing grows, robotic hardware and expensive force sensors, the complexity of
+assembly increasingly takes place in dynamic environments, ensuring stability and safety while regulating force, the
+whereobjectsarenotpreciselypositionedatknownlocations sensitivity of force control to environmental changes, the
+difficulty of estimating environment constraints and contact
+* Equalcontribution. dynamicsindynamicsettings,andthechallengeofcollecting
+† Correspondingauthor:FanWu(f.wu@tum.de).
+high-quality tactile data for learning force control. Due to
+1 Munich Institute of Robotics and Machine Intelligence (MIRMI),
+TechnicalUniversityofMunich,Germany.2CentreforTactileInternetwith these barriers, the use of simpler motion-domain action
+Human-in-the-Loop(CeTI).3 MohamedBinZayedUniversityofArtificial spaces, with impedance control as an indirect force control
+Intelligence,AbuDhabi,UAE.4 StateKeyLaboratoryforNovelSoftware method is often favored by the robot learning community.
+TechnologyandtheSchoolofScienceandTechnology,NanjingUniversity
+Nevertheless,theincreasingdiversityofcontact-richmanipu-
+(SuzhouCampus),China.
+Codeavailable:https://github.com/popnut123/TacDiffusion lationtaskshighlightstheequalimportanceofsimultaneously
+5202
+raM
+6
+]OR.sc[
+2v74011.9042:viXra
+=== Page 2 ===
+regulating motion, compliance, and force, so that agents four main categories: force controller [9], admittance con-
+can autonomously perform a wide range of task stably and troller [8], hybrid position/force controller [10], [13], and
+robustly, without the need for explicit controller switching impedance controller with feed-forward force [11], [12].
+[14]. Despite the recent successes of implementing trans- Nevertheless,theseworksnormallyfocusonaspecifictight-
+former [15]–[20] and/or diffusion-based [21]–[31] policies clearancetaskandlackinvestigationintothemethod’strans-
+for robot manipulation that exhibit excellent generalization ferability and adaptability to novel tasks [5].
+capability, it remains unexplored how to integrate force con-
+trolwiththesemodelsforhigh-precisiontactilemanipulation, B. Enhancing Transferability in Robotic Assembly
+so that the benefits of these generative models for multi- In the last decade, there is extensive literature on gen-
+modal modelling and prediction can be fully exploited. erating robotic assembly policies with broad generalization.
+To address this gap, and aiming to achieve both task- Deep Reinforcement Learning-based methods, for instance,
+level transferability and control-level self-adaptability, we typically achieve the generalization ability through training
+propose TacDiffusion, a novel framework that leverages a with multiple objects [33], [34]. Another noteworthy case
+diffusion policy for high-precision tactile manipulation. To is meta-learning, which trains a pre-trained model using
+the authors’ knowledge, it is the first framework to employ online or offline data from a diverse and comprehensive set
+diffusion models in generating force-domain actions for of tasks, enabling domain adaptation ability through fine-
+tactile-basedroboticmanipulationintight-clearanceinsertion tuning [35]–[37]. Furthermore, sim-to-real based approaches
+tasks.TacDiffusionlearnsfromdemonstrationsperformedby have gained attention for their cost-effective data collection
+expertpoliciesonasingletaskandachievesanoverall95.7% in the simulation environments, and zero-shot sim-to-real
+zero-shot transfer success rate across various novel high- transfer for perception-initialized assembly has been only
+precision, sub-millimeter-level peg-in-hole tasks. By imitat- recently demonstrated [38], [39]. Besides, to tackle pre-
+ing the expert policies, which are based on a behavior tree- cise manipulation, RVT-2 [20] trained a transformer-based
+basedskill proposedinourprevious work[32], TacDiffusion multi-task policy. Despite improving performance on multi-
+successfullyinheritsitsself-adaptability,characterizedbythe task learning benchmark, its success rate on high-precision
+ability to switch skill primitives based on real-time tactile (millimeter level) insertion tasks, roughly 50%, is far from
+sensing. Importantly, compared to the expert policy, TacDif- being satisfactory to deploy to real assembly production.
+fusion also outperforms in execution time and robustness on Aside from these approaches, evolutionary algorithms with
+these novel tasks in a zero-shot transfer manner. parameterized robot skills have shown transferability across
+To further enhance real-time performance, we investigate tasks via fine-tuning [32]. However, achieving zero-shot
+how model size affects the trade-off between accuracy and transfer on high-precision tasks with a satisfactory success
+inference speed, providing practical guidelines for optimal rate in the real world remains an open challenge
+modelselection.Moreover,tohandlethefrequencymisalign-
+ment between the diffusion policy’s inference process and C. Diffusion Model in Robotics
+the low-level controller, a dynamic system-based filter is de- Meanwhile, in other areas of robotics, diffusion models
+signed to smooth the output of the diffusion model for high- [40] have made significant progress. Compared to traditional
+frequency force-impedance control, significantly improving discriminative models, diffusion models excel in generaliza-
+the task success rate by 9.15%. tion, achieving superior performance on unseen tasks and
+In summary, our main contributions are: (i) a novel scenarios,byestablishingastochastictransportmapbetween
+diffusion-based policy that outputs 6D wrench for tactile anempiricallyobservedtargetdistributionandaknownprior
+manipulation; (ii) learning from a behavior tree-based expert [30]. Recent works have typically used scene images as
+policy to inherent its tactile-based self-adaptability; (iii) a input to solve planning problems [23], [24], [29] and per-
+dynamic system-based filter smoothing and aligning low form manipulation tasks [25]–[28] in robotics. However, the
+frequency outputs from diffusion model with high frequency application of diffusion models with other input modalities
+control, with experimental evidences showing significant remains relatively underexplored in robotics, with only few
+effect on task performance; (iv) investigation on trade-off studies addressing this area [22]. In addition, considering
+between accuracy and inference speed, resulting in insights diffusion model applications in sequential behavior imitation
+for optimal model selection in practice. [21] and time series processing [41], there is great potential
+for adapting diffusion models to force-domain actions in
+II. RELATEDWORKS
+robotics.
+In this section, we focus our review on (i) High-Precision In summary, although significant progress has been made
+AssemblyTasks,(ii)Transferabilityand(iii)Diffusionmodel in insertion tasks, achieving zero-shot transfer in high-
+in robotics. precision assembly tasks remains an ongoing challenge.
+Additionally, the application of diffusion models to force-
+A. High-Precision Assembly Tasks domain actions has not yet been explored. To bridge these
+Due to the robot’s accuracy limitation, position-based gaps, we propose a novel framework that leverages diffusion
+control methods are insufficient for high-precision assembly models to enable more efficient zero-shot transfer in high-
+tasks that require accuracy exceeding the robot’s precision precision insertion tasks.
+[10]. To address this issue, recent studies have shifted to
+designing actions in the force-domain rather than the po-
+III. METHODS
+sition domain to perform high-precision robotic assembly To solve the aforementioned issues, we develop a frame-
+tasks. According to the control strategy, these methods span workthatadaptsthediffusionmodeltoforce-domainactions
+=== Page 3 ===
+for high-precision tactile assembly tasks. In the following 1) Diffusion Process: The diffusion process is a forward
+subsections, we first provide an overview of the framework, progressive process that destructs data with noise over a
+followed by a detailed explanation of the concrete modules, series of steps. By progressively injecting noise into a
+i.e., the diffusion model, the impedance control with feed- “clean” initial action a , a sequence of “polluted” actions
+0
+forward force, and the dynamic system-based filter. a ,a ,··· ,a converging to a Gaussian distribution is
+1 2 T
+obtained, according to the diffusion rule [21]:
+A. Framework Overview
+Our framework comprises two key functional modules: α τ =1−β τ , (1)
+the diffusion policy-based action generation module and a = √ α a + (cid:112) β ϵ , (2)
+τ τ τ−1 τ τ
+the impedance control with feed-forward-based execution
+module.1 As illustrated in Fig. 1, the diffusion-based policy where τ ∈[1,T] denotes the diffusion step, with T referring
+is integrated into the behavior tree (BT) based Insertion to the total number of denoising steps (not to be confused
+skill by replacing the original sub-tree, which contained two with the environment time step, as it is common in time
+primitivesandastateestimator.Theresultantbehaviortreeis serials). a τ and ϵ τ ∈ N(0,I) represent the diffused action
+simplifiedintoasequenceofskillprimitives,with“approach” and the corresponding noise in the τ-th diffusion step. α τ
+and “contact” as two preceding primitives. As the BT is and β τ refer to variance schedule parameters that regulate
+simplified into a sequence and the diffusion model handles the noise mixed in each diffusion step.
+Furthermore, the noise ϵ also plays a crucial role in
+primitive-switching, the discussion of the preceding skill τ
+the subsequent denoising process. To account for this, we
+primitives for contact initialization is beyond the scope of
+construct the noise estimator ˆϵ(·) using a residual neural
+this work. For more details, we refer readers to our previous
+network, as illustrated in Fig. 2, and train it by minimizing
+work [32].
+During the assembly process, the interaction between the the following loss function:
+robot and the environment is captured as observation o, L =E[∥ˆϵ (o,a ,τ)−ϵ ∥2], (3)
+which includes the external wrench, internal wrench, and DDPM τ τ τ 2
+end-effector’s speed. The diffusion model then predicts the whereoincludesboththecurrentandpreviousobservations,
+force-domain actions (a := F ) based on both the current as incorporating historical information helps identify trends
+df
+observation o and the previous observation o . Due and enhances the accuracy of predicting future actions. The
+curr prev
+to the restrictions of computational resources, the diffusion diffusion step τ serves as positional information, enabling
+model’s inference frequency typically ranges from 50 Hz to the network to recognize the current diffusion stage effec-
+500 Hz (Table I), which is misaligned with the robot’s 1000 tively [44].
+Hz real-time control loop. To mitigate this, we design a dy- 2) DenoisingProcess: Incontrasttothediffusionprocess,
+namicsystem-basedfiltertointerpolatethediffusionmodel’s thedenoisingprocessreconstructsdatafromnoiseinreverse,
+predictions F . The filtered action is then transmitted to illustrated by the linen block in Fig. 1. Leveraging the pre-
+df
+the impedance controller with feed-forward force. Based on viously trained noise estimator ˆϵ(·), the model progressively
+the desired goal x d (insertion hole’s pose) and the force removes the noise from a random sample a T ∈ N(0,I),
+command, it regulates the robot’s motion and force behavior following the denoising rule:
+simultaneously. (cid:112)
+σ = β , (4)
+τ τ
+B. Diffusion Model τ
+(cid:89)
+Denoising diffusion probabilistic model (DDPM) [40], α¯ τ = α i , (5)
+[42], [43] is a specific type of diffusion model designed i=1
+to generate data by learning to reverse a noise injection a =√ 1 [a − √ 1−α τ ˆϵ (o,a ,τ)]+σ ϵ , (6)
+process. DDPM consists of two processes: diffusion and τ−1 α τ 1−α¯ τ τ τ τ
+τ τ
+denoising. The diffusion process systematically transforms
+wherethevariancescheduleparametersα¯ andσ modulate
+thedataintonoise,whilethedenoisingprocessisresponsible τ τ
+the subtracted noise in each step. After T steps (diffusion
+for converting this noise back into data.
+horizon) iteration, we obtain a probabilistic reconstructed
+actiona .AnillustrativeexampleisprovidedinSec.IV-B3.
+0
+C. Impedance Control with Feed-forward Force
+Consideratorque-controlledrobotwithn-DegreeofFree-
+dom, the second-order rigid body dynamics is written as:
+M(q)q¨+C(q,q˙)q˙ +g(q)=τ +τ , (7)
+m ext
+where q ∈Rn is the joint state. M(q)∈Rn×n corresponds
+to the mass matrix, C(q,q˙) ∈ Rn×n is the Coriolis matrix
+and g(q) ∈ Rn is the gravity vector. The motor torque
+Activation Concatenation Normalization Linear Layer Linear Layer Linear Layer (control input) and external torque are denoted by τ ∈Rn
+Layer Layer Layer with 128 neurons with N neurons with 6 neurons andτ ∈Rn,respectively.Theimpedancecontroll m awwith
+ext
+Fig. 2: Network architecture of the noise estimator. feed-forward force profile is defined as [45]:
+τ (t)=J(q)T[F (t)+K(t)e+De˙
+1A practical consideration here is the compatibility issues between the m ff (8)
+real-timekernelandtheNVIDIACUDAToolkit. +M(q)x¨ ]+C(q,q˙)q˙ +g(q),
+d
+=== Page 4 ===
+whereF (t)donatesthefeed-forwardwrench,x isdesired A. Experiment Setup
+ff d
+trajectory.xindicatestherobot’scurrentposition.e=x −x
+d TheexperimentsetupshowninFig.3consistsofaFranka
+and e˙ = x˙ −x˙ are the position and velocity error, respec-
+d Emika Panda robot with 5 tight-clearance insertion objects.
+tively. K(t) and D are stiffness and damping matrices in
+The robot is controlled by a PC using Ubuntu 20.04 with
+Cartesian space. J(q) represents the robot Jacobian matrix.
+Intel i9-10900K CPU and real-time kernel, and the diffusion
+The internal wrench F applied by the robot on objects is
+in module is implemented on the PyTorch framework. Training
+calculated with:
+and inference are performed on another PC with NVIDIA
+J =J† , (9) RTX 3090 GPU and CUDA Toolkit.
+binv body
+F =JT (τ −C(q,q˙)q˙ −g(q)), (10) B. Data Collection & Training
+in binv m
+where J represents the pseudo-inverse of the body Jaco-
+binv
+bian J , which relates joint velocities to the End-Effector
+body
+(EE) twist expressed in the body frame (a frame at the EE).
+D. Dynamic System based Filter
+Tosolvethefrequencymisalignmentbetweenthediffusion
+modelandtheimpedancecontrollerwithfeed-forwardforce,
+we interpolate the diffusion model’s output F with a
+df
+dynamic system-based filter, according to the equation:
+F¨ =α(β(F −F )−F˙ ), (11)
+ff df ff ff
+wheretheF referstotherawoutputofthediffusionmodel
+df
+andF indicatesthefilteredandinterpolated1000Hzfeed-
+ff Fig. 4: An example view of observations in the dataset.
+forwardforcetobeexecutedbythecontroller.Thederivative
+and second-order derivative of F are initialized as zero
+ff
+vectors. α and β are two constant scales.2 0.4 0.5 DF1 DF3
+To evaluate our p
+I
+r
+V
+o
+.
+po
+E
+s
+X
+ed
+PE
+m
+RI
+e
+M
+th
+E
+o
+N
+d
+T
+, we designed a set
+ssoL
+gniniarT0 0
+0
+.
+.
+.
+1
+2
+3 ssoL
+noitadilaV0
+0
+0
+0
+.
+.
+.
+.
+1
+2
+3
+4 DF2 DF4
+of experiments to: (i) demonstrate the effectiveness of our 0 0
+0 2 4 6 8 10 0 2 4 6 8 10
+proposed framework and validate its capability to generalize Iteration Step #105 Iteration Step #105
+tonoveltasks,(ii)provideapracticalguidelineforbalancing (a) training loss (b) validation loss
+inference ability and speed by evaluating the performance of Fig. 5: Training loss and validation loss. Validation is con-
+models with varying sizes, and (iii) showcase the feasibility ducted every 5 epochs throughout the training process.
+of our designed dynamic system-based filter to mitigate 1) Data Collection: To train the diffusion model, we
+the frequency misalignment between diffusion model and collect a comprehensive dataset comprising 1500 expert
+real-time controller. demonstrations of the assembly task, using the setup shown
+in Fig. 3. Demonstrations are generated by executing our
+previous method [32] to perform the insertion task (Cuboid)
+in various initial poses. The data is recorded at 1000 Hz, re-
+sultingina24-dimensionedsequence,i.e.,an18-dimensional
+observation o which includes external wrench, internal
+wrench, and EE’s speed (Fig. 4), paired with corresponding
+6-dimensional actions F .
+ff
+TABLE I: Hyperparameters for Training Diffusion Models
+Hyperparameters Value
+Epoch 1500
+Fig. 3: Experiment Setup. The object grasped by the robot
+BatchSize 4096
+in the left figure is the training object: (a) Cuboid: A LearningRate 10−3
+35 mm × 25 mm × 60 mm dimensional cuboid (0.1 mm DiffusionHorizon(T) 50
+clearance). The four objects on the right are applied to DiffusionWeight(βτ) increasedfrom10−4 to10−2
+validate the transferability: (b) Key: A 37 mm long key; (c)
+Cyl-S: A 50 mm long cylinder with a diameter of 20 mm 2) Training: There is a trade-off to select the optimal
+(0.02 mm clearance); (d) Cyl-L: A cylinder with a length of model. Larger models offer stronger inference capabilities,
+50 mm and diameter of 30 mm (0.025 mm clearance); (e) but smaller models provide faster inference speeds that are
+Prism: A 50 mm long octagonal prism with a side length of better suited to our controller. Therefore, an appropriate size
+11 mm (0.05 mm clearance). is crucial for balancing performance and real-time control
+requirements,especiallyinourscenariowherecomputational
+2In this work, α and β are fixed as 0.9 and 0.3, respectively, based on efficiency is critical.
+severaltrialsthatdemonstratedtheireffectiveness.
+=== Page 5 ===
+TABLE II: Details of four Diffusion Models
+TABLE III: Success Rate [%]
+Model Neurons(N) FinalLoss InferenceFrequency
+DF1 128 0.2751 503.8Hz trained novel(zero-shottransfer)
+DF2 256 0.1653 297.5Hz Model
+Cuboid Key Cyl-S Cyl-L Prism Average
+DF3 512 0.0716 141.8Hz
+DF4 1024 0.0288 51.2Hz DF1 90.0 99.0 86.0 85.0 40.0 77.5
+DF2 79.0 94.0 87.0 90.0 79.0 87.5
+DF3 98.0 99.0 97.0 96.0 91.0 95.7
+DF4 73.0 85.0 90.0 66.0 85.0 81.5
+To address this problem, we train diffusion models with
+Baseline 92.0 94.0 61.0 82.0 96.0 83.3
+varying neuron numbers N (highlighted in red in Fig. 2)
+to provide a practical guideline. 80% of the data is used
+*The highest success rate for each task is highlighted in bold font. The
+as training data. Hyperparameters employed in this process detailedconfigurationofmodelsDF1 toDF4 isprovidedinTableII.
+are detailed in Table I. Moreover, all trained models were
+exportedtotheONNXformattooptimizetheinferencespeed.
+Table II provides the details of each model. In addition, as
+select the best-performing one as our baseline. We evaluate
+shown by the corresponding learning curve in Fig. 5a, all
+not only the performance of the candidates on the training
+thecandidatemodelssuccessfullyconvergewithin1,000,000
+object but also emphasize their zero-shot transferability to
+iteration steps. As the model size increases, there is a clear
+four novel objects.
+improvement in accuracy on the training dataset, evidenced
+AsdepictedinTableIII,atotalof25testcasesarecreated
+by the decreasing final loss. However, larger models also
+by combining the models with various objects. For each
+require more computational resources, leading to an evident
+case, the model is evaluated on the corresponding task with
+frequency drop from 503.8 Hz to 51.2 Hz.
+50 random initial poses. At each pose, the robot performed
+two insertion trials to account for variability and reduce the
+Feed-Forward Force Along the X-Axis
+= = 50 influence of random occurrences. Consequently, the success
+4 rate and corresponding execution time are represented in
+2
+]N0 Table III and Fig. 7, respectively.
+[-2
+-4
+= = 25
+4 DF1 DF2 DF3 DF4 Baseline
+2
+]N0
+10
+[-2
+-4
+= = 1
+]s[
+em
+8
+]N [
+-
+-
+4
+2 0 2
+4
+F F ^d d f f ; ; x x
+iT
+n o itu cex
+E2
+4
+6
+0 0.5 1 1.5 2 2.5 3 3.5 4 4.5
+Time [s]
+0
+Cuboid Key Cyl-S Cyl-L Prism
+Fig. 6: Denoising process with model DF . From the top
+3
+Fig.7:Executiontime.Thecoloredbarsrepresentthemedian
+down, the red curves indicate the change in the diffused
+execution time for each model, and the black lines denote
+actions during the denoising process. The black refers to the
+their 25th and 75th percentiles.
+corresponding ground truth.
+3) Validation: The remaining 20% of the data is used for According to the Common Industry Format for Usability
+validation.ThevalidationlossesinFig.5bimplythatmodels Test Reports (ISO/IEC 25062:2006), the “core measure of
+have successfully converged without overfitting. Fig. 6 pro- efficiency” is the ratio of the task completion rate to the
+vides an intuitive instance of the denoising process, where meantimepertask[46].Weusethisratioastheperformance
+the diffusion model reconstructs actions by progressively metric, to evaluate the performance of comparing models.
+removing noise from a random Gaussian sample (τ = 50). The results, illustrated by the radar plots in Fig. 8, show that
+After 25 backward diffusion steps (τ = 25), the model’s DF 3 outperformsthebaselineondemonstratedtasksinterms
+output exhibits a tendency towards the ground truth. By the of efficiency.
+finalstep(τ =1),themodel’spredictioncloselymatchesthe Notably, for novel tasks, all diffusion models achieve over
+ground truth. a10%improvementinefficiency,showcasingexcellentzero-
+It is noteworthy that the diffusion model successfully shot transferability. Among these models, DF 3 stands out
+inherits the self-adaptability of our previous method, select- with the best comprehensive performance on novel tasks,
+ing appropriate primitives based on the assembly state. The achieving an average success rate of 95.7%.
+model performs a wiggle motion to align the object with the 2) Trade-offbetweenmodelaccuracyandinferencespeed:
+hole before 0.9 s, and to resolve a stuck state from 1.2 s to As the model size increases, the model better captures
+4.2 s. When the object is properly aligned, it applies a force latent relationships within the data, which is reflected in
+to push the object into the insertion hole. the increasing overall success rate from DF 1 to DF 3 , as
+shown in Table III. However, larger models also experience
+C. Real-World Experiment Performance
+a significant reduction in inference frequency, which exacer-
+1) Performance Test: In this section, we validate the bates the misalignment with the 1000 Hz control loop. As
+efficacyofourdiffusionmodelsusingtheexperimentalsetup depicted in TableII, DF maintains an acceptable frequency
+3
+depicted in Fig. 3. Among all demonstrated policies, we of 141.8 Hz, whereas DF suffers a dramatic drop to only
+4
+=== Page 6 ===
+Cuboid 0.29 Cuboid 0.19 Cuboid 0.55
+Prism KeyPrism KeyPrism Key 0.06 0.42 0.28 0.38 0.58 0.88
+Cyl-L Cyl-S Cyl-L Cyl-S Cyl-L Cyl-S
+1.39 0.24 0.74 0.29 1.35 0.56 Cuboid 0.16 Cuboid 0.52
+Prism KeyPrism Key DF1 0.38 0.41 0.30 0.20 DF2
+DF3
+DF4 Baseline
+Cyl-L Cyl-S Cyl-L Cyl-S 0.31 0.21 0.54 0.15
+Fig. 8: Radar plots for efficiency across different models
+51.2 Hz. This extremely low output frequency limits the
+model’s deployment potential despite its strong inference
+capability, resulting in an overall significant performance
+drop. Consequently, DF (with N =512) is the only model 3 thatoutperformsthebaselineonbothdemonstratedandnovel
+tasks. It exhibits the most balanced and highest performance
+across all insertion tasks, achieving a 129.5% improvement
+in overall performance compared to the baseline.
+3) Dymanic system-based filter: Our dynamic system-
+basedfilterisdesignedtoaddressthefrequencymisalignment
+issue. To validate its effectiveness, we repeat the identical
+experiments in Sec. IV-C1 for the diffusion models while
+disabling the filter in the framework. To distinguish from
+the previous models (DF ), these models are represented as
+x
+DF . For ease of comparison, the results are presented in xN
+the same figure. As illustrated in Fig. 9, the models with
+filter assistance achieve higher success rates in 16 out of 20
+scenarios, with three unchanged and one decreasing by 6%.
+Overall,ourdynamicsystem-basedfiltermitigatestheeffects
+of frequency misalignment, leading to a 9.15% increase in
+success rates.
+100
+80
+60
+40
+20
+0
+Cuboid Key Cyl-S Cyl-L Prism
+]%[
+etaR
+sseccuS
+Force Along the X-Axis Torque Along the X-Axis
+2
+2 ff
+]N [-2 0 ]m N [0 1 df
+-4 -1
+Force Along the Y-Axis Torque Along the Y-Axis
+2 1
+]N [0 1 ]m N [ 0
+-1 -1 Force Along the Z-Axis Torque Along the Z-Axis 2
+8
+]N [4 6 ]m N [ 0
+2 -2 0 0.05 0.1 0.15 0.2 0.25 0 0.05 0.1 0.15 0.2 0.25
+Time [s] Time [s]
+Fig.10:Impactofthefilterondiffusionmodel’spredictions.
+The red curves represent the filtered feed-forward wrench,
+while the black curves correspond to the raw outputs from
+the diffusion model DF .
+3
+0.6
+0.4
+0.2
+0
+DF1 DF1N DF2 DF2N DF3 DF3N DF4 DF4N
+Fig. 9: Impact of the dynamical system-based filter on the
+success rate of high-precision assembly tasks
+Moreover, we compare the model’s performance on both
+demonstrated and novel objects as illustrated in Fig.11.
+The inclusion of the filter results in enhanced performance
+across both categories. Besides, a more concrete example
+is provided in Fig.10, vividly illustrating the effect of our
+filter on diffusion model outputs. The raw diffusion output,
+depicted by the black curves, exhibits higher variability and
+fluctuations in force and torque components. In contrast, the
+filtered feed-forward force commands, indicated by the red
+curves, present a smoother profile at 1000 Hz. These results
+confirm that the filtering process mitigates the frequency
+misalignment issue.
+V. CONCLUSION
+Inthiswork,wepresentanovelframeworkleveragingdif-
+fusionmodelstogenerate6Dwrenchfortactilemanipulation
+ycneiciffE
+0.8
+0.6
+0.4
+0.2
+0
+(a) demonstrated object
+ycneiciffE
+egarevA
+D D D F F F 3 3 1 N D D Ba F F s 2 2eNline D D D F F F 4 4 1 N N
+(b) novel objects
+Fig. 11: Model efficiency sorted in descending order.
+inhigh-precisionroboticassemblytasks.Ourapproach,being
+the first force-domain diffusion policy, demonstrated excel-
+lent improved zero-shot transferability compared to prior
+work,byachievinganoverall95.7%successrateinzero-shot
+transferinexperimentalevaluations.Additionally,weinvesti-
+gate the trade-off between accuracy and inference speed and
+provide a practical guideline for optimal model selection.
+Further, we address the frequency misalignment between
+the diffusion policy and the real-time control loop with a
+dynamic system-based filter, significantly improving the task
+successrateby9.15%.Extensiveexperimentalstudiesinour
+work underscore the effectiveness of our framework in real-
+world settings, showcasing a promising approach tackling
+high-precision tactile manipulation by learning diffusion-
+based transferable skills from expert policies containing
+primitive-switching logic. In future work, we will focus on
+extending the framework’s applicability to a broader range
+of high-precision assembly tasks and integrating additional
+sensing modalities to enhance system adaptability and ro-
+bustness in real-time environments.
+ACKNOWLEDGMENT
+The authors acknowledge the financial support by the
+Bavarian State Ministry for Economic Affairs, Regional De-
+velopment and Energy (StMWi) for the Lighthouse Initiative
+KI.FABRIK (Phase 1: Infrastructure as well as the research
+and development program under, grant no. DIK0249), the
+European Union’s Horizon 2020 research and innovation
+programme as part of the project euROBIN under grant no.
+10107059,theFederalMinistryofEducationandResearchof
+Germany (BMBF) in the programme of “Souvera¨n. Digital.
+Vernetzt.”Jointproject6G-life,projectidentificationnumber
+16KISK002,andbytheGermanResearchFoundation(DFG,
+Deutsche Forschungsgemeinschaft) as part of Germany’s
+=== Page 7 ===
+Excellence Strategy – EXC 2050/1 – Project ID 390696704 [22] J. Carvalho, A. T. Le, M. Baierl, D. Koert, and J. Peters, “Motion
+– Cluster of Excellence “Centre for Tactile Internet with planning diffusion: Learning and planning of robot motions with
+diffusion models,” in 2023 IEEE/RSJ International Conference on
+Human-in-the-Loop” (CeTI) of Technische Universita¨t Dres-
+IntelligentRobotsandSystems(IROS). IEEE,2023,pp.1916–1923.
+den. [23] I.Kapelyukh,V.Vosylius,andE.Johns,“Dall-e-bot:Introducingweb-
+scale diffusion models to robotics,” IEEE Robotics and Automation
+REFERENCES Letters,vol.8,no.7,pp.3956–3963,2023.
+[24] U.A.Mishra,S.Xue,Y.Chen,andD.Xu,“Generativeskillchaining:
+[1] D.E.Whitney,Mechanicalassemblies:theirdesign,manufacture,and Long-horizonskillplanningwithdiffusionmodels,”inConferenceon
+roleinproductdevelopment. OxforduniversitypressNewYork,2004, RobotLearning. PMLR,2023,pp.2905–2925.
+vol.1. [25] K. Black, M. Nakamoto, P. Atreya, H. Walke, C. Finn, A. Kumar,
+[2] K. Nottensteiner, A. Sachtler, and A. Albu-Scha¨ffer, “Towards Au- andS.Levine,“Zero-shotroboticmanipulationwithpretrainedimage-
+tonomous Robotic Assembly: Using Combined Visual and Tactile editingdiffusionmodels,”arXivpreprintarXiv:2310.10639,2023.
+SensingforAdaptiveTaskExecution,”JournalofIntelligent&Robotic [26] C.Chi,S.Feng,Y.Du,Z.Xu,E.Cousineau,B.Burchfiel,andS.Song,
+Systems,vol.101,no.3,p.49,Mar.2021. “Diffusion policy: Visuomotor policy learning via action diffusion,”
+[3] R. S. Johansson and A˚. B. Vallbo, “Tactile sensory coding in the Robotics:ScienceandSystems,2023.
+glabrous skin of the human hand,” Trends in neurosciences, vol. 6, [27] M.Reuss,M.Li,X.Jia,andR.Lioutikov,“Goal-conditionedimitation
+pp.27–32,1983. learning using score-based diffusion policies,” Robotics: Science and
+[4] I. Birznieks, P. Jenmalm, A. W. Goodwin, and R. S. Johansson, Systems,2023.
+“Encodingofdirectionoffingertipforcesbyhumantactileafferents,” [28] U. A. Mishra and Y. Chen, “Reorientdiff: Diffusion model based
+JournalofNeuroscience,vol.21,no.20,pp.8222–8237,2001. reorientation for object manipulation,” in 2024 IEEE International
+[5] R. Li and H. Qiao, “A survey of methods and strategies for high- Conference on Robotics and Automation (ICRA). IEEE, 2024, pp.
+precision robotic grasping and assembly tasks—some new trends,” 10867–10873.
+IEEE/ASMETransactionsonMechatronics,vol.24,no.6,pp.2718– [29] A. Sridhar, D. Shah, C. Glossop, and S. Levine, “Nomad: Goal
+2732,2019. masked diffusion policies for navigation and exploration,” in 2024
+[6] K. Nottensteiner, A. Sachtler, and A. Albu-Scha¨ffer, “Towards au-
+IEEE International Conference on Robotics and Automation (ICRA).
+tonomousroboticassembly:Usingcombinedvisualandtactilesensing IEEE,2024,pp.63–70.
+foradaptivetaskexecution,”JournalofIntelligent&RoboticSystems, [30] P.Li,Z.Li,H.Zhang,andJ.Bian,“Onthegeneralizationproperties
+vol.101,no.3,p.49,2021. of diffusion models,” Advances in Neural Information Processing
+[7] I. Hirochika, “Force Feedback in Precise Assembly Tasks,” in AI
+Systems,vol.36,2024.
+Memos. MIT,1974. [31] Y. Meng, Z. Bing, X. Yao, K. Chen, K. Huang, Y. Gao, F. Sun, and
+A. Knoll, “Preserving and combining knowledge in robotic lifelong
+[8] H. Chen, G. Zhang, H. Zhang, and T. A. Fuhlbrigge, “Integrated
+reinforcementlearning,”NatureMachineIntelligence,pp.1–14,2025.
+robotic system for high precision assembly in a semi-structured en-
+[32] Y.Wu,F.Wu,L.Chenetal.,“1khzbehaviortreeforself-adaptable
+vironment,”AssemblyAutomation,vol.27,no.3,pp.247–252,2007.
+tactileinsertion,”in2024IEEEInternationalConferenceonRobotics
+[9] H. Chen, J. Wang, G. Zhang, T. Fuhlbrigge, and S. Kock, “High-
+andAutomation(ICRA),2024,pp.16002–16008.
+precision assembly automation based on robot compliance,” The In-
+[33] O. Spector and D. Di Castro, “Insertionnet-a scalable solution for
+ternational Journal of Advanced Manufacturing Technology, vol. 45,
+insertion,” IEEE Robotics and Automation Letters, vol. 6, no. 3, pp.
+no.9,pp.999–1006,2009.
+5509–5516,2021.
+[10] T.Inoue,G.DeMagistris,A.Munawar,T.Yokoya,andR.Tachibana,
+[34] O.Spector,V.Tchuiev,andD.DiCastro,“Insertionnet2.0:Minimal
+“Deep reinforcement learning for high precision assembly tasks,” in
+contact multi-step insertion using multimodal multiview sensory in-
+2017 IEEE/RSJ International Conference on Intelligent Robots and
+put,” in 2022 International Conference on Robotics and Automation
+Systems(IROS). IEEE,2017,pp.819–825.
+(ICRA). IEEE,2022,pp.6330–6336.
+[11] L. Johannsmeier, M. Gerchow, and S. Haddadin, “A framework for
+[35] G.Schoettler,A.Nair,J.A.Ojea,S.Levine,andE.Solowjow,“Meta-
+robotmanipulation:Skillformalism,metalearningandadaptivecon-
+reinforcementlearningforroboticindustrialinsertiontasks,”in2020
+trol,” in 2019 International Conference on Robotics and Automation
+IEEE/RSJInternationalConferenceonIntelligentRobotsandSystems
+(ICRA). IEEE,2019,pp.5844–5850.
+(IROS). IEEE,2020,pp.9728–9735.
+[12] J.Luo,E.Solowjow,C.Wen,J.A.Ojea,A.M.Agogino,A.Tamar,and
+[36] T.Z.Zhao,J.Luo,O.Sushkov,R.Pevceviciute,N.Heess,J.Scholz,
+P. Abbeel, “Reinforcement learning on variable impedance controller
+S. Schaal, and S. Levine, “Offline meta-reinforcement learning for
+forhigh-precisionroboticassembly,”in2019InternationalConference
+industrialinsertion,”in2022internationalconferenceonroboticsand
+onRoboticsandAutomation(ICRA). IEEE,2019,pp.3080–3087.
+automation(ICRA). IEEE,2022,pp.6386–6393.
+[13] C. C. Beltran-Hernandez, D. Petit, I. G. Ramirez-Alpizar, and
+[37] Z. Bing, A. Koch, X. Yao, K. Huang, and A. Knoll, “Meta-
+K. Harada, “Variable compliance control for robotic peg-in-hole as-
+reinforcement learning via language instructions,” in 2023 IEEE In-
+sembly: A deep-reinforcement-learning approach,” Applied Sciences,
+ternationalConferenceonRoboticsandAutomation(ICRA). IEEE,
+vol.10,no.19,p.6923,2020.
+2023,pp.5985–5991.
+[14] S.HaddadinandE.Shahriari,“Unifiedforce-impedancecontrol,”The
+[38] B.Tang,M.A.Lin,I.Akinola,A.Handa,G.S.Sukhatme,F.Ramos,
+International Journal of Robotics Research, p. 02783649241249194,
+D.Fox,andY.Narang,“Industreal:Transferringcontact-richassembly
+Jul.2024.
+tasks from simulation to reality,” arXiv preprint arXiv:2305.17110,
+[15] D.Driess,F.Xia,M.S.Sajjadi,C.Lynch,A.Chowdhery,B.Ichter,
+2023.
+A.Wahid,J.Tompson,Q.Vuong,T.Yuetal.,“Palm-e:Anembodied
+[39] B. Tang, I. Akinola et al., “Automate: Specialist and gener-
+multimodallanguagemodel,”inInternationalConferenceonMachine
+alist assembly policies over diverse geometries,” arXiv preprint
+Learning. PMLR,2023,pp.8469–8488.
+arXiv:2407.08028,2024.
+[16] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, J. Dabis, C. Finn
+[40] J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic
+et al., “Rt-1: Robotics transformer for real-world control at scale,”
+models,”Advancesinneuralinformationprocessingsystems,vol.33,
+arXivpreprintarXiv:2212.06817,2022.
+pp.6840–6851,2020.
+[17] A. Brohan, N. Brown, J. Carbajal, Y. Chebotar, X. Chen et al., “Rt-
+[41] M. Kollovieh, A. F. Ansari et al., “Predict, refine, synthesize: Self-
+2: Vision-language-action models transfer web knowledge to robotic
+guiding diffusion models for probabilistic time series forecasting,”
+control,”arXivpreprintarXiv:2307.15818,2023.
+AdvancesinNeuralInformationProcessingSystems,vol.36,2024.
+[18] M. Shridhar, L. Manuelli, and D. Fox, “Perceiver-actor: A multi-
+[42] A. Q. Nichol and P. Dhariwal, “Improved denoising diffusion prob-
+task transformer for robotic manipulation,” in Conference on Robot
+abilistic models,” in International conference on machine learning.
+Learning. PMLR,2023,pp.785–799.
+PMLR,2021,pp.8162–8171.
+[19] A. O’Neill, A. Rehman, A. Maddukuri, A. Gupta, A. Padalkar,
+[43] Y.Yang,M.Jinetal.,“Asurveyondiffusionmodelsfortimeseries
+A. Lee, A. Pooley, A. Gupta, A. Mandlekar, A. Jain et al., “Open
+andspatio-temporaldata,”arXivpreprintarXiv:2404.18886,2024.
+x-embodiment: Robotic learning datasets and rt-x models: Open x-
+[44] Y.Li,N.Miaoetal.,“Transformerforobjectdetection:Reviewand
+embodimentcollaboration0,”in2024IEEEInternationalConference
+benchmark,” Engineering Applications of Artificial Intelligence, vol.
+onRoboticsandAutomation(ICRA). IEEE,2024,pp.6892–6903.
+126,p.107021,2023.
+[20] A. Goyal, V. Blukis, J. Xu, Y. Guo, Y.-W. Chao, and D. Fox,
+[45] C. Yang, G. Ganesh, S. Haddadin et al., “Human-like adaptation
+“RVT-2: Learning Precise Manipulation from Few Demonstrations,”
+of force and impedance in stable and unstable interactions,” IEEE
+inRobotics:ScienceandSystems,Jun.2024.
+transactionsonrobotics,vol.27,no.5,pp.918–930,2011.
+[21] T.Pearce,T.Rashid,A.Kanervistoetal.,“Imitatinghumanbehaviour
+[46] B. Albert and T. Tullis, Measuring the user experience: collecting,
+with diffusion models,” in Deep Reinforcement Learning Workshop
+analyzing,andpresentingusabilitymetrics. Newnes,2013.
+NeurIPS,2022.

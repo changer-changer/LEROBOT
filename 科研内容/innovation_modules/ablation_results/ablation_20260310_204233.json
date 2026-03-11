@@ -1,0 +1,120 @@
+[
+  {
+    "name": "Vision-Only",
+    "params": 438535,
+    "inference_time_ms": 3.892488479614258,
+    "output_shape": [
+      4,
+      7
+    ]
+  },
+  {
+    "name": "Tac3D-Only (Simple)",
+    "params": 1887751,
+    "inference_time_ms": 0.1298832893371582,
+    "output_shape": [
+      4,
+      7
+    ]
+  },
+  {
+    "name": "Tac3D-Only (PSTE)",
+    "params": 1965063,
+    "inference_time_ms": 1.4163994789123535,
+    "output_shape": [
+      4,
+      7
+    ]
+  },
+  {
+    "name": "Simple Concat",
+    "params": 2192647,
+    "inference_time_ms": 4.879121780395508,
+    "output_shape": [
+      4,
+      7
+    ]
+  },
+  {
+    "name": "Weighted Sum (0.5/0.5)",
+    "params": 1667847,
+    "inference_time_ms": 4.784300327301025,
+    "output_shape": [
+      4,
+      7
+    ]
+  },
+  {
+    "name": "Weighted Sum (0.7/0.3)",
+    "params": 1667847,
+    "inference_time_ms": 4.800751209259033,
+    "output_shape": [
+      4,
+      7
+    ]
+  },
+  {
+    "name": "Ours (w/o PSTE)",
+    "params": 7748499,
+    "inference_time_ms": 6.546649932861328,
+    "output_shape": [
+      4,
+      7
+    ],
+    "param_details": {
+      "vision_encoder": 42752,
+      "tac3d_encoder": 1491968,
+      "fusion": 6080652,
+      "policy_head": 133127,
+      "total": 7748499
+    }
+  },
+  {
+    "name": "Ours (w/o Phase Gating)",
+    "params": 7265543,
+    "inference_time_ms": 7.880032062530518,
+    "output_shape": [
+      4,
+      7
+    ],
+    "param_details": {
+      "vision_encoder": 42752,
+      "tac3d_encoder": 2224640,
+      "fusion": 5520384,
+      "policy_head": 133127,
+      "total": 7920903
+    }
+  },
+  {
+    "name": "Ours (w/o VT-CAF)",
+    "params": 2305427,
+    "inference_time_ms": 6.787352561950684,
+    "output_shape": [
+      4,
+      7
+    ],
+    "param_details": {
+      "vision_encoder": 42752,
+      "tac3d_encoder": 2224640,
+      "fusion": 560268,
+      "policy_head": 133127,
+      "total": 2960787
+    }
+  },
+  {
+    "name": "Ours (Full System)",
+    "params": 7825811,
+    "inference_time_ms": 7.984342575073243,
+    "output_shape": [
+      4,
+      7
+    ],
+    "param_details": {
+      "vision_encoder": 42752,
+      "tac3d_encoder": 2224640,
+      "fusion": 6080652,
+      "policy_head": 133127,
+      "total": 8481171
+    }
+  }
+]

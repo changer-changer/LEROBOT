@@ -1,0 +1,789 @@
+=== Page 1 ===
+FlowPolicy: Enabling Fast and Robust 3D Flow-based Policy via Consistency Flow
+Matching for Robot Manipulation
+QinglunZhang1,2,*,ZhenLiu1,2,*,HaoqiangFan2,GuanghuiLiu1,BingZeng1,ShuaichengLiu1,2,†
+1UniversityofElectronicScienceandTechnologyofChina
+2MegviiTechnology
+{zhangqinglun26@std.,liuzhen03@std.,guanghuiliu@,eezeng@,liushuaicheng@}uestc.edu.cn,fhq@megvii.com
+Abstract
+Robotscanacquirecomplexmanipulationskillsbylearning
+policies from expert demonstrations, which is often known
+asvision-basedimitationlearning.Generatingpoliciesbased
+on diffusion and flow matching models has been shown to
+beeffective,particularlyinroboticmanipulationtasks.How-
+ever,recursion-basedapproachesareinferenceinefficientin
+workingfromnoisedistributionstopolicydistributions,pos-
+ing a challenging trade-off between efficiency and quality.
+ThismotivatesustoproposeFlowPolicy,anovelframework
+80
+forfastpolicygenerationbasedonconsistencyflowmatch-
+ing and 3D vision. Our approach refines the flow dynamics
+60
+bynormalizingtheself-consistencyofthevelocityfield,en-
+abling the model to derive task execution policies in a sin-
+40
+gleinferencestep.Specifically,FlowPolicyconditionsonthe
+observed 3D point cloud, where consistency flow matching
+20
+directlydefinesstraight-lineflowsfromdifferenttimestates
+to the same action space, while simultaneously constrain-
+0
+ingtheirvelocityvalues,thatis,weapproximatethetrajec- 0 30 60 90 120 150
+tories from noise to robot actions by normalizing the self- Inferencetime(ms)
+consistencyofthevelocityfieldwithintheactionspace,thus
+improvingtheinferenceefficiency.Wevalidatetheeffective-
+nessofFlowPolicyinAdroitandMetaworld,demonstratinga
+7×increaseininferencespeedwhilemaintainingcompetitive
+average success rates compared to state-of-the-art methods.
+Codeisavailableathttps://github.com/zql-kk/FlowPolicy.
+Introduction
+Enabling robots to acquire diverse manipulation tasks by
+learningfromexpertdemonstrations,commonlyreferredto
+as imitation learning, has been a long-standing objective
+in robotic learning and embodied AI (Atkeson and Schaal
+1997; Argall et al. 2009; Wang et al. 2024a; Zare et al.
+2024; Li et al. 2024). Prior work attempts to tackle this
+problem either by explicitly defining it as a supervised re-
+gression task (Zhang et al. 2018; Florence, Manuelli, and
+Tedrake2019;Toyeretal.2020;Rahmatizadehetal.2018),
+orbyimplicitlymodelingactiondistributionsusingenergy-
+basedmodels(Florenceetal.2022;Jarrett,Bica,andvander
+Schaar2020).Theformerlearnsthemappingfromobserva-
+tions to actions, while the latter seeks to identify the min-
+*Theseauthorscontributedequally.
+†Correspondingauthors
+Copyright©2025,AssociationfortheAdvancementofArtificial
+Intelligence(www.aaai.org).Allrightsreserved.
+)%(etarsseccuS
+80
+60 FlowPolicy(ours) DP3
+SimpleDP3
+(one-step)
+40
+DP
+20
+Metaworld
+0
+0 30 60 90 120 150
+Inferencetime(ms)
+)%(etarsseccuS
+80
+60
+40
+20
+0
+0 30 60 90 120 150
+FlowPolicy(ours) DP3
+SimpleDP3
+(one-step)
+DP
+Metaworld
+)%(etarsseccuS
+80
+60 FlowPolicy(ours) DP3
+(one-step)
+SimpleDP3
+40
+20
+DP Adroit
+0
+0 30 60 90 120 150
+)%(etarsseccuS
+FlowPolicy(ours) DP3
+(one-step)
+SimpleDP3
+DP Adroit
+Figure 1: Comparison of FlowPolicy with the state-of-the-
+art 2D-based method DP(Chi et al. 2023) and 3D-based
+methods DP3 (Ze et al. 2024) and its lightweight version
+SimpleDP3intermsofinferencetimeandaveragesuccess
+rateonAdroitandMetaworld.
+imal energy action through energy optimization. However,
+explicitregressionapproachesareofteninadequateforcap-
+turing multi-modal demonstration behaviors and struggle
+withhigh-precisiontasks(Florenceetal.2022).Conversely,
+energy-basedmodelsfacechallengeswithtrainingstability,
+primarilyduetothenecessityofnegativesampleextraction
+duringthetrainingprocess(Chietal.2023).
+Recent advancements in diffusion-based policy learning
+frameworks (Wang, Hunt, and Zhou 2022; Pearce et al.
+2023;Reussetal.2023;Chietal.2023;Zeetal.2024)have
+elevated this task to new heights, leveraging their powerful
+capability to model complex, high-dimensional robotic tra-
+jectories. Within this context, Diffusion Policy (Chi et al.
+2023)definespolicylearningasaconditionaldenoisingdif-
+fusion process over the robot action space, conditioned on
+2Dobservationfeatures.Thesubsequent3DDiffusionPol-
+icy(Zeetal.2024),alsoknownasDP3,furtherextendsthe
+4202
+ceD
+51
+]OR.sc[
+2v78940.2142:viXra
+=== Page 2 ===
+conditionalinputtomorecomplex3Dvisualrepresentations RelatedWork
+and is thus capable of acquiring generalizable visuomotor
+ApplicationofDiffusionModelsto3DRobotics
+policieswithonlyafewdozenexpertdemonstrations.Nev-
+ertheless, diffusion-based solutions are inevitably plagued Diffusionmodelsareafamilyofgenerativemodelsthatare
+by substantial runtime inefficiencies, as they typically re- highly generalizable and easy to train, which are initially
+quire numerous sampling steps during inference to gener- utilizedforimagegenerationtasks(Batzolisetal.2021;Ep-
+ate high-quality actions. While various sampling accelera- steinetal.2023).Asasubversiveapproach,diffusionmod-
+tiontechniques(Song,Meng,andErmon2020;Songetal. elsprogressivelyrefineGaussiannoisebyrecursivelyrefin-
+2023)havebeenproposed,thecriticalchallengeofbalanc- ingittothepointwhereitsatisfiesthedatadistribution.Re-
+ing efficiency and policy quality persists, severely limiting cently,ithasbeenintroducedtothefieldofrobotics,includ-
+thepracticalapplicationoftheselearnedpolicies. ing reinforcement learning (Ro¨mer et al. 2024), imitation
+learning (Wang et al. 2024b), trajectory optimization (Car-
+On the other hand, Flow Matching (FM) (Lipman et al.
+valho et al. 2023) and grasping (Urain et al. 2023), and
+2022), another class of generative model frameworks that
+have shown impressive performance. Denoising Diffusion
+directly defines probability paths via Ordinary Differen-
+ProbabilisticModels(DDPMs)(Ho,Jain,andAbbeel2020)
+tialEquations(ODEs)totransformbetweennoiseanddata
+generate a clean sample from noise by solving a Stochas-
+samples, has shown greater numerical stability and infer-
+ticDifferentialEquation(SDE).However,numericalsimu-
+ence efficiency than diffusion families. The latest advance-
+lationsofdiffusionprocessestypicallyinvolvehundredsof
+mentinthisarea,ConsistencyFlowMatching(Consistency-
+steps, greatly slowing the inference speed. Denoising Dif-
+FM)(Yangetal.2024),furtherimprovesefficiencybydefin-
+fusion Implicit Models (DDIMs) (Song, Meng, and Ermon
+ing a straight-line flow from any point in time to the same
+2020) speeds up inference by solving the inverse process
+endpoint,makingone-stepgenerationpossible,whichoffers
+as an Ordinary Differential Equation (ODE), but this sac-
+a potential direction for real-time policy generation. How-
+rifices generation quality. Although adaptive ODE solvers
+ever, the conditional generation capability of Consistency-
+are available, they do not meaningfully reduce the number
+FM,particularlyforembodiedtasksinvolvingcomplex3D
+of inference steps. In 3D robot manipulation tasks involv-
+visionrepresentationsasconditions,remainsunderexplored.
+inghigh-dimensionalcontrol,achievingreal-timeinference
+Inthispaper,weaddressthesechallengesinpolicygener-
+speed with high-quality actions using diffusion models is
+ation byleveraging theconcept ofconsistency flow match-
+challenging. The primary obstacles arise from the inherent
+ing,introducinganovel3Dflow-basedframeworkforreal-
+uncertaintyofthediffusionprocessanditsrecursivenature.
+time robotic manipulation policy generation, named Flow-
+To improve the efficiency of the diffusion process,
+Policy.Morespecifically,wemakethefirstattemptatcon-
+Song(Songetal.2023)proposestheconsistencymodel.The
+ditional consistent flow matching in 3D robotic manipula-
+consistencymodeldirectlymapsnoisetoadatadistribution
+tiontasks.FlowPolicyallowsforthefastestpossiblegener-
+bylearningtomappointsatarbitrarymomentsontheprob-
+ationoftargetactionsbydirectlydefiningstraight-lineflow
+abilistic flow ODE (PF-ODE) trajectory to the origin (i.e.,
+conditionsontheinitial3Dpointclouds.Inaddition,multi-
+cleandata)tosupportone-steporseveral-stepgeneration.It
+segment training is applied to ensure the quality of action
+hasbeenutilizedinseveraldomainssuchashigh-fidelityim-
+generation, aiming at a better trade-off between efficiency
+agegeneration(Luoetal.2023),text-to-3Dgeneration(Seo
+andeffectiveness.Weevaluatedourframeworkon37robot
+etal.2023),andvideoediting(Chaietal.2023).Although
+manipulation tasks from Adroit and Metaworld. As illus-
+consistency models support one-step generation (Lu et al.
+tratedinFig.1,ourapproachachievesa7×reductioninav-
+2024), they typically require distillation to achieve the de-
+erage inference time while maintaining a competitive aver-
+siredresults,whichrestrictstheirapplicabilityinreal-world
+agesuccessratecomparedtostate-of-the-artmethodsbased
+robotics. Compared to the above methods, our FlowPolicy
+on3Dvisualconditionalrepresentation.Bycombiningcon-
+doesnotrequirenumericalsimulationordistillation.
+sistency flow matching with 3D condition-based robot ma-
+nipulation,weenablethereal-timedecodingofhigh-quality
+FlowMatching
+robotactionswithone-stepinference.Insummary,ourmain
+contributionsarethreefold: Flow Matching (FM) (Lipman et al. 2022) is an emerging
+familyofgenerativemodelsbasedonoptimaltransportthe-
+• We first propose a 3D flow-based policy generation ory(Mozaffarietal.2016),whichaimstoestimateavector
+framework that conditions the 3D visual representation fieldthatyieldsanODEandadmitthedesiredprobabilistic
+andcangeneraterobustroboticactionswithfewdemon- path. FM allows direct regression to the goal of estimating
+strations,namelyFlowPolicy. thevectorfield,andhenceitissimplerandmorenumerically
+stablethanDDPMandDDIM.Byavoidingestimatingnoise
+• The proposed FlowPolicy significantly narrows the gap
+andinsteadmatchingapathfromthenoisetothetarget,FM
+betweenefficiencyandqualityinvision-basedimitation
+enables faster inference, which is crucial in real-time robot
+learning algorithms, enabling real-time policy genera-
+manipulations.Previousworkshavedemonstratedtheeffec-
+tionacrossdiversemanipulationtasks.
+tiveness of FM for inverse reinforcement learning (Chang
+• Weconductextensiveexperimentson37simulationtasks etal.2022),multi-supportmotion(Rouxeletal.2024),and
+from Adroit and Metaworld, demonstrating that our ap- robot deployment (Feng et al. 2023). However, FM-based
+proachachievesstate-of-the-artaveragesuccessrates. generationofcomplexrobotactionhasrarelybeenreported,
+=== Page 3 ===
+FlowPolicy Policy
+Expert demonstrations
+Conditioning
+v
+Sparse 3D
+Encoder
+Compact 3D Repr.
+Single-view Images Flow Network
+Robot State Embedd.
+Execute
+Robot state
+Encoder s a a
+0
+1
+State
+Noise Action
+Figure2:Overallpipeline.ThetopsectionvisualizesFlowPolicy,whereastraight-lineflowenablesthefastestdatatransition
+from the noise distribution to the action distribution (Adroit: Open the door). The bottom section shows the details of Flow-
+Policy: expert demonstrations are converted to 3D point clouds, which, along with the robot state, are encoded into compact
+3Dvisualrepresentationsandstateembeddings.Astraight-lineflowisthenlearnedviaconditionalconsistencyflowmatching,
+generatinghigh-qualityactionsfortasks(Metaworld:Assembly)atreal-timeinferencespeed.
+especiallyinvolvingcomplex3Dspatialrepresentations.In Method
+this work, we explore the feasibility of applying FM to 3D
+Ourmethodexpectsalimitednumberofexpertdemonstra-
+robotmanipulationandhopetoachievereal-timegeneration
+tions to teach an agent to learn a policy π : O =⇒ A, i.e.,
+throughconsistencyconstraints.
+mappingfromvisualobservationso ∈ O toactionsa ∈ A.
+Recently, Yang (Yang et al. 2024) proposed to perform Visual observations include the robot state and scene point
+consistencyinvelocityfieldspaceratherthansamplespace clouds, and actions are usually sequences of trajectories of
+to improve the flow matching process (Consistency-FM). therobottoaccomplishaspecifictask.Diffusion-basedand
+Consistency-FM directly defines a straight-line flow from flow-basedmethodscangeneratehigh-qualityrobotactions,
+anytimetothesameendpointandimposesconstraintsonits but expensive iterative sampling makes them unable to ac-
+velocity values. Also, the multi-segment training technique complishreal-timeoperations,andthustheapplicationsce-
+allowsConsistency-FMtoachieveabettertrade-offbetween nariosareverylimited.WhileConsistency-FMbalancesef-
+samplingqualityandefficiency.Therefore,Consistency-FM ficiencyandeffectiveness,existingworkshavenotexplored
+is an elegant balance of efficiency and performance. More theapplicationof3Dconditiongenerationbasedonconsis-
+importantly, Consistency-FM can be trained to produce a tent flow matching to robotic manipulation. Therefore, we
+robust flow model without the aid of distillation, which is propose FlowPolicy, a conditional consistency flow match-
+valuable to robots performing unseen tasks, as it is diffi- ingmodel,whichguaranteesthegenerationofhigh-quality
+culttofindarobustteachermodelinpracticalapplications. actionswhilealsoaccomplishingone-stepinferenceforreal-
+Whileconsistency-basedmodelshaveshownpromisingre- time applications. This section is organized as follows: we
+sults in some areas of embodied intelligence (Ding and Jin firstreviewflowmatchingandconsistentflowmatching,and
+2024; Chen, Li, and Zhao 2024; Prasad et al. 2024), its ef- then introduce the pipeline of FlowPolicy. Finally, we de-
+fectiveness has not been demonstrated on embodied tasks scribethedesigndetailsofeachcomponent.
+withcomplex3Dvisionrepresentationasconditions,espe-
+ConsistencyFlowMatching
+ciallyforflow-basedmethods.Toaddressthisissue,wepro-
+pose FlowPolicy, a real-time 3D policy generation frame- Wefirstintroducethenotionofflowmatching(Lipmanetal.
+workbasedonconsistencyflowmatching. 2022), given a ground truth vector field u(t,x) that gener-
+=== Page 4 ===
+atestheprobabilisticpathp undertwomarginalconstraints, Here,µi isauniformdistributionon[i/K,(i+1)/K −
+t
+p = p and p = p . The expectation is to find an ∆t]. The moving step of each segment is controlled by a
+t=0 0 t=1 1
+ODEwhosesolutiontransmitsthenoisex ∼p tothedata verysmallpositivenumber∆t.xandx bothfollowawell-
+0 0 t
+x ∼p : established distribution pattern. The flow and vector fields
+1 1
+(cid:26) dξ d x t (t) =ν ξ θ (t ( , 0 ξ ) x = (t) x ) (1) o o f n e th a e ch pa s r e a g m m e e t n e t rs a θ re a d n e d sc ti r m ib e ed t. b In y a ν d θ i d (t it , i x on t ) , , λ w i h is ic a h p d o e s p it e i n v d e
+x
+weighting factor used to balance the importance of the dif-
+ξ (t)iscalledaflow.Thegoalofflowmatchingistherefore
+x ferent sections, especially since vector fields in the middle
+tolearnavectorfieldν (t,x ):
+θ t sectionareusuallymoredifficulttotrain.
+L (θ)=E ∥ν (t,x )−u(t,x )∥2 (2)
+FM t,pt θ t t 2 FlowPolicy
+Flowmatchingisasimpleandattractiveobjective.How-
+The overall pipeline of our proposed FlowPolicy is pre-
+ever,lackofapriorknowledgeaboutuandp ,conditional
+t
+sented in Fig. 2. FlowPolicy takes the powerful 3D diffu-
+flowmatching(Lipmanetal.2022)istypicallyemployedto
+sionpolicy(DP3)astheunderlyingarchitecture.DP3isthe
+regressν (t,x )givenaconditionalvectorfieldu(t,x |x )
+θ t t 1
+state-of-the-art 3D vision-based conditional diffusion pol-
+andaconditionalprobabilitypathp (x |x ):
+t t 1
+icy model. We address the inefficiency of 3D policy infer-
+L (θ)=E E ∥ν (t,x )−u(t,x |x )∥2 ence by constructing conditional consistency flow match-
+FM∗ t,q(x1) t,(pt|x1) θ t t 1 2
+(3) ingas apolicygenerator whileensuringthe qualityof task
+Where x ∼q(x ). Learning straight-line flows enables completion.Specifically,weconsidertheobserved3Dpoint
+1 1
+faster inference efficiency. Consistency flow matching cloud as a visual conditional representation, which is com-
+(Consistency-FM) (Yang et al. 2024) is a generalized binedwithstateembeddingtoguidetheflowmodeltolearn
+method for efficiently learning straight-line flows without the manipulation policy. In the training phase, we regress
+approximating the entire probabilistic path. Consistent ve- the consistency vector field and learn the straight-line flow
+locityisdefinedasν(t,ξ (t))=ν(0,x),indicatingthatthe through velocity consistency loss, which directly generates
+x
+velocityalongthesolutionofEquation1remainsconstant. the robot action sequences. Depending on the consistency
+Due to the complexity of the target distribution solution, training and condition representation, FlowPolicy can gen-
+Consistency-FM does not regress directly on the ground eratehigh-qualityactionsinone-stepinferenceandaccom-
+truth vector field, instead, it directly defines a velocity- plishcomplexmanipulationtasks.
+consistentstraight-lineflowthatdepartsatdifferenttimesto
+3Dvisualconditionalrepresentation FlowPolicyapplies
+thesameendpoint.Consistency-FMcanregressonthefol-
+3D point clouds as a guide to generate execution-specific
+lowingobjectivetolearnavelocity-consistentvectorfield:
+policies given its rich spatial information. Specifically, we
+L(θ)=E E ∥f (t,x )−f (t+∆t,x )∥2 firstacquiresingle-viewdepth-observationimagesandthen
+t∼µ xt,xt+∆t θ t θ− t+∆t 2 convert the depth information into a point cloud via cam-
++α∥ν θ (t,x t )−ν θ− (t+∆t,x t+∆t )∥2 2 era intrinsics and extrinsic. The single-view image is more
+f (t,x )=x +(1−t)∗ν (t,x ) (4) practically applicable and the point cloud provides a richer
+θ t t θ t
+spatial representation. Further, a farthest point sampling
+whereµisauniformdistributionon[0,1−∆t],αisapos-
+(FPS) (Qi et al. 2017) is applied to downsample the point
+itivescalar,and∆tisthetimeinterval,asmallandpositive
+cloudtopreservespatialwholenessandreduceredundancy.
+scalar.θ−denotestherunningaverageofpastθvaluescom-
+Finally, we employ a lightweight MLP to encode the point
+puted using an exponential moving average (EMA). Train-
+cloudintoacompact3Drepresentationasthevisualcondi-
+ingL(θ)notonlyregularizesthevelocitybutalsolearnsthe
+tionalrepresentationforflow-basedpolicy.Withthecondi-
+datadistribution.
+tionalconstraintsofvisualfeatures,FlowPolicyenablesthe
+Additionally, Consistency-FM allows for multi-segment
+efficientcaptureofspatialinformationthatiscriticaltofine
+training to enhance its ability to express the distribu-
+roboticmanipulationtasks.
+tionoftransmissionthroughp .Specifically,multi-segment
+t
+Consistency-FM splits time into uniform subsets, normal- Conditional Trajectory Generation with FlowPolicy
+izes a consistent vector field νi(t,x ) within each subset, ForFlowPolicy,giventhefollowingdefinitions:
+θ t
+and in turn constructs segmented linear trajectories. This
+approach relaxes the velocity consistency requirement and asrc∼Γsrc,atar∼Γtar(·|s,v),t∼µ[ϵ,1−ϵ] (6)
+makes data transmission more flexible and efficient. Given
+whereΓsrc isthesourcedistribution,usuallydescribedas
+the number of segments K, the training loss of segmented
+Gaussian noise Γsrc = N(0,I). Γtar is the target distribu-
+Consistency-FMisasfollows:
+tion conditioned by the state s and visual representation v.
+L(θ∗)=E λiE ∥fi(t,x ) asrcandatararedenotedassequencesoftrajectoriessampled
+t∼µi xt,xt+∆t θ t from the source and target distributions. t obeys a uniform
+−f θ i − (t+∆t,x t+∆t )∥2 2 distribution t ∈ [ϵ,1−ϵ]. Define a t to be the interpolated
++α∥νi(t,x )−νi (t+∆t,x )∥2 trajectorybetweenthesourceanddestinationtrajectoriesat
+θ t θ− t+∆t 2
+thetransmissiontimestept.F istheflowmodelconditioned
+fi(t,x )=x +((i+1)/k−t)∗νi(t,x ) (5)
+θ t t θ t bythestatesandvisualrepresentationv,FlowPolicycanbe
+=== Page 5 ===
+Adroit Metaworld
+Methods NFE Average
+Hammer Door Pen Easy(21) Medium(4) Hard(4) VeryHard(5)
+DP 10 103.6±0.6 102.5±0.4 94.9±6.7 104.9±2.2 105.3±0.6 120.3±1.4 103.3±2.7 106.1±2.4
+DP3 10 146.6±0.7 146.8±2.0 144.8±2.9 145.9±2.1 144.7±2.3 148.6±3.4 143.2±2.6 145.7±2.3
+SimpleDP3 10 64.5±1.4 64.2±2.4 71.2±9.3 62.7±6.2 59.4±4.1 63.0±6.8 65.3±6.7 63.0±5.9
+FlowPolicy(Ours) 1 20.4±0.5 19.3±0.9 20.6±0.2 19.9±0.1 19.8±0.3 20.1±0.2 20.0±0.1 19.9±0.2
+Table 1: Quantitative comparison of runtime between state-of-the-art policy models (Chi et al. 2023; Ze et al. 2024) and the
+proposedFlowPolicy.Weevaluate37tasksfromAdroitandMetaworldacross3randomseedsandreportinferencetimeper
+step(ms)withstandarddeviation.OurFlowPolicyenablesreal-timerobotoperationswithanaveragetimeof19.9msinone-
+stepinference,whichis7×fasterthanDP3and3×fasterthanitslightweightversion,SimpleDP3.
+Adroit Metaworld
+Methods NFE Average
+Hammer Door Pen Easy(21) Medium(4) Hard(4) VeryHard(5)
+DP 10 16±10 34±11 13±2 50.7±6.1 11.0±2.5 5.25±2.5 22.0±5.0 35.2±5.3
+Adaflow∗ - 45±11 27±6 18±6 49.4±6.8 12.0±5.0 5.75±4.0 24.0±4.8 35.6±6.1
+CP 1 45±4 31±10 13±6 69.3±4.2 21.2±6.0 17.5±3.9 30.0±4.9 50.1±4.7
+DP3 10 100±0 56±5 46±10 87.3±2.2 44.5±8.7 32.7±7.7 39.4±9.0 68.7±4.7
+SimpleDP3 10 98±2 40±17 36±4 86.8±2.3 42.0±6.5 38.7±7.5 35.0±11.6 67.4±5.0
+FlowPolicy(Ours) 1 100±0 58±5 53±12 90.2±2.8 47.5±7.7 37.2±7.2 36.6±7.6 70.0±4.7
+Table2:Comparisonsonsuccessratebetweenstate-of-the-art2D-based(Chietal.2023;Huetal.2024;Prasadetal.2024)and
+3D-based(Zeetal.2024)policymodelsandtheproposedFlowPolicy.Weevaluate37tasksfromAdroitandMetaworldacross
+3randomseedsandreportthesuccessrate(%)withstandarddeviation.‘∗’indicatesthattheNFEofAdaflowisnotfixed.
+simplydescribedas: Metaworld benchmark offers a diverse array of tasks that
+spanthespectrumofdifficultylevels,fromeasytoveryhard,
+FlowPolicyF :a,t,s,v −→∆a (7)
+typicallysurmountedwiththeaidofatwo-fingeredrobotic
+To train a high-quality one-step generator, we employ a arm.Fortheprocurementofexpertdemonstrations,wehave
+two-segment Consistency-FM and use backpropagation to harnessedawell-trainedheuristicstrategy,designedtoyield
+minimizethefollowingequation: datasetsofexceptionalquality.
+Baselines The main objective of this work is to leverage
+L (θ)=E λiE ∥fi(t,a ,s,v)
+FlowPolicy t∼µi at,at+∆t θ t 3D point clouds as visual conditional representations, aim-
+−f θ i − (t+∆t,a t+∆t ,s,v)∥2 2 ing to elevate the robot manipulation to the real-time level
++α∥νi(t,a ,s,v)−νi (t+∆t,a ,s,v)∥2 viaaconsistencyflowmatchingstrategy.Therefore,wefo-
+θ t θ− t+∆t 2 cus on comparing DP3, a state-of-the-art 3D conditional
+f θ i(t,a t ,s,v)=a t +(i+1)/k−t∗ν θ i(t,a t ,s,v) (8) diffusion-based strategy model. In addition, its lightweight
+version, simple DP3, is also compared. We also compared
+By training the two-segment loss above, two consistent
+state-of-the-art 2D-based approaches, including diffusion
+vectorfieldscanbelearned,whichinturnconstructsatwo-
+policy(DP)(Chietal.2023),Adaflow(Huetal.2024),and
+segment linear trajectory that transforms the noisy trajec-
+Consistency Policy (CP) (Prasad et al. 2024) and collected
+tory into the target trajectory. In the inference process, the
+thesameviewpointimagesforthem.
+noise trajectories are sampled from the source distribution
+a 0 ∈ asrc and then predicted by a flow model to obtain ac- Evaluation Metrics We evaluate 20 episodes per 200
+tiontrajectoriesa 1 ∈atar. trainingepochsandrecordthemeanofthefivehighestsuc-
+FlowPolicy provides a framework for generating high- cess rates. Each task is run repeatedly under three differ-
+quality actions in a one-step process that promotes a trade- entrandomseeds,andtheirmeansandvariancesaswellas
+offbetweenefficiencyandeffectiveness. inference times are calculated. In addition, the Number of
+Function Evaluations (NFE) is evaluated as a metric of in-
+Experiments ference efficiency. The higher the success rate, the better,
+DatasetandImplementationDetails andthelowertheNFEandinferencetime,thebetter.
+Simulation Benchmarks We choose two preeminent en- Implementation Details For each task, we generate a
+vironmentalsimulators,Adroit(Rajeswaranetal.2018)and compact conditional embedding consisting of a 3D point
+Metaworld (Yu et al. 2021), as our benchmarks for a com- cloud and the robot’s state with a dimension of 64. Addi-
+prehensive set of 37 tasks. The Adroit benchmark presents tionally, our model employs an observation horizon of two
+threechallengesofdexterousmanipulationtasks,wherethe steps, signifying that it leverages the point clouds from the
+executionofcomplextasksisfacilitatedbytheintricatecon- two most recent time frames as conditional inputs for pol-
+trolofahigh-dimensional,articulatedhand.Incontrast,the icygeneration.Weassigntenexpertdemonstrationstoeach
+=== Page 6 ===
+3PD
+yciloPwolF
+Adroit: Pen (DP3: 144.8ms / FlowPolicy: 20.6ms) Metaworld: Pick-place (DP3: 149.6ms / FlowPolicy: 20.1ms)
+Figure3:QualitativeComparisonofFlowPolicyandDP3(Zeetal.2024)ontwochallengingmanipulationtasksfromAdroit
+andMetaworld.Ourmethodsuccessfullygenerateshigh-qualityactionsatreal-timespeeds,completingthesetaskseffectively,
+whereasDP3eitherproduceslower-qualityactions(left)orfailstocompletethetask(right).
+task. The image size is cropped to a resolution of 84×84
+pixels,andthepointcloudisdownsampledto512pointsfor 100
+Adroitor1024pointsforMetaworldusingFPS.Duringthe
+80
+training phase, the weights are updated using the AdamW
+optimizer with a learning rate of 1e-4 and a batch size of 60
+SimpleDP3
+128.Thetrainingprocessisiteratedfor3,000epochs.EMA
+40 DP3
+decay rate is set to the default value of 0.95. Additionally, FlowPolicy
+both action and state inputs are normalized to the interval 20
+[-1, 1] to facilitate the training process, with actions being 0
+0 10k 20k 30k 40k
+unnormalizedbeforeexecution.Ourmodelandallcompared
+methodsaredevelopedbasedonthePyTorchframeworkand
+evaluatedonasingleNVIDIARTX2080TiGPU.
+ComparisonwithState-of-the-artMethods
+Quantitative Comparisons on Runtime Table 1 reports
+the average inference time of each model for 3 dexterity
+tasks from Adroit and 34 different difficulty tasks from
+Metaworld. Our FlowPolicy demonstrates remarkable re-
+sultsbyreducingtheaverageinferencetimeto19.9ms,im-
+proving by more than 7× (19.9ms vs. 145.7ms) compared
+totheDP3model.EvenforthelightweightversionofSim-
+ple DP3, FlowPolicy enhances the inference efficiency by
+over 3× (19.9ms vs. 63.0ms). The consistent velocity field
+providesamoredirectlinearpath,enablingfasterandmore
+efficient action generation. Notably, our approach exhibits
+lessvariationininferencetime.Specifically,FlowPolicyhas
+less fluctuation in the average runtime for both individual
+and overall tasks, with a potential explanation attributed to
+thedeterministicsamplingpolicyofconsistentflowmatch-
+ing.TheresultsshowthatfasterODEtrajectoriescanbede-
+termined and the inference efficiency can be improved by
+directlydefiningastraight-lineflow,whichiscrucialforre-
+alizingreal-timerobotoperation.
+QuantitativeComparisonsonSuccessRate Further,Ta-
+ble 2 shows the average success rate of each model on 37
+tasks in Adroit and Metaworld. 3D-based baselines gener-
+ally outperform 2D-based ones, owing to the richer spatial
+representation offered by point clouds. Among 3D-based
+baselines, our approach achieves the best success rate with
+theshortestinferencetime.Specifically,FlowPolicy’sover-
+)%(etaRsseccuS
+MetaworldButtonPressWall MetaworldHammer
+100
+80
+60
+40
+20
+0
+0 10k 20k 30k 40k
+100
+80
+60
+40
+20
+0
+0 10k 20k 30k 40k
+Step
+)%(etaRsseccuS
+MetaworldReachWall AdroitPen
+100
+80
+60
+40
+20
+0
+0 10k 20k
+Step
+Figure 4: Illustrations of the learning curves. Compared to
+SimpleDP3andDP3,FlowPolicydemonstrateshighersta-
+bility,learningefficiency,andsuccessrates.
+all success rate is 1.3% higher than DP3 and 2.6% higher
+than Simple DP3 with the same expert demonstration. The
+resultsshowthatFlowPolicycanachievecompetitiveresults
+with state-of-the-art methods in just one step of inference.
+Thisisattributedtoconditionaltrajectorygenerationbased
+on consistent flow matching. On the one hand, the com-
+pact 3D representation leads to a richer spatial representa-
+tionoftheflowmodel.Ontheotherhand,directlydefining
+thestraight-lineflowmotivatesfasterandsimplerODEtra-
+jectoriestotheextentthattheycanbegeneratedinonestep.
+Finally,multi-segmenttrainingensuresatrade-offbetween
+generation quality and efficiency. As a result, FlowPolicy
+decodeshigh-qualityrobotactionsinjustonestepofinfer-
+ence, which demonstrates the effectiveness of consistency
+flowmatchinginrobotmanipulationtasks.
+=== Page 7 ===
+100
+80
+60
+SimpleDP3
+40 DP3
+FlowPolicy
+20
+0
+0 10k 20k 30k 40k
+)%(etaRsseccuS
+MetaworldButtonPressWall MetaworldHammer
+100
+80
+60
+40
+20
+0
+0 10k 20k 30k 40k
+100
+80
+60
+40
+20
+0
+0 10k 20k 30k 40k
+Step
+)%(etaRsseccuS
+MetaworldReachWall
+100
+80
+60
+40 DP3
+FlowPolicy
+20
+0
+1 10 20 50
+MetaworldReachWall AdroitPen
+100
+80
+60
+40
+20
+0
+0 10k 20k
+Step
+)%(etaRsseccuS
+MetaworldCoffeePull
+100
+80
+60
+40
+20
+0
+1 10 20 50
+MetaworldHammer
+100
+80
+60
+40
+20
+0
+1 10 20 50
+NumberofExpertDemonstrations
+)%(etaRsseccuS
+AnalysisofLearningCurves Similarly,weselectedfour
+representativetasksinAdroitandMetaworldandvisualized
+theirlearningcurves,asillustratedinFigure4.Althoughwe
+defined 3000 epochs for each task, most of the tasks con-
+vergedandleveledoffat500–1000epochs.Forthesimple-
+level task ‘Button Press Wall’, all three models learned the
+correctpolicyeasilyandconvergedwithasmallnumberof
+iterations.AlthoughSimpleDP3andDP3havehighsuccess
+rates,theirsuccessratesfluctuateastrainingprogresses.On
+the contrary, our FlowPolicy learns the button policy well
+MetaworldPickPlace andmaintainsit,demonstratingthestabilityofFlowPolicy.
+100 For another simple level task ’Reach Wall’ and a medium
+difficulty task ‘Hammer’, all three models learn faster, but 80
+SimpleDP3andDP3reachaperformancebottleneck,while
+60
+our method achieves a higher task success rate. The learn-
+40 ingcurvesforthedexteritytaskinAdroitshowsimilarcon-
+clusions.TheaboveresultsshowthatFlowPolicycanlearn
+20
+policiesfasterandbetter,anddemonstratescertainstability.
+0
+1 10 20 50
+NumberofExpertDemonstrations AblationStudiesonExpertDemonstrations
+Thesuccessrateoftheagentinaccomplishingtasksdepends
+Figure5:Ablationonthenumberofexpertdemonstrations.
+onthenumberandqualityofexpertdemonstrations,where
+We choose four typical tasks to explore the impact of dif-
+thequalityofdemonstrationsisensuredbyaheuristicalgo-
+ferent numbers of demonstrations on FlowPolicy and DP3.
+rithm.Wefurtherconductablationstudiestoverifytheinflu-
+Bothgenerallyimprovetheaccuracywithmoredemonstra-
+enceofthenumberofexpertdemonstrations.Asillustrated
+tions,butFlowPolicytypicallyhasahighersuccessrateand
+inFigure5,thesuccessratevariationcurvesfortypicaltasks
+avoidstheperformancebottleneckaspresentedinDP3.
+withdifferentnumberofdemonstrations.Fornon-hardtasks
+(i.e.,‘ReachWall’,‘Hammer’),FlowPolicycanoutperform
+DP3withalimitednumberofpresentations.Forhard-level
+QualitativeComparisonsonManipulationTasks Asil-
+tasks (i.e., ‘Pick-Place’), the success rate of the task can
+lustrated in Figure 3, we selected two typical qualitative
+be significantly improved by increasing the number of ex-
+examples in Adroit and Metaworld, generated by DP3 and
+pert presentations, as shown in both FlowPolicy and DP3.
+FlowPolicy, respectively. From left to right, this sequence
+However,DP3reachesperformancesaturationmoreeasily,
+delineates the holistic progression of the task’s execution,
+whichevenleadstoadecreaseinthesuccessratewhenthe
+witheachframeofthesequencecorrespondingtoadistinct
+number of demonstrations is sufficient (i.e., ‘Coffee Pull’),
+phase in the operation, as performed by the agent. On the
+while FlowPolicy performs better. The experiments reveal
+leftisa‘Pen-turning’taskinvolvingcomplexdexterityma-
+abettertrade-offbetweenthenumberofexpertdemonstra-
+nipulation, which requires turning the blue-capped pen in
+tions and the success rate of the proposed FlowPolicy, i.e.,
+the dexterous hand to a specific position (i.e., the green-
+the ability to learn effective data distributions from a small
+capped pen serves as the reference angle). Although DP3
+amount of data and to break through performance bottle-
+accomplishesthedexteritytask,thediffusionpolicygener-
+neckswhentheamountofdataissufficient.
+atedbasedonDP3failstoensureconsistencywiththetarget
+penin3DspacecomparedtoFlowPolicy.Specifically,DP3
+Conclusion
+turnsoneendofthepentoastatesohighthatitisdarkerin
+the camera view. In contrast, FlowPolicy generates higher- In this work, we have introduced FlowPolicy, a novel 3D
+quality action sequences to turn the pen to the most appro- flow-based visual imitation learning algorithm. It can be
+priateangle.Moreimportantly,FlowPolicygetsclosertothe summarizedasapolicy-generatingmodelbasedon3Dpoint
+target position faster at the same frame. The right case is a cloudandconsistencyflowmatching.Forthefirsttime,we
+difficult‘Pick-Place’taskinMetaworld,whichrequiresthe haveexploredthechallengeofconditionalgenerationwithin
+use of parallel gripping clips to carry a red cube to a blue consistency flow matching, particularly under complex 3D
+target location. DP3 unsuccessfully picks up the red cube visualrepresentations.FlowPolicyacceleratesthetransferof
+and fails the task. Instead, FlowPolicy correctly locates the datafromthenoisetotheactionspacebydefiningstraight-
+position of the red cube and successfully carries it to the line flows, thereby improving the inference efficiency of
+target location. The above findings show that our FlowPol- robotic manipulation tasks at the real-time level. Evalua-
+icynotonlyaccomplishesthetasksthatDP3cannotaccom- tions across 37 tasks of diverse challenges on Adroit and
+plish well, but also achieves a higher quality and speed of MetaworldplatformsdemonstratethatFlowPolicyachieves
+accomplishment than DP3. This further demonstrates that competitivesuccessrateswithreal-timeinferencespeed.We
+ourproposedFlowPolicyhasamoredelicateunderstanding hopeourworkwilladvance3Dvisual-basedimitationlearn-
+andgenerativeabilityinrobotmanipulationtasks. ingtowardspracticalapplications.
+=== Page 8 ===
+Acknowledgments Hu,X.;Liu,B.;Liu,X.;andLiu,Q.2024. AdaFlow:Imita-
+tionLearningwithVariance-AdaptiveFlow-BasedPolicies.
+ThisworkwassupportedinpartbyNationalNaturalScience
+arXivpreprintarXiv:2402.04292.
+Foundation of China (NSFC) under Grant Nos. 62372091,
+62071097 and in part by Sichuan Science and Technol- Jarrett, D.; Bica, I.; and van der Schaar, M. 2020. Strictly
+ogyProgramunderGrantNos.2023NSFSC0462,2023NS- batchimitationlearningbyenergy-baseddistributionmatch-
+FSC0458,2023NSFSC1972. ing. InProc.NeurIPS,volume33,7354–7365.
+Li, S.; Wang, X.; Zuo, R.; Sun, K.; Cui, L.; Ding, J.; Liu,
+References P.;andMa,Z.2024. RobustVisualImitationLearningwith
+InverseDynamicsRepresentations. InProc.AAAI,13609–
+Argall, B. D.; Chernova, S.; Veloso, M.; and Browning,
+13618.
+B. 2009. A survey of robot learning from demonstration.
+Lipman, Y.; Chen, R. T.; Ben-Hamu, H.; Nickel, M.; and
+Roboticsandautonomoussystems,57(5):469–483.
+Le,M.2022. Flowmatchingforgenerativemodeling. arXiv
+Atkeson, C. G.; and Schaal, S. 1997. Robot learning from preprintarXiv:2210.02747.
+demonstration. InProc.ICML,volume97,12–20.
+Lu,G.;Gao,Z.;Chen,T.;Dai,W.;Wang,Z.;andTang,Y.
+Batzolis,G.;Stanczuk,J.;Scho¨nlieb,C.-B.;andEtmann,C. 2024. ManiCM: Real-time 3D Diffusion Policy via Con-
+2021. Conditionalimagegenerationwithscore-baseddiffu- sistency Model for Robotic Manipulation. arXiv preprint
+sionmodels. arXivpreprintarXiv:2111.13606. arXiv:2406.01586.
+Carvalho,J.;Le,A.T.;Baierl,M.;Koert,D.;andPeters,J. Luo,S.;Tan,Y.;Huang,L.;Li,J.;andZhao,H.2023.Latent
+2023. Motionplanningdiffusion:Learningandplanningof consistency models: Synthesizing high-resolution images
+robotmotionswithdiffusionmodels. InProc.IROS,1916– withfew-stepinference. arXivpreprintarXiv:2310.04378.
+1923.
+Mozaffari,M.;Saad,W.;Bennis,M.;andDebbah,M.2016.
+Chai,W.;Guo,X.;Wang,G.;andLu,Y.2023. Stablevideo: Optimaltransporttheoryforpower-efficientdeploymentof
+Text-driven consistency-aware diffusion video editing. In unmannedaerialvehicles. InProc.ICC,1–6.IEEE.
+Proc.ICCV,23040–23050. Pearce,T.;Rashid,T.;Kanervisto,A.;Bignell,D.;Sun,M.;
+Chang, W.-D.; Higuera, J. C. G.; Fujimoto, S.; Meger, Georgescu, R.; Macua, S. V.; Tan, S. Z.; Momennejad, I.;
+D.; and Dudek, G. 2022. Il-flow: Imitation learning Hofmann,K.;etal.2023. Imitatinghumanbehaviourwith
+from observation using normalizing flows. arXiv preprint diffusionmodels. arXivpreprintarXiv:2301.10677.
+arXiv:2205.09251. Prasad, A.; Lin, K.; Wu, J.; Zhou, L.; and Bohg, J. 2024.
+Chen, Y.; Li, H.; and Zhao, D. 2024. Boosting Con- Consistency Policy: Accelerated Visuomotor Policies via
+tinuous Control with Consistency Policy. arXiv preprint ConsistencyDistillation. arXivpreprintarXiv:2405.07503.
+arXiv:2310.06343. Qi, C. R.; Yi, L.; Su, H.; and Guibas, L. J. 2017. Point-
+Net++:DeepHierarchicalFeatureLearningonPointSetsin
+Chi, C.; Feng, S.; Du, Y.; Xu, Z.; Cousineau, E.; Burch-
+aMetricSpace. arXivpreprintarXiv:1706.02413.
+fiel, B.; and Song, S. 2023. Diffusion policy: Visuomo-
+tor policy learning via action diffusion. arXiv preprint Rahmatizadeh,R.;Abolghasemi,P.;Bo¨lo¨ni,L.;andLevine,
+arXiv:2303.04137. S.2018. Vision-basedmulti-taskmanipulationforinexpen-
+sive robots using end-to-end learning from demonstration.
+Ding, Z.; and Jin, C. 2024. Consistency Models as a
+InProc.ICRA,3758–3765.
+RichandEfficientPolicyClassforReinforcementLearning.
+arXivpreprintarXiv:2309.16984. Rajeswaran, A.; Kumar, V.; Gupta, A.; Vezzani, G.; Schul-
+man, J.; Todorov, E.; and Levine, S. 2018. Learn-
+Epstein,D.;Jabri,A.;Poole,B.;Efros,A.;andHolynski,A.
+ing Complex Dexterous Manipulation with Deep Rein-
+2023. Diffusionself-guidanceforcontrollableimagegener-
+forcement Learning and Demonstrations. arXiv preprint
+ation. InProc.NeurIPS,volume36,16222–16239.
+arXiv:1709.10087.
+Feng, J.; Lee, J.; Geisler, S.; Gunnemann, S.; and Triebel,
+Reuss, M.; Li, M.; Jia, X.; and Lioutikov, R. 2023. Goal-
+R. 2023. Topology-Matching Normalizing Flows for Out-
+conditioned imitation learning using score-based diffusion
+of-DistributionDetectioninRobotLearning. arXivpreprint
+policies. arXivpreprintarXiv:2304.02532.
+arXiv:2311.06481.
+Rouxel, Q.; Ferrari, A.; Ivaldi, S.; and Mouret, J.-B. 2024.
+Florence, P.; Lynch, C.; Zeng, A.; Ramirez, O. A.; Wahid, Flow Matching Imitation Learning for Multi-Support Ma-
+A.;Downs,L.;Wong,A.;Lee,J.;Mordatch,I.;andTomp- nipulation. arXivpreprintarXiv:2407.12381.
+son,J.2022. Implicitbehavioralcloning. InConferenceon
+Ro¨mer, R.; Brunke, L.; Schuck, M.; and Schoellig,
+RobotLearning,158–168.PMLR.
+A. P. 2024. Safe Offline Reinforcement Learning using
+Florence, P.; Manuelli, L.; and Tedrake, R. 2019. Self- Trajectory-Level Diffusion Models. In Proc. ICRA Work-
+supervised correspondence in visuomotor policy learning. shop.
+IEEERoboticsandAutomationLetters,5(2):492–499.
+Seo, J.; Jang, W.; Kwak, M.-S.; Kim, H.; Ko, J.; Kim, J.;
+Ho, J.; Jain, A.; and Abbeel, P. 2020. Denoising diffusion Kim, J.-H.; Lee, J.; and Kim, S. 2023. Let 2d diffusion
+probabilistic models. In Proc. NeurIPS, volume 33, 6840– modelknow3d-consistencyforrobusttext-to-3dgeneration.
+6851. arXivpreprintarXiv:2303.07937.
+=== Page 9 ===
+Song,J.;Meng,C.;andErmon,S.2020.Denoisingdiffusion
+implicitmodels. arXivpreprintarXiv:2010.02502.
+Song, Y.; Dhariwal, P.; Chen, M.; and Sutskever, I. 2023.
+Consistencymodels. arXivpreprintarXiv:2303.01469.
+Toyer, S.; Shah, R.; Critch, A.; and Russell, S. 2020. The
+magicalbenchmarkforrobustimitation. InProc.NeurIPS,
+volume33,18284–18295.
+Urain,J.;Funk,N.;Peters,J.;andChalvatzaki,G.2023. Se
+(3)-diffusionfields:Learningsmoothcostfunctionsforjoint
+grasp and motion optimization through diffusion. In Proc.
+ICRA,5923–5930.
+Wang, B.; Wu, G.; Pang, T.; Zhang, Y.; and Yin, Y. 2024a.
+DiffAIL:DiffusionAdversarialImitationLearning.InProc.
+AAAI,15447–15455.
+Wang,C.;Fang,H.;Fang,H.-S.;andLu,C.2024b. RISE:
+3D Perception Makes Real-World Robot Imitation Simple
+andEffective. arXivpreprintarXiv:2404.12281.
+Wang, Z.; Hunt, J. J.; and Zhou, M. 2022. Diffusion poli-
+cies as an expressive policy class for offline reinforcement
+learning. arXivpreprintarXiv:2208.06193.
+Yang, L.; Zhang, Z.; Zhang, Z.; Liu, X.; Xu, M.; Zhang,
+W.; Meng, C.; Ermon, S.; and Cui, B. 2024. Consistency
+FlowMatching:DefiningStraightFlowswithVelocityCon-
+sistency. arXivpreprintarXiv:2407.02398.
+Yu, T.; Quillen, D.; He, Z.; Julian, R.; Narayan, A.; Shiv-
+ely,H.;Bellathur,A.;Hausman,K.;Finn,C.;andLevine,S.
+2021. Meta-World:ABenchmarkandEvaluationforMulti-
+Task and Meta Reinforcement Learning. arXiv preprint
+arXiv:1910.10897.
+Zare, M.; Kebria, P. M.; Khosravi, A.; and Nahavandi, S.
+2024. A survey of imitation learning: Algorithms, recent
+developments,andchallenges. IEEETrans.onCybernetics.
+Ze, Y.; Zhang, G.; Zhang, K.; Hu, C.; Wang, M.; and Xu,
+H. 2024. 3D Diffusion Policy: Generalizable Visuomotor
+Policy Learning via Simple 3D Representations. In Proc.
+RSS.
+Zhang,T.;McCarthy,Z.;Jow,O.;Lee,D.;Chen,X.;Gold-
+berg, K.; and Abbeel, P. 2018. Deep imitation learning for
+complex manipulation tasks from virtual reality teleopera-
+tion. InProc.ICRA,5628–5635.

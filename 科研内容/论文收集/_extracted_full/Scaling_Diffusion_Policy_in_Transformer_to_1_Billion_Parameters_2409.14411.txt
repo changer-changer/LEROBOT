@@ -1,0 +1,644 @@
+=== Page 1 ===
+Scaling Diffusion Policy in Transformer to 1 Billion Parameters
+for Robotic Manipulation
+Minjie Zhu1,∗, Yichen Zhu2,∗,†, Jinming Li5, Junjie Wen1, Zhiyuan Xu4,
+Ning Liu2, Ran Cheng2, Chaomin Shen1,†, Yaxin Peng5, Feifei Feng2, Jian Tang4
+Abstract—Diffusion Policy is a powerful technique tool for for robotics, stimulating a series of improvements in skill
+learningend-to-endvisuomotorrobotcontrol.Itisexpectedthat learning, navigation, and visual representation.
+Diffusion Policy possesses scalability, a key attribute for deep
+The community expects that an effective method should
+neuralnetworks,typicallysuggestingthatincreasingmodelsize be scalable: as the model size and training data increase,
+would lead to enhanced performance. However, our observa-
+tions indicate that Diffusion Policy in transformer architecture thereshouldbeacorrespondingimprovementinperformance
+(DP-T) struggles to scale effectively; even minor additions and generalization capabilities. This property, namely scal-
+of layers can deteriorate training outcomes. To address this ing laws, has driven remarkable progress across machine
+issue, we introduce Scalable Diffusion Transformer Policy for
+learning domains like language modeling [11], [12] and
+visuomotor learning. Our proposed method, namely ScaleDP,
+computer vision [13], [14], especially the success of large
+introduces two modules that improve the training dynamic
+of Diffusion Policy and allow the network to better handle language models. Building a robot model that could achieve
+multimodal action distribution. First, we identify that DP- the scaling laws is also desirable in the field of robotics.
+Tsuffersfromlargegradientissues,makingtheoptimizationof However,whetherDiffusionPolicy(DP)couldscaleup,like
+DiffusionPolicyunstable.Toresolvethisissue,wefactorizethe
+those transformer models in other domains, has not been
+feature embedding of observation into multiple affine layers,
+explored [15], [16], [17]. Hence, in this work, we study the
+and integrate it into the transformer blocks. Additionally, our
+utilize non-causal attention which allows the policy network to scalabilityofthediffusiontransformerforvisuomotorpolicy
+“see” future actions during prediction, helping to reduce com- learning.
+pounding errors. We demonstrate that our proposed method WebeginwiththeexaminationoftheexistingDPintrans-
+successfully scales the Diffusion Policy from 10 million to
+formerarchitecture(DP-T).ToassessthescalabilityofDP-T,
+1 billion parameters. This new model, named ScaleDP, can
+weconductedapreliminaryinvestigationonMetaWorld[18]
+effectively scale up the model size with improved performance
+andgeneralization.WebenchmarkScaleDPacross50different (more details in Section III-A). Our evaluation revealed that
+tasks from MetaWorld and find that our largest ScaleDP out- consistent with the findings in Diffusion Policy [9], where
+performsDP-Twithanaverageimprovementof21.6%.Across scaling DP-T does not improve performance, regardless of
+7real-worldrobottasks,ourScaleDPdemonstratesanaverage
+increasing depth or number of heads, increasing in model
+improvementof36.25%overDP-Tonfoursingle-armtasksand
+sizecouldnegativelyaffectthetasks.Forexample(Figure1),
+75% on three bimanual tasks. We believe our work paves the
+wayforscalingupmodelsforvisuomotorlearning.Theproject DP-T with eight layers achieves a success rate of 80.1%
+page is available at https://scaling-diffusion-policy.github.io/. in MetaWorld [18]. However, this success rate decreases to
+78.4%whenthenumberoflayersisincreasedtotwelveand
+I. INTRODUCTION
+further drops to 74.6% with fourteen layers.
+Diffusion models have established leading roles in state- Through further analysis, we find that the failure to scale
+of-the-art advancements across various domains, including the transformer architecture stems from unstable training
+image,audio,video,and3Dgeneration[1],[2],[3],[4],[5], caused by large gradients in the observation fusion mod-
+[6], [7], [8]. Specifically, Denoising Diffusion Probabilistic ule. By replacing the conventional cross-attention fusion
+Models (DDPMs) [1] are recognized for their approach of approach [15] with multiple affine layers, we are able to
+reversing a Stochastic Differential Equation. This technique normalize parameter distribution [9], [19], which brings
+leveragesastochasticdenoisingprocessthatgraduallyincor- good training dynamics to DP-T. To further improve model
+porates Brownian motion during the generation of outputs. generalization, we propose to remove masked attention,
+Recently, the power of the diffusion model has manifested allowing the model to “see” both past actions and future
+in the field of robotics as imitation learning [9], [10]. It trajectories.Thisisparticularlybeneficialforlearningvisuo-
+has become one of the most popular learning strategies motorpoliciessincetrajectorypredictionsaretypicallymuch
+longerthanthetrajectoriesusedduringtesting.Forinstance,
+1SchoolofComputerScience,EastChinaNormalUniversity,China, Diffusion Policy predicts actions within ten timesteps but
+{mjzhu, jjwen, cmshen}@cs.ecnu.edu.cn
+onlyusestheactionatthefirsttimestep.Allowingthemodel
+2MideaGroup,AIResearchCenter,{zhuyc25, liuning22,
+chengran, feifei.feng}@midea.com to observe the future trajectory makes it more robust to
+4Beijing Innovation Center of Humanoid Robotics, {eric.xu, compound errors during prediction.
+jian.tang}@x-humanoid.com
+To demonstrate the effectiveness of our work, we con-
+5Department of Computer Science, Shanghai University, China
+duct experiments on 50 simulation tasks in Metaworld and
+{ljm2022, yaxin.peng}@shu.edu.cn
+∗Co-firstauthor.†Correspondingauthor. real robot experiments on 7 distinct tasks. We have suc-
+4202
+voN
+41
+]OR.sc[
+2v11441.9042:viXra
+=== Page 2 ===
+83
+82.5
+82
+81.5
+81
+80.5
+80
+79.5
+79
+78.5
+4 6 12 16
+)%(
+etaR
+sseccuS
+DPwithVarying#ofHeads
+82
+80
+78
+76
+74
+72
+70
+8 12 14
+# of Heads
+)%(
+etaR
+sseccuS
+DPwithVarying#ofLayers 1.2
+1
+0.8
+0.6
+0.4
+0.2
+0
+2 4 6 8
+# of Layers
+eulaVnoitaciveD
+dradnatS
+L2-NormGradientStd
+DP (8 Layers)
+DP (12 Layers)
+ScaleDP (12 Layers)
+i-thLayer
+Fig. 1: The motivation of ScaleDP. Left: Increasing the number of heads for Diffusion Policy in Transformer architecture
+does not necessarily improve performance. Middle: Increase depth could be harmful to the model performance. Right: The
+visualization of standard deviations of gradient magnitudes (the lower the better, i.e., more balanced optimization paces).
+cessfully trained a Scalable Diffusion Transformer Policy of the multi-modality in human-collected demonstrations.
+(ScaleDP) that demonstrates effective scaling with an in- Specifically, Diffusion Policy uses DDPM to model the
+crease in model parameters, ranging from 10 million to 1 action sequence p(A | o ,x ), where A = {a ,...,a }
+t t t t t t+C
+billion. Both simulation and real-world experiments reveal represents a chunk of the next C actions. The final action is
+thatScaleDPsignificantlyoutperformsthebaselineDiffusion the output of the following denoising process [56]:
+Policy. Additionally, we confirm that as the model size in-
+creases,itaccommodatesmoretrainingdata,whichenhances Ak−1 =α (cid:0) Ak−γϵ (o ,x ,Ak,k) (cid:1) +N(0,σ2I), (1)
+its performance. Furthermore, we observe improved visual t t θ t t t
+generalization capabilities, as the model scales up. where Ak is the denoised action sequence at time k. De-
+t
+noising starts from AK sampled from Gaussian noise and is
+II. RELATEDWORKS t
+repeateduntilk =1.InEqn(1),(α,γ,σ)aretheparameters
+Diffusion Policy in Robotics. Diffusion models are one of of the denoising process and ϵ is the score function trained
+θ
+the generative models that progressively transform random using the MSE loss ℓ(θ) = (ϵ −ϵ (o ,x ,Ak +ϵ ,k))2.
+k θ t t t k
+noiseintostructureddatasamples,haveachievedremarkable The noise at step k of the diffusion process, ϵ , is sampled
+k
+success in generating high-fidelity images [1], [2], [20], [4]. from a Gaussian of appropriate variance.
+Due to their remarkable expressiveness, diffusion models
+A. Example of Motivation
+have recently expanded into the field of robotics. Their
+applications now extend to various domains such as rein- To better illustrate the scalability problem of Diffusion
+forcement learning [21], [22], [23], [24], [25], [26], [27], Policy, we leverage MetaWorld [18] as our testbed. The
+[28], imitation learning [9], [10], [29], [30], [31], [32], [33], experimental results are presented in Figure 1. Our findings
+[34], [35], [13], [36], [37], [38], [39], [35], [40], reward indicate that increasing the model size of the vanilla Diffu-
+learning[41],[42],[43],grasping[44],[45],[46],andmotion sion Policy in Transformer architecture (DP-T) [9] does not
+planning [47], [48], [44], [49], [50], [51], [52], [53], [54], consistentlyenhancethesuccessrateontasksinMetaWorld.
+[55]. In this work, we focus on scaling up the diffusion This observation is consistent with the statement made in
+policy with transformer architectures. We demonstrate that the original Diffusion Policy paper [9]. Specifically, there is
+DiffusionPolicyintransformerarchitecturefailstoscaleup. a noticeable performance boost when the number of heads
+We show that our proposed method, when scaled up, gain increases from four to six. However, adding more heads
+possesses multiple merits that the small transformer model beyondthispointresultsintheaveragesuccessratereverting
+does not have. to that of a model with only four heads.
+We also assessed the impact of increasing the number of
+III. METHOD
+layers within the Transformer model. Our empirical results
+Problem Setup. We assume an expert collected dataset of show a consistent decline in performance with each addi-
+demonstrations D = {τ ,τ ,...,τ }, where each trajectory tionallayer.Forexample,amodelwitheightlayersachieves
+0 1 n
+τ = {(o ,x )} is a sequence of paired raw visual observa- a success rate above 80%, but this decreases to 78.4% with
+i j j
+tionsoandproprioceptiveinformationx.Theproprioceptive twelve layers and drops below 75% with fourteen layers.
+informationcaneitherbetheend-effectorposeorjointangles These findings suggest that the current Diffusion Policy
+and includes the gripper width. In this work, we use 6D model struggles to scale effectively with respect to model
+pose, i.e., position (x,y,z) and rotation (roll,pitch,yaw) size. This scalability limitation hampers the model’s ability
+to control the robot. to learn from data, ultimately diminishing its generalization
+Diffusion Policy. Diffusion Policy [9] models the condi- capabilities.Wefurtherinvestigatedthetrainingdynamicsof
+tional action distribution as a denoising diffusion probabilis- DP-T,plottingthestandarddeviationofgradientmagnitudes
+tic model (DDPM) [1], allowing for better representation acrossdifferentlayers.Previousworks[57],[58],[59]found
+=== Page 3 ===
+Global Rea 4 lS 5 e 7 nce Rea 4 lS 3 e 5 nce ZED ZED
+Resnet50 Resnet50 Resnet50
+Real
+Left Wrist Concat Robot
+Obs Setup RealSence
+Emb N x 435
+Right Wrist Tim E e m s b tep Transformer Bimanual Setting Single Arm Setting
+Block
+Action Norm & Linear at at+1at+2at+3… Fig. 3: To evaluate the wide scalability of ScaleDP, we
+Emb
+conductexperimentsonboththeBimanualUR5RobotArms
++ + and the Franka Arm.
+Scale 𝛼! FFN
+FFN Layer Norm
+Scale, Shift
+𝛾!,𝛽! + TABLE I: Diverse model size of ScaleDP. We present five
+Layer Norm Multi-Head model sizes, Tiny (Ti), Small (S), Base (B), Large (L), and
+Cross-Attention
++ Layer Norm Huge (H).
+Scale 𝛼" +
+Multi-Head Masked Model: Hidden size Param
+S A ca tt l e e n , t S io h n ift 𝛾",𝛽" Mult A i- t H te e n a ti d o n Self- ScaleDP Layers d Heads
+MLP
+Layer Norm Timestep Layer Norm Timestep Tiny (Ti) 8 256 4 10M
+Action & Action &
+Emb ObsEmb Emb ObsEmb Small (S) 12 384 6 33M
+AdaLNBlock (Ours) Base (B) 12 768 12 130M
+Large (L) 24 1024 16 457M
+Fig. 2: The architecture of the scalable diffusion trans- Huge (H) 32 1280 16 1B
+former policy. Top: Overview of Our ScaleDP. It takes as
+input multi-view images and outputs a sequence of actions.
+Bottom: Details of our ScaleDP block. The cross-attention
+of the embedding vectors of k and o. Compared with the
+block has the same structure as [15]. The AdaLN block
+conditioning mechanism using cross-attention, this enables
+employsadaptivelayernormtofuseconditionsintothenoise
+the model to change the distribution of the noise action em-
+actionembeddings,achievingmorestabletrainingandbetter
+bedding according to the conditions. The AdaLN is defined
+inference performance.
+as:
+AdaLN(x)=(γ(k,o)+1)·x+β(k,o) (2)
+thatlowervaluesindicateamorebalancedoptimizationpace, where x is the input to the layer normalization, and γ(k,o)
+which generally leads to better generalization. As illustrated and β(k,o) are the adaptive scale and shift parameters
+in Figure 1 (right), increasing the depth of DP-T results regressed from the embedding vectors of k and o.
+in larger gradient magnitudes, signaling unstable training in Non-causal Attention. Following the transformer architec-
+deeper network configurations. This motivated us to modify ture proposed by [15], the Diffusion Policy utilizes masks
+the neural architecture to address this issue. We demonstrate to ensure that each action embedding can only attend to
+that ScaleDP maintains low gradient magnitudes even with previous tokens in the self-attention and cross-attention lay-
+an increased number of layers. ers of each transformer decoder block. We argue that this
+unidirectional attention mechanism would hide the action
+B. Modification on Neural Architecture
+representations. By removing the mask in self-attention lay-
+Thissectiongivesadetailedillustrationofhowwemodify ers, we can make each action more consistent with both left
+our neural architecture to ensure ScaleDP could scale up the and right actions.
+model size. WeapplyasequenceofN ScaleDPblocks,eachoperating
+Cross-attention block. The traditional approach fuses atthehiddendimensionsized. FollowingViT,weusestan-
+the conditional information with a cross-attention mecha- dardtransformerconfigsthatjointlyscaleN,d,andattention
+nism [9], [15]. It concatenates the embeddings of timestep k heads [16]. Specifically, we use five configs: ScaleDP-Ti,
+and observation o into a sequence, separate from the action ScaleDP-S, ScaleDP-B, ScaleDP-L, and ScaleDP-H. They
+sequence. The transformer block is similar to the original cover a wide range of model sizes, from 10M parameters to
+design from [15]. We find that increasing the depth of DP- 1B parameters, allowing us to gauge scaling performance.
+T results in larger gradient magnitudes, thus making the Table I gives details of the configs.
+training procedure more difficult. After the final ScaleDP block, we apply the final adaptive
+Adaptive Layer Norm (AdaLN) block. Following the layer norm and linear layer to decode the sequence of noise
+widespread usage of adaptive normalization layers in image action tokens into the predicted noise.
+generation [19], [60], [61], we explore replacing standard
+IV. EXPERIMENTS
+layernormlayerswithadaptivelayernorm(AdaLN).Specif-
+ically, instead of directly learning dimension-wise scale and In our experiments, we aim to demonstrate the effective-
+shift parameters γ and β, we regress them from the sum nessofScaleDPfromthefollowingtwoperspectives:1)The
+=== Page 4 ===
+90
+70
+50
+30
+10
+Easy Medium Hard Very Hard
+)%(
+sseccuS
+Diffusion Policy ScaleDP-Tiny 90
+70
+50
+30
+10
+Easy Medium Hard Very Hard
+)%(
+sseccuS
+ScaleDP-Ti ScaleDP-S
+ScaleDP-L ScaleDP-H
+90
+70
+50
+30
+10
+0 50 100
+)%(
+sseccuS
+ComparisonwithDiffusionPolicy ModelScaling
+DataScaling
+90
+70
+50
+ScaleDP-Ti ScaleDP-S 30
+ScaleDP-L ScaleDP-H
+10
+0 50 100
+Number of Demonstration
+)%(
+sseccuS
+ModelConvergence
+40
+20
+0
+0 5 10 15
+MetaworldDisassemble MetaworldAssembly
+ScaleDP-Ti ScaleDP-S
+ScaleDP-L ScaleDP-H
+Number of Demonstration
+)%(
+sseccuS
+MetaworldAssembly
+ScaleDP-Ti ScaleDP-S
+ScaleDP-L ScaleDP-H
+Training Steps (k)
+0.6
+0.4
+0.2
+0
+0 50 100
+ssoL
+gniniarT
+(a) (b) (e)
+Real-World:StackCube
+ScaleDP-Ti ScaleDP-S
+ScaleDP-B ScaleDP-L
+Training Steps (k)
+(c) (d) (f)
+Fig.4:Experiments.(a)ComparisonwithDiffusionPolicyonMetaWorld;(b)ModelscalingresultsonMetaWorld;(c)and
+(d): Data scaling results on MetaWorld (Disassemble and Assembly); (e) Model convergence rate on MetaWorld Assembly;
+(f) Model convergence rate on real-world task (stack cube).
+performance compared to Diffusion Policy, the model/data architecture and other variants of Diffusion Policy.
+scalability, and rate of convergence; 2) The visual obser-
+vation appears on the model, including appearance, object, B. Simulation Experiments
+light, and distractor. Experimental setup. We classified 50 tasks from Meta-
+World [18] into levels—easy, medium, hard, and very
+A. Real Robot Experimental Setup
+hard—based on MWM [63]. All experiments were trained
+Real robot benchmarks. Our ScaleDP is evaluated across with 20 demonstrations and evaluated with 3 seeds, and for
+7 tasks, with 4 tasks using Franka robot with a 7-degree- each seed, the success rate was averaged over five different
+of-freedom arm and 3 tasks using two UR5 robots with a iterations.
+total of 14-degree-of-freedom arm. We use 2 ZED cameras Comparison with DP-T. We compared the ScaleDP-Ti
+for Franka and 3 RealSence cameras for bimanual to obtain modelwithDP-T.Bothmodelshaveacomparablenumberof
+real-worldvisualinformation.Ourrealrobotsetupareshown parameters. As shown in Figure 4(a), our approach achieves
+in Figure 3. A brief description of our tasks is following: a higher success rate across all four levels of challenging
+Data collection. We acquire our dataset through demonstra- tasks in MetaWorld. Notice that ScaleDP-Ti has a similar
+tions performed by humans. For each target task, we place number of parameters as the Diffusion Policy. The superior
+objects randomly within a designated area and instruct a performance of ScaleDP-Ti across all task levels indicates a
+human to manipulate the objects as smoothly as possible. more efficient utilization of the model’s capabilities, due to
+Additionally, the opening of the mug faces to the left for more advanced architecture as we proposed.
+flip mug task. Throughout this process, we record the RGB Model scaling. In Figure 4(b), we present the results of
+streams from two different angles and capture the robot’s scaling up the model size while keeping the number of
+state,suchasjointpositions.ScaleDPemploysamainstream demonstrations constant. The data indicate that as the model
+control mode that predicts the 6D, encompassing position size increases, the success rate improves, demonstrating the
+(x,y,z) and rotation (roll,pitch,yaw). For every task, we scalability of our method. This pattern confirms that our
+collected 100 trajectories. For the task of closing a laptop, approach not only accommodates but thrives of increased
+we collected 40 trajectories. computational capacity. The continuous improvement in
+Baselines. As the primary focus of this work is to study the success rates with larger model sizes, despite the constant
+scalable diffusion transformer policy, we select the vanilla number of demonstrations, suggests that the models are
+DiffusionPolicyintransformerarchitecture(DP-T)[9]asour effectively extracting more meaningful patterns and insights
+baseline.Wealsocompareanumberofdifferentapproaches, from the same amount of data.
+including Octo[33], Beso [36],MDT [31], DP-Unet[9] and
+ACT [62]. These methods cover models with transformer Data scaling. We further explored whether larger models
+=== Page 5 ===
+TABLEII:Successratesonfourreal-worldtasksonsingle TABLEIV:Ablationstudyontheeffectivenessofnon-causal
+armFrankarobot.Task1:CloseLaptop,Task2:FlipMug, attentiononreal-worldtasks.Theexperimentsareconducted
+Task 3: Stack Cube, Task 4: Place Tennis. It is worth noting on bimanual UR5 robot.
+that as the model size increases, the average success rate
+also increases correspondingly, demonstrating the scalability Model Non-causal Task1 Task2 Task3 Avg.
+of our model architecture. Each task is evaluated with 20 ✗ 70 20 10 33.33
+trials.
+ScaleDP-S ✓ 100 50 10 53.33+20
+✗ 90 50 10 50.00
+Model Task1 Task2 Task3 Task4 Avg.
+ScaleDP-B ✓ 100 60 10 56.67+6.67
+✗ 100 80 20 66.66
+Octo [33] 65 50 40 35 47.50 ScaleDP-L ✓ 100 80 90 90.00+23.34
+Beso [36] 50 30 20 15 28.75
+MDT [31] 55 45 50 30 45.00
+DP-Unet [9] 70 70 45 40 56.25
+ACT [62] 90 70 55 50 66.25 a success rate of at least 50%. Moreover, as the model size
+DP-T [9] 80 70 50 5 51.25 increases,theaveragesuccessrateimprovescorrespondingly,
+ScaleDP-S 85 70 50 30 58.75 demonstrating the scalability of our model architecture. Ad-
+ScaleDP-B 80 65 50 55 62.50 ditionally, compared with state-of-the-art imitation learning
+ScaleDP-L 95 80 70 50 73.75
+method, such as ACT, ScaleDP-L outperform its average
+ScaleDP-H 95 95 90 70 87.50
+success rates by 16.67% on 3 bimanul tasks and by 7.5%
+on 4 single-arm tasks, while ScaleDP-S and ScaleDP-B do
+TABLE III: Success rates on three real-world tasks on bi-
+not, further highlighting the scalability of our ScaleDP’s
+manualUR5robot.Task1:Puttennisballintobag,Task2:
+architecture. When we increase the model size to 1 billion
+Sweeptrash,Task3:BimanualStackCube.Itisworthnoting
+parameters, ScaleDP-H achieves even better performance
+thatasthemodelsizeincreases,theaveragesuccessratealso
+across all tasks and experimental settings. It improves the
+increases correspondingly, demonstrating the scalability of
+average success rate over ScaleDP-L by 13.75% and 8.33%
+ourmodelarchitecture.Eachtaskisevaluatedwith20trials.
+in two different setups, respectively. These results validate
+thescalabilityofourmethodandhighlighttheimportanceof
+Model Task1 Task2 Task3 Avg.
+increasing model size in diffusion-based imitation learning.
+ACT [62] 100 70 50 73.33 Non-causal attention. To demonstrate the importance of
+DP-T [9] 20 50 0 23.33 the non-causal attention in ScaleDP, we conducted ablation
+ScaleDP-S 100 50 10 53.33 studies on ScaleDP across 3 bimanual tasks (see Table IV).
+ScaleDP-B 100 60 10 56.67 Our findings indicate that unmasking significantly improves
+ScaleDP-L 100 80 90 90.00 thetestperformanceofall3modelsizes,particularlyforthe
+ScaleDP-H 100 95 100 98.33 largemodelsize,whichshowsaremarkableimprovementon
+Task 3 (Bimanual Stack Cube), achieving a success rate that
+is 70% higher than that with masking strategy.
+benefitmorefromincreaseddata.Figures4(c)and(d)show
+D. Visual Generalization
+that as the number of demonstrations increases, the success
+rate for smaller models plateaus, whereas larger models Visualgeneralizationreferstotheabilitytoadapttonovel
+continuetoimprove.ThistrendsuggeststhatlargerScaleDP visual textures. Examples of this in robotic manipulation
+have a higher capacity to leverage additional data, thereby tasks include variations in background color, object texture,
+enhancing their learning curves significantly. Moreover, this or ambient lighting. These visual changes do not alter the
+observation underscores the importance of data scalability fundamental structure of the task, such as the positions
+when deploying larger models in practical applications. of objects and targets, and primarily require the robot to
+Learning efficacy. To illustrate the learning efficacy of our accuratelyinterpretsemanticmeanings.Herewedemonstrate
+model, we plotted the model convergence in Figures 4 (e) thevisualgeneralizationabilityofScaleDP-L.Wecategorize
+and(f).Figure4(e)showsthesuccessrateontheMetaWorld the visual generalization into the following:
+Assembly task, while Figure 4 (f) examines the training loss Appearance generalization. We alter the color of the target
+on a real robot task. The results indicate that as training objects to be grabbed, as demonstrated in Figure 5. Orig-
+progresses, larger models tend to converge more effectively, inally, the cube/mug is colored blue/gold; we then make
+achieving higher success rates and lower training losses. changes accordingly. We observe that ScaleDP-L is able to
+generalize on objects with different colors. In comparison,
+C. Real Robot Experiments
+the vanilla DP fails to recognize target objects of different
+Main result. Table II and III presents the real robot experi- colors. Notably, our approach achieves appearance general-
+mental results. It can be observed that ScaleDP outperforms izationwithoutrelyingondataaugmentationduringtraining.
+DP-Tacrossallmodelsizesin3bimanualtasksand4single- Thisindicatesthatthegeneralizationcapabilityofourmodel
+arm tasks. Notably, for place tennis task, DP-T succeeded stems solely from its ability to recognize the shapes of
+only once in 20 trials, whereas our ScaleDP-B/L achieved objects.
+=== Page 6 ===
+Appearance Object
+Appearance Generalization ( / ) Object Generalization ( / )
+DP-T DP-T
+ScaleDP-L ScaleDP-L
+Fig. 5: Appearance & Object Generalization. We test two tasks: stack cube and flip mug. For appearance generalization,
+we change the color of the target object to another color. For object generalization, we replace the target object with six
+objects of varied sizes and shapes from daily life. Each result is evaluated with one trial.
+Training States T1 T2
+Distractor
+Distractors
+Training States T3 T4
+Distractor Generalization T1 T2 T3 T4 Light Generalization Normal Weak Lightless
+DP-T DP-T
+ScaleDP-L ScaleDP-L
+Fig. 6: Distractor & Light Generalization. We test these capabilities on close laptop and flip mug tasks. Each test is
+evaluated with one trial.
+Object generalization. Achieving generalization across di- evaluate a model’s ability to resist distractions. As shown in
+verse objects, which vary in size and shape, presents a Figure6(T4),simplyaddingamousetothescene,compared
+significantlygreaterchallengecomparedtomereappearance with T3, prevents ScaleDP-L from completing the task
+generalization. In Figure 5, we demonstrate that ScaleDP- accurately. This result is contrast to Diffusion Policy, which
+L effectively manages a wide range of everyday objects. is extremely sensitive to the distractor. We observe that the
+Specifically, when the blue block is replaced with a cup Diffusion Policy tends to target the central points of objects,
+of a completely different shape and the gold mug with a indicating a deficiency in adapting to new environments.
+tape, ScaleDP-L still exhibits robust generalization capabil- In contrast, our model demonstrates greater robustness to
+ities. This ability to adapt to new and varied object types changes in the scene, suggesting superior adaptability.
+without a loss in performance underscores the flexibility
+and practicality of our model, making it highly suitable for V. CONCLUSION
+dynamic and unpredictable real-world environments where
+In this study, we explore the transformer architecture
+object variability is the norm.
+within the context of Diffusion Policy. We pinpoint the
+Light generalization. Light generalization is similar to large gradient of condition fusion as the fundamental chal-
+background generalization, which reduces the intensity of lenge in transformer architecture. Our proposed architecture
+the light background in each image compared to the normal facilitates training with increased model sizes up to one
+one. As demonstrated in Figure 6, ScaleDP-L effectively billionparameters.Wepresentapreliminarystudyindicating
+addresses this generalization problem when the light is that incorporating a greater number of parameters into the
+slightlydecreased.However,itiscrucialtoacknowledgethat diffusion transformer policy model enables the emergence
+while ScaleDP-L can generalize across minor variations in of properties not observed in smaller-scale models. Our
+light, significant changes might be more difficult to handle. method presents the first attempt to scale up model size for
+Distractorgeneralization.Distractorgeneralizationrefersto diffusion-based imitation learning, which we believe will be
+introducing additional distractors during the testing phase to an important direction for future research.
+=== Page 7 ===
+VI. ACKNOWLEDGEMENTS [19] T.Karras,S.Laine,andT.Aila,“Astyle-basedgeneratorarchitecture
+forgenerativeadversarialnetworks,”inProceedingsoftheIEEE/CVF
+We sincerely thank Yanjie Ze for contributions in discus- conference on computer vision and pattern recognition, 2019, pp.
+4401–4410.
+sionsandpaperreview.OurgratitudealsothankYongWang
+[20] R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer,
+for his assistance with the hardware setup.
+“High-resolution image synthesis with latent diffusion models,” in
+Proceedings of the IEEE/CVF conference on computer vision and
+patternrecognition,2022,pp.10684–10695.
+REFERENCES
+[21] L. Yang, Z. Huang, F. Lei, Y. Zhong, Y. Yang, C. Fang, S. Wen,
+B.Zhou,andZ.Lin,“Policyrepresentationviadiffusionprobability
+[1] J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic modelforreinforcementlearning,”arXivpreprintarXiv:2305.13122,
+models,”Advancesinneuralinformationprocessingsystems,vol.33, 2023.
+pp.6840–6851,2020.
+[22] B. Mazoure, W. Talbott, M. A. Bautista, D. Hjelm, A. Toshev, and
+[2] J. Song, C. Meng, and S. Ermon, “Denoising diffusion implicit
+J. Susskind, “Value function estimation using conditional diffusion
+models,”arXivpreprintarXiv:2010.02502,2020.
+modelsforcontrol,”arXivpreprintarXiv:2306.07290,2023.
+[3] J. Ho and T. Salimans, “Classifier-free diffusion guidance,” arXiv
+[23] J.Brehmer,J.Bose,P.DeHaan,andT.S.Cohen,“Edgi:Equivariant
+preprintarXiv:2207.12598,2022.
+diffusion for planning with embodied agents,” Advances in Neural
+[4] C. Saharia, W. Chan, S. Saxena, L. Li, J. Whang, E. L. Denton, InformationProcessingSystems,vol.36,2024.
+K. Ghasemipour, R. Gontijo Lopes, B. Karagol Ayan, T. Salimans
+[24] S.Venkatraman,S.Khaitan,R.T.Akella,J.Dolan,J.Schneider,and
+et al., “Photorealistic text-to-image diffusion models with deep lan-
+G.Berseth,“Reasoningwithlatentdiffusioninofflinereinforcement
+guage understanding,” Advances in neural information processing
+learning,”arXivpreprintarXiv:2309.06599,2023.
+systems,vol.35,pp.36479–36494,2022.
+[25] K. Lee, S. Kim, and J. Choi, “Refining diffusion planner for reli-
+[5] J. Richter, S. Welker, J.-M. Lemercier, B. Lay, and T. Gerkmann,
+able behavior synthesis by automatic detection of infeasible plans,”
+“Speech enhancement and dereverberation with diffusion-based gen-
+AdvancesinNeuralInformationProcessingSystems,vol.36,2024.
+erative models,” IEEE/ACM Transactions on Audio, Speech, and
+[26] S.Zhou,Y.Du,S.Zhang,M.Xu,Y.Shen,W.Xiao,D.-Y.Yeung,and
+LanguageProcessing,2023.
+C.Gan,“Adaptiveonlinereplanningwithdiffusionmodels,”Advances
+[6] T. Brooks, B. Peebles, C. Holmes, W. DePue, Y. Guo,
+inNeuralInformationProcessingSystems,vol.36,2024.
+L. Jing, D. Schnurr, J. Taylor, T. Luhman, E. Luhman,
+[27] H. Chen, C. Lu, C. Ying, H. Su, and J. Zhu, “Offline reinforce-
+C. Ng, R. Wang, and A. Ramesh, “Video generation
+ment learning via high-fidelity generative behavior modeling,” arXiv
+models as world simulators,” 2024. [Online]. Available: https:
+preprintarXiv:2209.14548,2022.
+//openai.com/research/video-generation-models-as-world-simulators
+[28] Y.Ze,N.Hansen,Y.Chen,M.Jain,andX.Wang,“Visualreinforce-
+[7] J. Ho, W. Chan, C. Saharia, J. Whang, R. Gao, A. Gritsenko, D. P.
+mentlearningwithself-supervised3drepresentations,”IEEERobotics
+Kingma,B.Poole,M.Norouzi,D.J.Fleetetal.,“Imagenvideo:High
+andAutomationLetters,vol.8,no.5,pp.2890–2897,2023.
+definition video generation with diffusion models,” arXiv preprint
+arXiv:2210.02303,2022. [29] A.Khazatsky,K.Pertsch,S.Nair,A.Balakrishna,S.Dasari,S.Karam-
+cheti,S.Nasiriany,M.K.Srirama,L.Y.Chen,K.Ellisetal.,“Droid:
+[8] K. Lee, K. Sohn, and J. Shin, “Dreamflow: High-quality text-
+A large-scale in-the-wild robot manipulation dataset,” arXiv preprint
+to-3d generation by approximating probability flow,” in The
+arXiv:2403.12945,2024.
+TwelfthInternationalConferenceonLearningRepresentations,2024.
+[Online].Available:https://openreview.net/forum?id=GURqUuTebY [30] V.Vosylius,Y.Seo,J.Uruc¸,andS.James,“Renderanddiffuse:Align-
+ing image and action spaces for diffusion-based behaviour cloning,”
+[9] C.Chi,S.Feng,Y.Du,Z.Xu,E.Cousineau,B.Burchfiel,andS.Song,
+arXivpreprintarXiv:2405.18196,2024.
+“Diffusion policy: Visuomotor policy learning via action diffusion,”
+RSS,2023. [31] M.Reuss,O¨.E.Yag˘murlu,F.Wenzel,andR.Lioutikov,“Multimodal
+[10] A.Prasad,K.Lin,J.Wu,L.Zhou,andJ.Bohg,“Consistencypolicy: diffusion transformer: Learning versatile behavior from multimodal
+Accelerated visuomotor policies via consistency distillation,” arXiv goals,”inFirstWorkshoponVision-LanguageModelsforNavigation
+preprintarXiv:2405.07503,2024. andManipulationatICRA2024.
+[11] H.Touvron,L.Martin,K.Stone,P.Albert,A.Almahairi,Y.Babaei, [32] Y.Ze,G.Zhang,K.Zhang,C.Hu,M.Wang,andH.Xu,“3ddiffusion
+N. Bashlykov, S. Batra, P. Bhargava, S. Bhosale et al., “Llama policy: Generalizable visuomotor policy learning via simple 3d rep-
+2: Open foundation and fine-tuned chat models,” arXiv preprint resentations,”inICRA2024Workshopon3DVisualRepresentations
+arXiv:2307.09288,2023. forRobotManipulation,2024.
+[12] M. Dehghani, J. Djolonga, B. Mustafa, P. Padlewski, J. Heek, [33] O. M. Team, D. Ghosh, H. Walke, K. Pertsch, K. Black, O. Mees,
+J.Gilmer,A.P.Steiner,M.Caron,R.Geirhos,I.Alabdulmohsinetal., S.Dasari,J.Hejna,T.Kreiman,C.Xuetal.,“Octo:Anopen-source
+“Scalingvisiontransformersto22billionparameters,”inInternational generalistrobotpolicy,”arXivpreprintarXiv:2405.12213,2024.
+ConferenceonMachineLearning. PMLR,2023,pp.7480–7512. [34] Z. Xian, N. Gkanatsios, T. Gervet, and K. Fragkiadaki, “Unifying
+[13] H. Ha, P. Florence, and S. Song, “Scaling up and distilling down: diffusion models with action detection transformers for multi-task
+Language-guided robot skill acquisition,” in Conference on Robot roboticmanipulation,”in7thAnnualConferenceonRobotLearning,
+Learning. PMLR,2023,pp.3766–3777. 2023.
+[14] X. Zhai, A. Kolesnikov, N. Houlsby, and L. Beyer, “Scaling vision [35] Y. Ze, G. Yan, Y.-H. Wu, A. Macaluso, Y. Ge, J. Ye, N. Hansen,
+transformers,” in Proceedings of the IEEE/CVF conference on com- L.E.Li,andX.Wang,“Gnfactor:Multi-taskrealrobotlearningwith
+putervisionandpatternrecognition,2022,pp.12104–12113. generalizableneuralfeaturefields,”inConferenceonRobotLearning.
+[15] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. PMLR,2023,pp.284–301.
+Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” [36] M. Reuss, M. Li, X. Jia, and R. Lioutikov, “Goal-conditioned imi-
+Advancesinneuralinformationprocessingsystems,vol.30,2017. tation learning using score-based diffusion policies,” arXiv preprint
+[16] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, arXiv:2304.02532,2023.
+T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly, [37] T.Pearce,T.Rashid,A.Kanervisto,D.Bignell,M.Sun,R.Georgescu,
+J. Uszkoreit, and N. Houlsby, “An image is worth 16x16 words: S. V. Macua, S. Z. Tan, I. Momennejad, K. Hofmann et al.,
+Transformers for image recognition at scale,” in International “Imitating human behaviour with diffusion models,” arXiv preprint
+Conference on Learning Representations, 2021. [Online]. Available: arXiv:2301.10677,2023.
+https://openreview.net/forum?id=YicbFdNTTy [38] Y.Ze,N.Hansen,Y.Chen,M.Jain,andX.Wang,“Visualreinforce-
+[17] J. Kaplan, S. McCandlish, T. Henighan, T. B. Brown, B. Chess, mentlearningwithself-supervised3drepresentations,”IEEERobotics
+R.Child,S.Gray,A.Radford,J.Wu,andD.Amodei,“Scalinglaws andAutomationLetters,vol.8,no.5,pp.2890–2897,2023.
+forneurallanguagemodels,”arXivpreprintarXiv:2001.08361,2020. [39] Y.Zhu,Z.Ou,X.Mou,andJ.Tang,“Retrieval-augmentedembodied
+[18] T. Yu, D. Quillen, Z. He, R. Julian, K. Hausman, C. Finn, and agents,”2024.
+S. Levine, “Meta-world: A benchmark and evaluation for multi-task [40] S. Yang, Y. Ze, and H. Xu, “Movie: Visual model-based policy
+and meta reinforcement learning,” in Conference on robot learning. adaptation for view generalization,” Advances in Neural Information
+PMLR,2020,pp.1094–1100. ProcessingSystems,vol.36,2024.
+=== Page 8 ===
+[41] M.Psenka,A.Escontrela,P.Abbeel,andY.Ma,“Learningadiffusion [63] Y. Seo, D. Hafner, H. Liu, F. Liu, S. James, K. Lee, and P. Abbeel,
+model policy from rewards via q-score matching,” arXiv preprint “Masked world models for visual control,” in Conference on Robot
+arXiv:2312.11752,2023. Learning. PMLR,2023,pp.1332–1344.
+[42] T. Huang, G. Jiang, Y. Ze, and H. Xu, “Diffusion reward:
+Learning rewards via conditional video diffusion,” arXiv preprint
+arXiv:2312.14134,2023.
+[43] Y.Ze,Y.Liu,R.Shi,J.Qin,Z.Yuan,J.Wang,andH.Xu,“H-index:
+Visualreinforcementlearningwithhand-informedrepresentationsfor
+dexterousmanipulation,”AdvancesinNeuralInformationProcessing
+Systems,vol.36,2024.
+[44] J. Urain, N. Funk, J. Peters, and G. Chalvatzaki, “Se (3)-
+diffusionfields: Learning smooth cost functions for joint grasp and
+motion optimization through diffusion,” in 2023 IEEE International
+Conference on Robotics and Automation (ICRA). IEEE, 2023, pp.
+5923–5930.
+[45] A. Simeonov, A. Goyal, L. Manuelli, L. Yen-Chen, A. Sarmiento,
+A. Rodriguez, P. Agrawal, and D. Fox, “Shelving, stacking, hang-
+ing:Relationalposediffusionformulti-modalrearrangement,”arXiv
+preprintarXiv:2307.04751,2023.
+[46] T.Wu,M.Wu,J.Zhang,Y.Gan,andH.Dong,“Learningscore-based
+graspingprimitiveforhuman-assistingdexterousgrasping,”Advances
+inNeuralInformationProcessingSystems,vol.36,2024.
+[47] J. Wen, Y. Zhu, J. Li, M. Zhu, K. Wu, Z. Xu, R. Cheng, C. Shen,
+Y.Peng,F.Fengetal.,“Tinyvla:Towardsfast,data-efficientvision-
+language-action models for robotic manipulation,” arXiv preprint
+arXiv:2409.12514,2024.
+[48] Z.Zhong,D.Rempe,Y.Chen,B.Ivanovic,Y.Cao,D.Xu,M.Pavone,
+andB.Ray,“Language-guidedtrafficsimulationviascene-leveldiffu-
+sion,”inConferenceonRobotLearning. PMLR,2023,pp.144–177.
+[49] X.Liu,Y.Zhu,J.Gu,Y.Lan,C.Yang,andY.Qiao,“Mm-safetybench:
+A benchmark for safety evaluation of multimodal large language
+models,”arXivpreprintarXiv:2311.17600,2023.
+[50] Y. Zhu, M. Zhu, N. Liu, Z. Ou, X. Mou, and J. Tang, “Llava-phi:
+Efficient multi-modal assistant with small language model,” arXiv
+preprintarXiv:2401.02330,2024.
+[51] W. Liu, T. Hermans, S. Chernova, and C. Paxton, “Structdiffusion:
+Object-centricdiffusionforsemanticrearrangementofnovelobjects,”
+inWorkshoponLanguageandRoboticsatCoRL2022,2022.
+[52] K. Saha, V. Mandadi, J. Reddy, A. Srikanth, A. Agarwal, B. Sen,
+A.Singh,andM.Krishna,“Edmp:Ensemble-of-costs-guideddiffusion
+formotionplanning,”arXivpreprintarXiv:2309.11414,2023.
+[53] J. Chang, H. Ryu, J. Kim, S. Yoo, J. Seo, N. Prakash, J. Choi,
+and R. Horowitz, “Denoising heat-inspired diffusion with insulators
+forcollisionfreemotionplanning,”arXivpreprintarXiv:2310.12609,
+2023.
+[54] J.Wen,Y.Zhu,M.Zhu,J.Li,Z.Xuetal.,“Object-centricinstruction
+augmentationforroboticmanipulation,”2024.
+[55] M. Zhu, Y. Zhu, J. Li, J. Wen, Z. Xu et al., “Language-conditioned
+roboticmanipulationwithfastandslowthinking,”2024.
+[56] M.WellingandY.W.Teh,“Bayesianlearningviastochasticgradient
+langevindynamics,”inProceedingsofthe28thinternationalconfer-
+enceonmachinelearning(ICML-11). Citeseer,2011,pp.681–688.
+[57] Y. Zhao, H. Zhang, and X. Hu, “Penalizing gradient norm for
+efficientlyimprovinggeneralizationindeeplearning,”inInternational
+ConferenceonMachineLearning. PMLR,2022,pp.26982–26992.
+[58] Y. Zhou, B. Karimi, J. Yu, Z. Xu, and P. Li, “Towards better
+generalization of adaptive gradient methods,” Advances in Neural
+InformationProcessingSystems,vol.33,pp.810–821,2020.
+[59] A. Akbari, M. Awais, M. Bashar, and J. Kittler, “How does
+loss function affect generalization performance of deep learning?
+application to human age estimation,” in Proceedings of the 38th
+International Conference on Machine Learning, ser. Proceedings of
+Machine Learning Research, M. Meila and T. Zhang, Eds., vol.
+139. PMLR, 18–24 Jul 2021, pp. 141–151. [Online]. Available:
+https://proceedings.mlr.press/v139/akbari21a.html
+[60] W. Peebles and S. Xie, “Scalable diffusion models with transform-
+ers,” in Proceedings of the IEEE/CVF International Conference on
+ComputerVision,2023,pp.4195–4205.
+[61] A. Brock, J. Donahue, and K. Simonyan, “Large scale gan train-
+ing for high fidelity natural image synthesis,” arXiv preprint
+arXiv:1809.11096,2018.
+[62] T.Z.Zhao,V.Kumar,S.Levine,andC.Finn,“Learningfine-grained
+bimanual manipulation with low-cost hardware,” arXiv preprint
+arXiv:2304.13705,2023.

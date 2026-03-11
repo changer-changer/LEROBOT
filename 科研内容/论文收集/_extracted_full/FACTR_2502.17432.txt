@@ -1,0 +1,1136 @@
+=== Page 1 ===
+FACTR: Force-Attending Curriculum Training for
+Contact-Rich Policy Learning
+Jason Jingzhou Liu∗, Yulong Li∗, Kenneth Shaw, Tony Tao, Ruslan Salakhutdinov, Deepak Pathak
+Carnegie Mellon University
+∗Equal contribution
+Fig. 1: FACTR. We present Force-Attending Curriculum Training (FACTR) – a system that leverages robot external joint torques for both
+teleoperation and improving policy generalization for complex contact-rich tasks. [Left] Our low-cost leader-follower setup employs actuated
+servo motors to enable force feedback in both the leader arm and gripper, improving teleoperation success rate, completion time, and ease of
+use. [Right] FACTR’s behavior cloning policy utilizes robot force information to enhance performance and generalization across objects with
+diverse geometries and textures in contact-rich tasks. Video results, codebases, and instructions at https://jasonjzliu.com/factr/
+Abstract—Many contact-rich tasks humans perform, such as interplay of forces and require precise adjustments based on
+box pickup or rolling dough, rely on force feedback for reliable force feedback. Humans rely heavily on this force feedback
+execution. However, this force information, which is readily avail-
+to generalize across tasks and objects, adapting seamlessly to
+able in most robot arms, is not commonly used in teleoperation
+variations in visual appearances and geometries. However, in
+andpolicylearning.Consequently,robotbehaviorisoftenlimited
+to quasi-static kinematic tasks that do not require intricate force- robot learning, force information remains underutilized, even
+feedback. In this paper, we first present a low-cost, intuitive, though it is readily available on many modern robotic arms,
+bilateral teleoperation setup that relays external forces of the such as the Franka Panda and the KUKA LBR iiwa. Instead,
+follower arm back to the teacher arm, facilitating data collection
+most data-driven methods, including those using Behavior
+for complex, contact-rich tasks. We then introduce FACTR, a
+Cloning(BC),focusprimarilyonvisualfeedbackforbothdata
+policylearningmethodthatemploysacurriculumwhichcorrupts
+the visual input with decreasing intensity throughout training. collection and policy learning, overlooking the critical role of
+The curriculum prevents our transformer-based policy from over- force. This limited use of force information hinders the vision-
+fitting to the visual input and guides the policy to properly onlypolicies’abilitytogeneralizetonovelobjects.Forinstance,
+attend to the force modality. We demonstrate that by fully
+in tasks like lifting up a box with two arms, the primary factor
+utilizing the force information, our method significantly improves
+influencing the action is the object’s geometry, while attributes
+generalization to unseen objects by 43% compared to baseline
+approaches without a curriculum. Video results, codebases, and such as color or texture are irrelevant. In such cases, force
+instructions at https://jasonjzliu.com/factr/ feedback provides a clear signal for mode switching, such
+as detecting when contact is established, which can facilitate
+I. INTRODUCTION
+object generalization compared to relying solely on vision.
+Contact-rich tasks are an integral part of daily life, from One of the main reasons for the under-utilization of force
+liftingaboxandrollingdoughtocrackinganeggoropeninga feedback in robot learning is the lack of an intuitive and low-
+door. These tasks, while seemingly simple, involve a complex costteleoperationsystemthatcancaptureforcefeedbackduring
+5202
+rpA
+42
+]OR.sc[
+2v23471.2052:viXra
+=== Page 2 ===
+datacollectionitself.Recently,low-costleader-followersystems
+havebecomepopularforteleoperation,offeringintuitivecontrol
+of robot arms by mirroring the joint movements of the leader
+arm controlled by a teleoperator to the follower arm [32, 29].
+However, these systems are typically passive (leader arm
+joints are not actuated) and unilateral (the leader arm does
+not receive information from the follower arm). This makes
+teleoperation difficult for dynamic, contact-rich tasks where
+precise force adjustments are necessary [22]. To overcome this
+limitation, we present a bilateral low-cost teleoperation system
+that provides force feedback by actuating motors in the leader
+arm joints based on external joint torques transmitted from the
+follower arm (Fig. 1 Left). By actuating the motors, we also
+provide active gravity compensation and resolve the kinematic Fig. 2: Our low-cost bimanual teleoperation system with force-
+feedback.Thesystemfeaturestwoactuatedleaderarms,twofollower
+redundancy due to the redundant degrees of freedom of the
+arms with external joint torque sensors (such as the Franka Panda
+arm.Theseenhancementsimprovetheteleoperationexperience,
+and the KUKA LBR iiwa), a front camera and two wrist cameras.
+leadingtoa64.7%increaseinthetaskcompletionrate,a37.4%
+reduction in completion time, and an 83.3% improvement in (Fig. 1 Right) – box lifting, prehensile pivoting, fruit pick-
+subjective ease of use across four evaluated contact-rich tasks. and-place, and dough rolling – showcasing the efficacy of our
+The second challenge lies in effectively incorporating robot force-attending curriculum training.
+forceinformationintopolicylearning.Althoughrecentmethods In summary, our contributions are as follows.
+such as diffusion policy [4] and action chunking transformers • Low-Cost Teleoperation with Force Feedback: We
+[32] achieve impressive results for fine-grained manipulation, design a low-cost bilateral leader-follower teleoperation
+they often fail to generalize to unseen objects with variations system with force feedback, gravity compensation, and
+in object visual appearances and geometries. Humans, on the redundancy resolution, demonstrating a 64.7% improve-
+other hand, can disregard irrelevant visual details once contact ment in task completion rate and an 83.3% enhancement
+is established and rely solely on force feedback to perform in ease of use for teleoperation through a user study.
+tasks such as lifting a box or rolling dough. Therefore, to • Force-Attending Curriculum Training: We propose
+improve generalization, we seek to incorporate force input FACTR,acurriculumtrainingframeworkthatbetterlearns
+into autonomous robot policies. However, making effective touseforcefeedbackinpolicylearningandachievesbetter
+use of force information in policy learning is challenging, as generalization capability to object visual appearances and
+policies often overfit to using visual modality [28], effectively geometries. Evaluated on four challenging contact-rich
+disregarding force data. This issue arises because contact force tasks, FACTR improves the performance of autonomous
+signals are typically less discriminative, often remaining near policies by 40.0% compared to policies with force
+zero for extended periods when the arm is not in contact with information as part of input but trained without FACTR.
+the environment during an episode. Hence, without proper care
+during training, policies tend to ignore force input and rely II. RELATEDWORKS
+primarily on visual information. We empirically analyze this
+A. Imitation Learning with Force
+effect in Sec. V-C and Fig. 9.
+To mitigate this imbalance, we propose Force-Attending Imitation learning has recently experienced significant ad-
+Curriculum Training (FACTR), a curriculum training strategy vancements, driven by the development of more effective
+designed to improve the policy’s ability to effectively leverage algorithms that leverage demonstrations to train robotic poli-
+force information. FACTR systematically reduces the reliance cies [17, 4]. Although traditional approaches primarily rely on
+on visual information during training by applying operators visual and joint position inputs, many real-world tasks require
+suchasGaussianblurringordownsamplingwithvaryingscales explicit force feedback to improve stability, adaptability, and
+to visual inputs. A scheduler gradually decreases the blurring safety [18, 9]. Recent work has applied learning methods to
+scale and increases the fidelity of the visual inputs. Intuitively, train with demonstrations that incorporate gripper force or
+this approach encourages the policy to focus more on force tactile signals, resulting in policies capable of handling small,
+input during initial training phases and gradually balances fragile objects and performing contact-intensive tasks such as
+force with visual inputs as training progresses. We ground this vegetable peeling [15, 31, 14]. However, utilizing force data
+intuition with a theoretical analysis on a simplified scenario from the robot arms, such as joint torques, remains under-
+through the framework of Neural Tangent Kernels [11]. We explored. One approach involves using an end-effector force
+exploreFACTRinboththepixelspaceandlatentspace,testing sensor to estimate compliance parameters or virtual position
+various operators and scheduling strategies. Our experiments targets through kinesthetic teaching and force tensors [10, 3].
+show that FACTR improves the success rate for unseen objects Another method infers a 6D wrench for low-level control by
+by an average of 40.0% in four challenging contact-rich tasks integrating torque sensing into a diffusion policy [30].
+=== Page 3 ===
+However, naively incorporating force feedback into policy forming a scaled-down but kinematically equivalent version of
+learning can lead to overfitting to visual information, causing the follower arms, as shown in Fig. 2. By actuating the servo
+thepolicytodisregardforceinput.FoAR[8]explicitlypredicts motors, we introduce force feedback, customizable redundancy
+contact and non-contact phases to regulate the fusion of vision resolution through nullspace projection, gravity and friction
+and force modalities, which requires additional data labeling. compensation, and joint limit avoidance. These functionalities
+We propose FACTR to effectively incorporate force and vision augment the teleoperation experience while still using low-cost
+input into policy through a curriculum, enabling policies to hardware to provide functions that are usually only available
+leverage force for improved object generalization. with much more expensive teleoperation devices. Please see
+Appendix VIII for a detailed Bill of Materials.
+B. Low-Cost Teleoperation Systems with Force Feedback
+A. Force Feedback
+Parallel to advances in imitation learning, significant efforts
+have been made to collect low-cost and high-quality data with Forcefeedbackprovidestheoperatorwithatangiblesenseof
+hand-held grippers [27, 5] or leader-follower systems [32, 29, interaction with the environment, allowing more intuitive and
+25]. Hand-held grippers naturally provide force feedback to delicate manipulation, especially in contact-rich tasks or tasks
+the operator, but they do not directly record force data. Recent with limited visual feedback [22]. We implement a control law
+work has added force sensors to hand-held grippers to address that relays external joint torques sensed by the follower arm
+thislimitation[15].However,hand-heldgrippersareingeneral to the leader arm, allowing the operator to feel the physical
+limited by the kinematic differences between humans and constraints experienced by the follower arm:
+robots, resulting in commands that might be unachievable for
+τ =µ K τ −K q˙ (1)
+the robots. Although the leader-follower systems are not prone feedback f f,p ext f,d
+to this limitation, they often lack force feedback, impairing where µ is a scalar constant, τ is the external joint torque
+f ext
+their effectiveness in contact-rich tasks. Recently, Kobayashi et sensed by the follower arm, K and K are the PD gains
+f,p f,d
+al. [13] implemented a bilateral leader-follower teleoperation fortheforcefeedback,respectively.Here,K iscalculatedas
+f,p
+system where in addition to the follower following the joint theratiobetweenthemaximumtorqueoftheleaderandthatof
+positionsoftheleader,theleaderalsogetsanadditionaltorque the follower, and K q˙ helps reduce oscillations in the leader
+f,d
+if there is a difference in its joint position from that of the arm when the follower arm is in contact. We note that τ is
+ext
+follower.However,whenthefollowerarmisinmotionwithout a readily available measurement in various collaborative robot
+contact, this system causes the operator to experience inertial, manipulators, such as the Franka Panda and the KUKA LBR
+frictional, and other dynamic forces of the follower, reducing iiwa. In particular, we implement mediated force feedback by
+the ease of use and precision of the system [26]. Our approach scaling down τ with µ , which has been shown to improve
+ext f
+introduces an alternative bilateral teleoperation method by the accuracy of the operation while reducing the cognitive
+relayingonlyexternaljointtorquesfromthefollowerarmback load of the operator [33]. Furthermore, we highlight that our
+to the leader arm, providing force feedback without impairing implementationonlytransmitsexternalforcesfromthefollower
+operational precision. to the leader; as a result, the operator does not experience the
+internal friction and inertia of the follower arm during motion,
+III. FACTRLOW-COSTBILATERALTELEOPERATION
+providing a clearer perception of the environment [26].
+Leader-follower systems, such as GELLO [29] or In addition, we implement force feedback for the parallel-
+ALOHA [32], offer a simple and cost-effective solution to jaw gripper. Since our servo-based gripper does not contain
+teleoperation in manipulation tasks. These systems feature an external force sensor, we utilize the present current reading
+kinematically equivalent leader and follower arms, allowing of the gripper servo to provide force feedback as follows:
+intuitivecontrolthroughjointspacemapping,wheretheleader’s
+τ =α(−k I )+(1−α)τ (2)
+joint positions are mirrored as targets for the follower. This h,t h g,t h,t−1
+setup lets users naturally feel the follower arms’ kinematic whereτ istheforcefeedbacktorquesenttothegripperleader
+h,t
+constraints. However, most implementations lack force feed- device, I is the present current reading from the follower
+g,t
+back, preventing users from sensing the geometric constraints gripper, and α is the smoothing factor for the EMA filter. Our
+of the environment, which is crucial for teleoperating contact- system sets α=0.1 which provides a good user experience.
+rich tasks [22]. Instead, those leader arms are mostly passive,
+B. Customizable Redundancy Resolution
+lacking active motor torque actuation, despite being equipped
+with servo motors capable of actuation. Furthermore, the For kinematic redundant manipulators, without regulating
+lack of active torque means the leader arms require external the joint space, the manipulator tends to drift into unde-
+structuralframesandrubberbandsorstringstoachievegravity sirable configurations under the influence of gravity during
+compensation, reducing portability [32]. teleoperation. Approaches like Gello [29] rely on mechan-
+Inthispaper,weaimtofullyleveragetheservomotorsinthe ical components, such as springs, to regularize the joint
+leaderarmandgrippertoachieveforce-feedbackenabledteleop- space. However, these components introduce non-uniform,
+erationwithaffordablehardware.SimilarlytoGELLO[29],our configuration-dependent wrenches at the end-effector, resulting
+leaderarmsuseoff-the-shelfservosand3D-printedcomponents, in an unintuitive teleoperation experience. In addition, using
+=== Page 4 ===
+mechanical joint regularization effectively prevents the user
+from setting custom joint regularization targets for redundancy
+resolution.Inconfined-spacemanipulationsettings,theinability
+to control the joint regularization target can impair the arm’s
+reachability, as demonstrated in Fig. 3.
+In contrast, our proposed method leverages the following
+null-spaceprojectioncontrollawtoregulatejointpositions[12],
+which stabilizes the joint-space at any user-defined desirable
+posture without imposing additional end-effector wrenches,
+regardless of the arm’s configuration:
+τ = (cid:0) I−J†J (cid:1) (−K (q−q )−K q˙) (3)
+null n,p rest n,d
+where J is the manipulator Jacobian matrix, q is a user-
+rest
+defined resting posture configuration, K and K are the Fig. 3: Customizable Joint Regularization [Left] Without the
+PD gains for the null space projection. N n o , t p e that (cid:0) I n − ,d J†J (cid:1) is flexibility to define the resting joint configuration q rest , the arm’s
+reachability is restricted, leading to collisions in confined spaces.
+the null-space projector. [Right] Our leader arm allows the user to define custom resting joint
+q , helping the follower arm reach targets in confined spaces.
+C. Gravity Compensation rest
+To ensure the leader arms remain stationary, allowing the IV. FACTR:FORCE-ATTENDINGCURRICULUMTRAINING
+user to easily pause teleoperation, we implement gravity Naively incorporating robot force data into policy learning
+compensation. This is achieved by modeling the dynamics does not necessarily ensure policy improvement. Contact force
+of the leader arm and computing the joint torques required to signals often provide limited discriminative information for
+counteract dynamic forces using the recursive Newton-Euler the policy, as it remains close to zero for significant periods
+algorithm (RNEA) for real-time inverse dynamics [16]. whenthearmisnotinteractingwiththeenvironmentduringan
+episode. As a result, the policy tends to disregard force input
+τ =M(q)q¨+C(q,q˙)q˙ +g(q)=RNEA(q,q˙,q¨) (4)
+grav
+and rely predominantly on visual information, as empirically
+where M(q) is the mass (or inertia) matrix, C(q,q˙) is the analyzed in Sec. V-C and Fig. 9.
+Coriolis and centrifugal matrix, and g(q) is the gravity vector. To fully leverage the robot force data collected from our
+teleoperationsystem,weintroduceForce-AttendingCurriculum
+D. Additional Compensation and Controls
+Training (FACTR), a training strategy designed to effectively
+Toreducetheperceivedfrictionintheleaderarmduringtele-
+integrateforceinformationintopolicylearning.FACTRapplies
+operation, our system provides friction compensation τ .
+friction operators like Gaussian blur or downsampling to corrupt visual
+Furthermore, since the leader arm joints lack mechanical joint
+information, where the amount of visual corruption decreases
+limits,weimplementanartificialpotentialbasedcontrollawto
+throughout training. The curriculum intuitively encourages
+preventusersfromexceedingjointlimitsofthefollowerarmin
+contributionfromtheforcemodalityatthestartoftraining.We
+order to respect the workspace of the follower arm. Finally, for
+ground this intuition with a theoretical analysis on a simplified
+bi-manual follower arms, the system uses Riemannian Motion
+scenariothroughtheframeworkofNeuralTangentKernels[11].
+Policies [24] for dynamic obstacle avoidance between the two
+Inthissection,wefirstpresentthebasepolicymodelusedfor
+follower arms. Please refer to Appendix IX for more details.
+learning from teleoperated demonstrations, and then motivate
+E. Overall Control Law for the Leader Arm and describe FACTR, our curriculum training approach. Our
+overall method is summarized in Algorithm 1 and Fig. 4.
+In summary, the control torques are defined as follows:
+• τ feedback relays external forces from the follower arm A. Problem Statement and Base Model
+back to the leader arm, allowing the operator to sense the
+We consider a policy π (· | ·) that produces a chunk of
+θ
+geometric constraints of the environment.
+future actions of length k qˆ (joint positions) given (i) a
+t:t+k
+• τ null resolves kinematic redundancy by regulating the visual observation I (image at time t), and (ii) an external
+t
+joints at a user-defined rest posture in the null-space.
+joint torque reading τ . Our goal is to learn π via behavior
+t θ
+• τ grav provides gravity compensation for the leader arm. cloning (BC) from a dataset of expert trajectories D. Each
+• τ friction compensates for the leader arm joint frictions to trajectory in D comprises tuples (cid:0) I ,τ ,q (cid:1) , where q is the
+t t t t
+enable smoother teleoperation.
+ground-truth (expert) joint position target at time t. We let
+• τ limit prevents the joints of the leader arm from violating qˆ be the predicted future joint position targets over the
+t:t+k
+the joint position limits of the follower arm.
+next k time steps. The loss is defined by:
+The resulting combined torque applied to the servo motors
+(cid:0) (cid:1)
+of the leader arm is defined as follows: L = MSE qˆ t:t+k , q t:t+k , (6)
+τ =τ feedback +τ null +τ grav +τ friction +τ limit (5) where q t:t+k are the expert’s future joint position targets and
+qˆ are the policy’s predictions.
+t:t+k
+=== Page 5 ===
+Pixel Space Curriculum Latent Space Curriculum
+… … … …
+OR
+n = 0 n = Max Iter n = 0 n = Max Iter
+σp σl q
+n n t:t+k
+*
+Vision Encoder
+… …
+f Action
+ϕ
+* Transformer
+π
+External θ …
+Force Encoder
+Joint Torque
+𝑔
+𝜏 ψ
+Fig.4:FACTRallowsourpolicytobetterintegrateforceinformationwithoutoverfittingtovisualinformation,resultinginbettergeneralization
+to objects with unseen visual appearances and geometries. Our policy takes as inputs RGB images I and external joint torque τ, which are
+then tokenized by a vision encoder and a force encoder before fed into an action transformer to regress joint position targets q . FACTR
+t:t+k
+appliesablurringoperatorofscaleσ ineitherpixelorlatentspace,initializedatalargevaluethengraduallydecreasedthroughthetraining.
+n
+Our policy π is based on an encoder-decoder transformer For the force part:
+θ
+that integrates vision and force modalities. Visual observations (cid:16) √ (cid:17)
+α(l) = softmax (A(l)WQ(l))(HE(l)WK(l))⊤/ d .
+andforcereadingsareconvertedintotokens,fedtotheencoder, F t,F
+then decoded into action tokens through cross attention.
+These α(l) and α(l) measure how strongly each action token
+V F
+A pre-trained vision transformer (ViT) [7, 6] is used to attends to vision vs. force tokens at layer l, and will be the
+encode an input image I into a sequence of vision tokens main source of analysis in Sec. V-C.
+t
+zV t ∈RMv×d for some number of tokens M v and embedding Finally, we project the decoder output HD t to action space,
+dimension d. An MLP-based force encoder is applied to the which represents joint position targets for the follower arm:
+joint torque τ t , resulting in a single force token: zF t ∈ R1×d. qˆ =MLP (cid:0) HD(cid:1) ∈ Rl×da.
+The tokens are concatenated to form the model input: t:t+k t
+X = (cid:2) zV; zF(cid:3) ∈ R(Mv+1)×d. where d a is the dimension of the action space. Substituting
+t t t qˆ into Eq. 6 gives the full BC objective. Please see
+t:t+k
+Appendix X for the detailed policy architecture and training
+Then, a transformer encoder Enc processes X t via multiple hyperparameters.
+self-attention and feed-forward layers:
+B. Force-Attending Curriculum
+HE t = Enc (cid:0) X t (cid:1) ∈ R(Mv+1)×d. Through experiments, as shown in Sec. V-C and Fig. 9,
+we found that naively concatenating force data to the policy
+This yields the encoded vision and force tokens.
+observationduringtrainingoftenresultsinpoliciesthatneglect
+For the decoder, we introduce k action tokens, A∈Rk×d. force input, failing to leverage force input to the fullest extent.
+A transformer decoder Dec refines these tokens through self- To address this, we employ a curriculum that gradually unveils
+attention and cross-attention to HE: detailed visual information, encouraging the model to learn
+t
+to utilize force first. Specifically, we define two operators:
+HD = Dec (cid:0) A, HE(cid:1) .
+t t β P (I, σ n ) for the pixel space, and β L (z, σ n ) for the latent
+space,whereσ isascaleparameter(e.g.thestandarddeviation
+Duringcrossattention,eachactiontokenattendstobothvision n
+and force representations. If we split HE into its vision (V) of a Gaussian kernel or the kernel size of a max pooling
+t
+operator) that is updated over the course of training for N
+and force (F) parts, the cross-attention weights for each layer
+total gradient steps. During training, we apply the pixel-space
+l can be decomposed as follows. For simplicity of notation,
+operator β to image I or β to visual latent tokens zV.
+assumetheseweightsarealreadyaveragedovermultipleheads: P t L t
+Intuitively, the operators make visual inputs or latent tokens
+For the vision part: close in the metric space, thus encouraging more contribution
+(cid:16) √ (cid:17) from the force modality, particularly at the start of the training.
+α V (l) = softmax (A(l)WQ(l))(HE t,V (l)WK(l))⊤/ d , Consider the limit σ → ∞, each visual input converges to
+=== Page 6 ===
+Algorithm 1 Force-Attending Curriculum Training (FACTR) TheoreticalAnalysis: WeanalyzetheeffectsofGaussianblur
+1: Given: Expert dataset D; action chunking size k; total training as an example of a curriculum operator through the framework
+steps N; Pixel-space operator β P (I, σ); latent-space operator of Neural Tangent Kernels (NTK) [11]. Although we consider
+β L (z, σ); Scheduler defining σ n for n=1...N a simple two-layer model here, the intuition applies to more
+2: Initialize pre-trained ViT f ϕ , force MLP encoder g ψ , and action- complex architectures like vision transformers (ViTs), which
+chunking transformer π
+θ
+have a more sophisticated NTK [2]. The formal theoretical
+3: for iteration n=1...N do
+4: Sample (cid:0) I t ,τ t , q t (cid:1) from D analysis is presented in Appendix VII.
+5: σ n ←Scheduler(n) // get current scale
+6: if pixel-space curriculum then D. Curriculum Schedulers
+(cid:0) (cid:1)
+7: I t ← β P I t , σ n Over the course of training (indexed by n=1,...,N), we
+8: end if
+adjust σ via a scheduler to control the information released
+9: zV t ← f ϕ (I t ) // vision tokens n
+10: if latent-space curriculum then from the visual branch. Given a initial scale σ 0 , we consider
+11: zV t ← β L (cid:0) zV t , σ n (cid:1) the following schedulers:
+12: end if
+1 1 4 3 : : q z ˆ t F t :t+ ← k ← g ψ ( π τ θ t (cid:0) ) zV t , // z f F t or (cid:1) ce token Decay Type Scheduler Equation
+(cid:0) (cid:1)
+15: L = MSEqˆ t:t+k , q t:t+k Constant σ =σ
+16: Update ϕ, ψ, θ using ADAM n 0
+17: end for Linear σ =σ (cid:0) 1− n(cid:1)
+n 0 N
+(cid:16) (cid:16) (cid:17)(cid:17)
+Cosine σ n = σ 2 0 1+cos n N π
+approximately the same tensor. Hence, the model can only Exponential σ =σ ·αn, α>1
+n 0
+learn a single global output for all visual inputs. Thus, at the (cid:16) (cid:17)
+Step σ =σ 1− 1 ⌊ n ⌋ , d >1
+early stage of the curriculum, the gradient updates focus more n 0 dsteps N/dsteps steps
+on using the force information and updating the force encoder
+Furthermore, we warm-up the curriculum by fixing the scale
+to maximally differentiate between inputs.
+to σ for certain gradient steps, and adjust the decay formula
+0
+toaccountforthisduration.Therationalebehindthisstepisto
+C. Curriculum Operators
+warm-up the randomly initialized force encoder with relatively
+We consider two types of operators: Gaussian blur and low visual information.
+downsampling.
+V. EVALUATION
+For the Gaussian blur, we define the 2D kernel G as:
+σ
+A. Experimental Setup
+1
+(cid:18) x2+y2(cid:19)
+G (x,y)= exp − We setup four contact-rich tasks, which are illustrated in
+σ 2πσ2 2σ2
+Fig. 5 along with the training and testing objects of various
+The operator β P (I,σ) applies this kernel using the 2D shapes and visual appearances. For all tasks, we use Franka
+convolution operator ∗: Panda arm(s) with OpenManipulator-X gripper(s). Each task
+uses either a front ZED2 camera or wrist cameras mounted
+β (I,σ)=I∗G
+P σ nearthegripperswithRGBobservations.Wedescribethetasks
+For the 1D Gaussian blur, the kernel g is defined as: details and the success criteria below.
+σ
+1 (cid:18) x2 (cid:19) • Box Lift: A bi-manual task where two arms lift a box and
+g σ (x)= √ 2πσ exp − 2σ2 balance in the air for at least two seconds, using the front
+camera and external joint torque from the arms.
+The operator β L (zV,σ) similarily applies this kernel using 1D • Non-Prehensile Pivot: The robot flips an item by pivoting
+convolution: it against the corner of a fixture until the item is rotated
+β (zV,σ)=zV ∗g by 90◦ and can stand stably, using the front camera and
+L σ
+external joint torque from the arm.
+For downsampling, we use MaxPool followed by nearest
+• Fruit Pick and Place: The robot grasps a soft and delicate
+interpolation. In 2D, the pixel-space operator β (I) is:
+P fruit and places it in a bowl, using the wrist camera and
+β (I)=NearestInterp(MaxPool2D(I)) the external joint torque of the gripper.
+P
+• Rolling Dough: The robot continuously rolls the dough to
+In 1D, the latent-space operator β I (zV) is the same except shape it into a cylinder for at least 8 seconds, using the
+that a MaxPool1D is used. front camera and the external joint torque of the arm.
+By gradually reducing σ , the curriculum ensures that the
+n
+B. Teleoperation Evaluation
+modelfocusesfirstonforcetokens,andthenincorporatesvisual
+information in the later stage of the training. This produces a Wecompareourleader-followerteleoperationsystem,which
+policy π that more robustly fuses force and vision for control, includes our leader arm with force feedback, gravity compen-
+θ
+alleviating the issue of overfitting to the vision modality. sation, and redundancy resolution, to an un-actuated leader-
+=== Page 7 ===
+Train Objects
+Test Objects
+ACT (Vision-Only) ACT (Vision+Force) FACTR
+Fig. 5: Tasks. We evaluate our leader-follower teleoperation system
+and autonomous policies trained with FACTR on four contact-rich
+tasks.Thesetasksarechallengingastheyrequiretherobottoperceive
+andrespondtotheforcefeedbackasitmanipulatesobjectswithunseen
+visual appearances and geometries.
+follower baseline system with mechanical joint regulation,
+similar to [29]. We summarize our results in Fig. 7.
+Our experiments show that our system allows users to
+complete tasks with 64.7% higher task completion rate, 37.4%
+reduced completion time, and 83.3% improvement in the
+subjective ease of use metrics.
+We observe that for tasks that require continuous contact
+betweenthearmandanobject,suchasnon-prehensilepivoting
+and bimanual box lifting, the un-actuated teleoperation system
+often causes the follower arm to lose contact with the object.
+This occurs because of the absence of force feedback, which
+prevents the user from perceiving the environment’s geometric
+constraints through the leader arms. As a result, maintaining
+continuous contact with the object becomes challenging.
+For the un-actuated system, the follower arm frequently
+exceedsitsjointvelocitylimitswhenmovingundercontinuous
+contact. This occurs because the operator can easily maneuver
+the leader arms in ways that cause significant deviations
+between the leader and follower joint positions, especially
+when the follower arm is in contact with the environment.
+Whencontactislost,theresultinglargejoint-spaceerrorcauses
+the PID controller to generate large torques, causing abrupt
+movements that exceed the velocity limits. On the other hand,
+our system’s force feedback renders geometric constraints of
+the environment for the operator through the leader arms,
+etaR
+sseccuS
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+Box Lift Pivot Fruit Pick-Place Rolling Dough
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+Box Lift Pivot Fruit Pick-Place Rolling Dough
+etaR
+sseccuS
+Fig. 6: FACTR leads to better object generalization.
+preventing the operator from moving the leader arms too far
+away from the follower arms during environment contacts.
+C. Policy Evaluation
+Questions. In our real-world evaluation, we seek to address
+the following research questions regarding FACTR:
+• How does FACTR perform compared to baseline ap-
+proaches that do not use force feedback and ones that use
+force feedback without FACTR?
+• How do different curriculum parameters affect policy
+performance?
+TrainingandEvaluationProtocol.Wecollected50demon-
+strationswithourteleoperationsystem.Wetrainedeachmethod
+with the same hyperparameters, where details can be found in
+the Appendix X. We compare the following methods:
+• ACT (Vision-Only) [32]: Action Chunking Transformer
+which only takes in visual observation.
+• ACT (Vision+Force) [13, 14]: Action Chunking Trans-
+former which takes in both visual and force observation,
+but trained without a curriculum.
+• FACTR(Ours):ActionChunkingTransformertrainedwith
+Force-Attending Curriculum. For each task, we train a
+latent space curriculum with the Guassian Blur operator
+and linear scheduler. We discuss more detailed ablations
+on the curriculum in Sec. V-D.
+For each object in each task, we evaluated 5-10 trials. We
+presenttheaveragesuccessratefortrainingandtestingobjects,
+respectively. Detailed evaluation results for each object can be
+found in the Appendix XII.
+FACTR leads to better generalization. We present our
+main quantitative results in Fig. 6. All the policies perform
+similarly on the train objects for most tasks, except for the
+rolling dough task, where the vision-only policy smashes the
+dough without any rolling actions and fails completely. Note
+that the visual observations are hard to distinguish during
+the oscillatory rolling motions, while the force signals form
+=== Page 8 ===
+a) Completion Rate ↑ b) Completion Time (sec) ↓ c) Ease of Use ↑
+1.0 25 5
+0.8 20 4
+0.6 15 3
+0.4 10 2
+0.2 5 1
+0.0 0 0
+Box Lift Pivot Pick-Place Rolling Box Lift Pivot Pick-Place Rolling Box Lift Pivot Pick-Place Rolling
+Un-Actuated Leader-Follower Ours
+Fig. 7: User study. FACTR teleoperation system allows users to complete tasks with significantly higher success rate, using less time, and
+they subjectively found our system to be easier to use.
+Duringpolicyrollout,wevisualizetheaveragecrossattention
+of the action tokens to the force or vision tokens of the first
+decoder layer as shown in Fig. 9. FACTR learns to attend to
+force more during task execution. For example, in the box
+lifting task, attention to force outweighs that of vision as the
+arms contact the box, signaling a mode switch. While without
+the curriculum, the policy does not pay enough attention to
+force, and either fails to lift or balance the novel boxes.
+FACTRleadstobetterrecoverybehavior.Anothernotable
+observation is that FACTR also facilitates recovery behavior.
+Specifically, we evaluate the box-lifting task with five trials
+per object. A trial begins when the policy successfully lifts
+the box for the first time; we then knock the box down and
+assess the second attempt. As shown in Table I, all policies
+maintain nearly 100% recovery success on training objects.
+However, for test objects, the vision-only policy’s success rate
+Fig. 8: WevisualizetheexternaljointtorquenormoftheFrankaarm
+drops significantly from 31.7% on the first attempt to 13.3%
+for a collected trajectory. Blue highlights indicate pre-contact phases,
+whilepurpleandgreenmarktorquepeaksandtroughsatthedough’s on the second. In contrast, force-attending policies maintain
+left and right ends, respectively. The oscillatory torque pattern helps similar success rates across both attempts.
+the policy distinguish observations despite similar visual inputs. Weobservethatvision-onlypoliciesoftenremainstaticafter
+the box is knocked down, failing to retry. We hypothesize that
+a corresponding oscillatory pattern, as shown in Fig. 8; this this occurs because the vision-only policy overfits to training
+distinctive torque pattern helps policies with force input to scenarios, making it unresponsive to unseen objects outside its
+complete the task. training distribution. In contrast, FACTR policies detect loss of
+Forthetestobjects,thevision-onlypolicyachievesasuccess contact through external joint torque readings, which revert to
+rate of 21.3% on average, which is significantly worse than pre-lift values when the object is dropped. Since our FACTR
+policies incorporating force. Without a curriculum, policies policies effectively attend to force input, they successfully
+naively incorporating force achieve a success rate of 61.2%, recover to a pre-lift state and attempt the task again.
+while FACTR achieves a success rate of 87.5%, which shows
+thatFACTRleadstosignificantlybettergeneralizationtonovel Train Objects Test Objects
+objects. We hypothesize that the force information provides
+ACT (Vision-Only) 4/5 4/30
+importantsignalsformodeswitchingatmomentssuchaswhen
+ACT (Vision+Force) 5/5 16/30
+the robots get into contact with the box in the lifting task and
+when the object is grasped in the fruit pickup task. FACTR 3/3 27/30
+Policies with FACTR learns to identify mode switching.
+TABLE I: Evaluation of recovery behaviors for box lifting.
+To better understand the policies trained with FACTR. We
+visualize the attention behavior during policy training and D. Ablations on Curriculum
+inference. Specifically, we visualize the cross attention of the To further validate the significance of a curriculum, we
+action tokens to the memory tokens denoted as α(1) and α(1) trained models with fixed σ across training. Moreover, to
+V F n
+for the first layer of the decoder, where α(1) and α(1) are ablateonpixelspaceandlatentspacecurriculum,anddifferent
+V F
+defined in Sec. IV. scheduler and operator choices, we train policies on different
+=== Page 9 ===
+FACTR (Ours)
+noitnettA
+No FACTR (Baseline)
+noitnettA
+1 1
+0 0
+Time Steps Time Steps
+Vision Force
+Fig. 9: Policies trained with FACTR learns to identify mode switching. We visualize the average cross attention of the action tokens to
+the force or vision tokens of the first decoder layer during policy rollout. [Left] Without the curriculum, the policy does not pay enough
+attention to force, and either fails to lift or balance the novel boxes. [Right] FACTR learns to attend to force more to complete the task. For
+example, in the box lifting task, attention to force outweighs that of vision as the arms contact the box, signaling a mode switch.
+combination of these parameters. We choose the task of ization in contact-rich tasks. FACTR leverages a blurring
+pivoting, one of the hardest tasks from our task suite, for operator with decreasing scales on the visual information
+the ablations. We evaluate only on the five test objects for five throughout training. This encourages the policy to leverage
+trialseach,sincetheyaremoreindicativeofpolicyperformance force input at the beginning stages of training, preventing
+than train objects. The results are presented in TABLE II. the problem where the policy overfits to visual input and
+thus neglects force input. This approach was demonstrated
+Pixel Space Latent Space through a series of experiments on the following tasks: box
+Blur Downsample Blur Downsample lifting,non-prehensilepivoting,fruitpick-and-place,androlling
+dough, where FACTR exhibits significant improvements in
+Constant 16/25 15/25 17/25 16/25
+task completion rates and generalization to unseen object
+Linear 19/25 18/25 19/25 18/25 appearances and geometries. Additionally, our teleoperation
+Cosine 20/25 19/25 17/25 19/25 system, which includes an actuated leader arm for force
+Exp 19/25 21/25 20/25 19/25 feedback and gravity compensation, was shown to provide
+Step 19/25 18/25 20/25 19/25 a more intuitive user experience, as evidenced by higher task
+completion rates and user satisfaction in our studies.
+TABLE II: Curriculum ablation.
+While FACTR demonstrates significant improvements in
+Fixed-Scale Operator vs. Curriculum. We found that force-based policy learning for contact-rich tasks, it has limita-
+performancewithacurriculumofdecayingsmoothingperforms tions. First, the precision of the external joint torque sensors
+better than a fixed curriculum across all tasks. We hypothesize in our follower arm is limited. This limitation can particularly
+that to enable better performance, the final policy needs to affect tasks that involve subtle force adjustments during fine-
+take in the fully unblurred vision information. Through the grainedmanipulationsincethetorquereadingscanbetoonoisy
+curriculum,apolicygetstograduallyadapttounblurredimages. to be used effectively. Future work could explore integrating
+On the other hand, with fixed smoothing, even though policy high-resolution tactile sensors or haptic gloves to enhance
+may not overfit to visual information, it cannot extract the feedback precision and improve overall system performance.
+necessary details from unblurred vision to complete the tasks. Second, our approach assumes the availability of external joint
+Comparisonswithotherschedulerparameters.Wefurther torque sensors in the follower arms. Future work can explore
+comparepoliciestrainedwitheitherpixelspaceorlatentspace, adapting our system for an arm mounted with an end-effector
+two operators (Gaussian blur and downsample) as defined in force-torque sensor. Third, the effectiveness of our curriculum
+Sec. IV-C, and four schedulers (linear, cosine, exponential, learningapproachcanbeinfluencedbyseveralhyperparameters,
+and step) as defined in Sec. IV-D. However, we do not find a such as the choice of the blurring operator and scheduling
+uniform advantage or disadvantage for any set of parameters. strategies. These parameters can be highly task-dependent,
+The results suggest that FACTR is relatively robust to different requiringextensivetuningfordifferentapplications.Developing
+sets of curriculum parameters. adaptiveorself-tuningcurriculumstrategiescouldhelpmitigate
+this issue by dynamically adjusting hyperparameters based on
+VI. CONCLUSIONANDLIMITATIONS
+task-specific requirements. Addressing these limitations could
+WeintroducedFACTR,acurriculumapproachtotrainforce- further enhance FACTR’s applicability and robustness across
+based policies to improve performance and object general- a broader range of contact-rich manipulation tasks.
+=== Page 10 ===
+ACKNOWLEDGMENTS in neural networks. Advances in neural information
+processing systems, 31, 2018.
+We thank Arthur Allshire, Andrew Wang, Mohan Kumar
+[12] Oussama Khatib. A unified approach for motion and
+Srirama, Ritvik Singh for discussions about the paper. We also
+forcecontrolofrobotmanipulators:Theoperationalspace
+thank Tiffany Tse, Ray Liu, Sri Anumakonda, Sheqi Zhang
+formulation. IEEE Journal on Robotics and Automation,
+with teleoperation. This work is supported in part by ONR
+3(1):43–53, 1987.
+MURI N00014-22-1-2773, ONR MURI N00014-24-1-2748
+[13] Masato Kobayashi, Thanpimon Buamanee, and Takumi
+and AFOSR FA9550-23-1-0747.
+Kobayashi. Alpha-α and bi-act are all you need: Im-
+portance of position and force information control for
+REFERENCES
+imitation learning of unimanual and bimanual robotic
+[1] SanjeevArora,SimonSDu,WeiHu,ZhiyuanLi,RussR manipulation with low-cost system. arXiv preprint
+Salakhutdinov,andRuosongWang. Onexactcomputation arXiv:2411.09942, 2024.
+with an infinitely wide neural net. Advances in neural [14] Kelin Li, Shubham M Wagh, Nitish Sharma, Saksham
+information processing systems, 32, 2019. Bhadani, Wei Chen, Chang Liu, and Petar Kormushev.
+[2] EnricBoix-Adsera,OmidSaremi,EmmanuelAbbe,Samy Haptic-act: Bridging human intuition with compliant
+Bengio, Etai Littwin, and Joshua Susskind. When can robotic manipulation via immersive vr. arXiv preprint
+transformers reason with abstract symbols? International arXiv:2409.11925, 2024.
+Conference on Learning Representations, 2023. [15] Wenhai Liu, Junbo Wang, Yiming Wang, Weiming Wang,
+[3] Claire Chen, Zhongchun Yu, Hojung Choi, Mark and Cewu Lu. Forcemimic: Force-centric imitation
+Cutkosky,andJeannetteBohg.Dexforce:Extractingforce- learningwithforce-motioncapturesystemforcontact-rich
+informed actions from kinesthetic demonstrations for manipulation. arXiv preprint arXiv:2410.07554, 2024.
+dexterousmanipulation. arXivpreprintarXiv:2501.10356, [16] Kevin M. Lynch and Frank C. Park. Modern Robotics:
+2025. Mechanics, Planning, and Control. Cambridge University
+[4] Cheng Chi, Siyuan Feng, Yilun Du, Zhenjia Xu, Eric Press, USA, 1st edition, 2017.
+Cousineau, Benjamin Burchfiel, and Shuran Song. Dif- [17] Ajay Mandlekar, Danfei Xu, Josiah Wong, Soroush
+fusion policy: Visuomotor policy learning via action Nasiriany,ChenWang,RohunKulkarni,LiFei-Fei,Silvio
+diffusion. In Robotics: Science and Systems, 2023. Savarese, Yuke Zhu, and Roberto Mart´ın-Mart´ın. What
+[5] Cheng Chi, Zhenjia Xu, Chuer Pan, Eric Cousineau, matters in learning from offline human demonstrations
+Benjamin Burchfiel, Siyuan Feng, Russ Tedrake, and forrobotmanipulation. InConferenceonRobotLearning,
+Shuran Song. Universal manipulation interface: In-the- pages 1678–1690. PMLR, 2022.
+wild robot teaching without in-the-wild robots. Robotics: [18] Matthew T Mason. Compliance and force control for
+Science and Systems, 2024. computer controlled manipulators. IEEE Transactions on
+[6] Sudeep Dasari, Mohan Kumar Srirama, Unnat Jain, and Systems, Man, and Cybernetics, 11(6):418–432, 1981.
+Abhinav Gupta. An unbiased look at datasets for visuo- [19] Mayank Mittal, Calvin Yu, Qinxi Yu, Jingzhou Liu,
+motor pre-training. In Conference on Robot Learning, Nikita Rudin, David Hoeller, Jia Lin Yuan, Ritvik Singh,
+pages 1183–1198. PMLR, 2023. Yunrong Guo, Hammad Mazhar, Ajay Mandlekar, Buck
+[7] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Babich, Gavriel State, Marco Hutter, and Animesh Garg.
+Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Orbit: A unified simulation framework for interactive
+Mostafa Dehghani, Matthias Minderer, Georg Heigold, robot learning environments. IEEE Robotics and Automa-
+Sylvain Gelly, et al. An image is worth 16x16 words: tion Letters, 8(6):3740–3747, 2023.
+Transformers for image recognition at scale. In Interna- [20] G. Morel and S. Dubowsky. The precise control of
+tional Conference on Learning Representations, 2020. manipulatorswithjointfriction:abaseforce/torquesensor
+[8] Zihao He, Hongjie Fang, Jingjing Chen, Hao-Shu Fang, method. InProceedingsofIEEEInternationalConference
+and Cewu Lu. Foar: Force-aware reactive policy on Robotics and Automation, volume 1, pages 360–365
+for contact-rich robotic manipulation. arXiv preprint vol.1, 1996.
+arXiv:2411.15753, 2024. [21] H. Olsson, K.J. A˚stro¨m, C. Canudas de Wit, M. Ga¨fvert,
+[9] Neville Hogan. Impedance control: An approach to and P. Lischinsky. Friction models and friction com-
+manipulation.In1984Americancontrolconference,pages pensation. European Journal of Control, 4(3):176–195,
+304–313. IEEE, 1984. 1998.
+[10] YifanHou,ZeyiLiu,ChengChi,EricCousineau,Naveen [22] Lorenzo Pagliara, Enrico Ferrentino, Andrea Chiacchio,
+Kuppuswamy, Siyuan Feng, Benjamin Burchfiel, and and Giovanni Russo. Safe haptic teleoperations of
+Shuran Song. Adaptive compliance policy: Learning admittance controlled robots with virtualization of the
+approximate compliance for diffusion guided control. force feedback. arXiv preprint arXiv:2404.07672, 2024.
+arXiv preprint arXiv:2410.09309, 2024. [23] WilliamPeeblesandSainingXie. Scalablediffusionmod-
+[11] Arthur Jacot, Franck Gabriel, and Cle´ment Hongler. els with transformers. In Proceedings of the IEEE/CVF
+Neural tangent kernel: Convergence and generalization international conference on computer vision, pages 4195–
+=== Page 11 ===
+4205, 2023.
+[24] Nathan D. Ratliff, Jan Issac, and Daniel Kappler. Rie-
+mannian motion policies. CoRR, abs/1801.02854, 2018.
+[25] Kenneth Shaw, Yulong Li, Jiahui Yang, Mohan Kumar
+Srirama, Ray Liu, Haoyu Xiong, Russell Mendonca, and
+Deepak Pathak. Bimanual dexterity for complex tasks.
+In 8th Annual Conference on Robot Learning, 2024.
+[26] Bruno Siciliano, Oussama Khatib, and Torsten Kro¨ger.
+Springer handbook of robotics, volume 200. Springer,
+2008.
+[27] Shuran Song, Andy Zeng, Johnny Lee, and Thomas
+Funkhouser. Grasping in the wild: Learning 6dof closed-
+loop grasping from low-cost demonstrations. IEEE
+Robotics and Automation Letters, 5(3):4978–4985, 2020.
+[28] Weiyao Wang, Du Tran, and Matt Feiszli. What makes
+training multi-modal classification networks hard? In
+Proceedings of the IEEE/CVF conference on computer
+visionandpatternrecognition,pages12695–12705,2020.
+[29] Philipp Wu, Yide Shentu, Zhongke Yi, Xingyu Lin, and
+Pieter Abbeel. Gello: A general, low-cost, and intuitive
+teleoperation framework for robot manipulators. In 2024
+IEEE/RSJ International Conference on Intelligent Robots
+and Systems (IROS), pages 12156–12163. IEEE, 2024.
+[30] Yansong Wu, Zongxie Chen, Fan Wu, Lingyun Chen,
+Liding Zhang, Zhenshan Bing, Abdalla Swikir, Alois
+Knoll, and Sami Haddadin. Tacdiffusion: Force-domain
+diffusion policy for precise tactile manipulation. arXiv
+preprint arXiv:2409.11047, 2024.
+[31] WilliamXie,StefanCaldararu,andNikolausCorrell. Just
+addforcefordelicaterobotpolicies.CoRL2024Workshop
+onMasteringRobotManipulationinaWorldofAbundant
+Data, 2024.
+[32] Tony Z Zhao, Vikash Kumar, Sergey Levine, and Chelsea
+Finn. Learning fine-grained bimanual manipulation with
+low-cost hardware. Robotics: Science and Systems, 2023.
+[33] Qi Zhu, Jing Du, Yangming Shi, and Paul Wei. Neu-
+robehavioral assessment of force feedback simulation in
+industrial robotic teleoperation. Automation in Construc-
+tion, 126:103674, 2021.
+=== Page 12 ===
+APPENDIX where K
+σ
+∗ x is the convolution of x with a Gaussian
+kernel K . Assuming that the model has infinite width and the
+VII. ANALYSISOFFACTRFROMNEURALTANGENT σ
+parameters in W are initialized from a Gaussian distribution,
+KERNEL(NTK)PERSPECTIVE
+the NTK for this model is:
+Inthissection,weaimtogiveasketchofamoretheoretical
+argumentforwhyoperatorslikeGaussianblurordownsampling
+in FACTR could help the policy attending to force input. We k (x,x′)=E [⟨∇ f(x),∇ f(x′)⟩]
+σ W∼N(0,I) W W
+will first briefly introduce Neural Tangent Kernel (NTK), and
+=E ⟨K ∗x,K ∗x′⟩.
+then use it a theoretical framework to analyze the effects of W∼N(0,I) σ σ
+Gaussian blur as an example curriculum operator. This is the dot product between the convolved inputs K ∗x
+σ
+and K ∗x′. As σ increases, the Gaussian convolution K ∗x
+A. Preliminaries on Neural Tangent Kernel (NTK) σ σ
+actsasalow-passfilter,attenuatinghigh-frequencycomponents
+TheNeuralTangentKernel(NTK)isatheoreticalframework
+in the input x. This causes the convolved inputs K ∗x and
+σ i
+usedtoanalyzethebehaviorofneuralnetworks,particularlyin
+K ∗x to become more similar for any pair of inputs x and
+σ j i
+the limit of infinite width [11, 1]. For a neural network f (x)
+θ x . In the extreme case where σ →∞, K ∗x ≈K ∗x for
+j σ i σ j
+with parameters θ, the NTK is defined as:
+allx ,x ,andtheNTKk (x ,x )approachesaconstantvalue.
+i j σ i j
+k(x ,x )=⟨∇ f (x ),∇ f (x )⟩, This implies that the kernel matrix K becomes approximately
+i j θ θ i θ θ j
+an all-ones matrix, scaled by the magnitude of the convolved
+where ∇ θ f θ (x) is the gradient of the network’s output with inputs.
+respect to its parameters θ, and ⟨·,·⟩ denotes the inner product.
+In our curriculum, we decrease σ, where the model is first
+In the infinite width limit, the NTK becomes deterministic and
+exposed to smoother visual data before gradually transitioning
+remains constant during training. Assuming the parameters θ
+to the original unsmoothed data. At the beginning of the
+are initialized from a Gaussian distribution, the NTK k(x ,x )
+i j curriculum, the model focuses on low-frequency patterns and
+converges to a deterministic kernel k (x ,x ) given by:
+∞ i j robust features from visual inputs. As σ decreases to small σ,
+k (x ,x )=E [⟨∇ f (x ),∇ f (x )⟩], the NTK retains discriminative power, allowing the model to
+∞ i j θ∼N(0,I) θ θ i θ θ j
+learn fine-grained features from visual inputs. . This gradual
+wheretheexpectationistakenovertheGaussianinitialization increaseincomplexitycanhelpthemodellearnmoreeffectively
+of θ. byavoidingoverfittingtothehigh-frequencyvariationsinvisual
+The NTK k(x i ,x j ) is a similarity function: if k(x i ,x j ) is inputs in the early stages of training.
+large, then the predictions f (x ) and f (x ) will tend to be
+θ i θ j More rigorously, consider the limit σ → ∞, each blurred
+close.Ifwehaventrainingpoints(x ,y ),k definesapositive
+i i input K ∗x converges to the same vector ϕ. Hence,
+semi-definite(PSD)kernelmatrixK ∈Rn×n whereeachentry σ i
++
+K
+ij
+=k(x
+i
+,x
+j
+). k
+σ
+(x
+i
+,x
+j
+) = ⟨ϕ,ϕ⟩ = ∥ϕ∥2,
+Fascinatingly, when we train this infinite-width neural
+and the NTK matrix K becomes
+network with gradient flow on the squared error, we precisely
+ 
+know the model output at any point in training. At time t, the 1 1 ··· 1
+training residual is given by: 1 1 ··· 1
+K = ∥ϕ∥2 
+
+. .
+.
+. .
+.
+... . .
+.
+ 
+
+.
+f (x)−y =e−ηKt(f (x)−y),
+θt θ0 1 1 ··· 1
+where η is the learning rate, K is the kernel matrix, and This matrix is rank-1, with largest eigenvalue λ = n∥ϕ∥2
+f (x) is the initial model output. This equation shows that
+θ0 (for n training points) and corresponding eigenvector v =
+the residual error decays exponentially with a rate determined
+(1,1,...,1).
+by the kernel matrix K.
+Recall that in the infinite-width NTK regime, the training
+B. Analyzing the Effects of Gaussian Blur with NTK residual r satisfies
+We analyze the effects of Gaussian blur as an example r(t) = e−ηKtr(0),
+of a curriculum operator. While we consider a simple two-
+layer model here, the intuition applies to more complex where r(0) = f θ0 (x)−y is the initial residual. Decompose
+architectures like vision transformers (ViTs), which have a r(0) into components parallel and perpendicular to v:
+more sophisticated NTK [2].
+r(0) = r +r , with r ∝v and r ·v =0.
+∥ ⊥ ∥ ⊥
+Consideramodelwheretheinputxisfirstconvolvedwitha
+Gaussian kernel K before being passed through the network, Since K is rank-1,
+σ
+where σ is the standard deviation of the Gaussian kernel. The
+e−ηKtr(0) = r + e−ηλtr .
+output of the model is: ⊥ ∥
+The parallel component decays exponentially at rate λ, while
+f(x)=WT(K ∗x), the perpendicular component is unchanged. This effectively
+σ
+=== Page 13 ===
+learns a single global scalar for all inputs, reducing mean- where µ is a calibrated static friction coefficient and f is the
+s
+squared error by matching the average label but losing control loop frequency, set to 500 Hz.
+discriminative power. Thus, at the early state of the curriculum, We also account for kinetic friction by compensating for
+the gradient updates will focus on using the force information Coulomb friction and viscous friction as follows [21]:
+and updating the force encoder to maximally differentiate
+τ(i) =µ(i)sgn(q˙(i))+µ(i)q˙(i) (8)
+between inputs. ks c v
+where µ is the Coulomb friction coefficient and µ is viscous
+c v
+VIII. COSTANALYSISOFOURTELEOPERATIONSYSTEM
+friction coefficient.
+WITHFORCEFEEDBACK
+The total friction compensation τ is the sum of the
+friction
+Please see Table III for a detailed Bill of Materials and static friction τ and kinetic friction τ terms.
+ss ks
+breakdown of the cost to create one leader arm and leader
+B. Joint Limit Avoidance
+gripperaspartofourteleoperationwithforcefeedbacksystem.
+This is accurate pricing as of the paper release. Weimplementthefollowingartificialpotential-basedcontrol
+law to prevent the operator from making the leader arm go
+beyond the joint limits of the follower arm:
+Object Quantity Total
+D
+D
+y
+y
+n
+n
+a
+a
+m
+m
+i
+i
+x
+x
+e
+e
+l
+l
+X
+X
+M
+C3
+4
+3
+3
+0
+0
+-
+-
+T
+W
+28
+2
+8
+1
+-
+0
+T
+-T 2
+6
+$
+$
+5
+5
+3
+3
+9
+9
+.
+.
+8
+4
+0
+0 U(q(i))=
+ 
+1
+1 2 η
+η
+(q(i)− 1
+1
+q
+m
+(i
+in
+))2 ,
+,
+q
+q
+(
+(
+i
+i
+)
+)
+<
+>
+q
+q
+m (
+(
+i
+i
+i )
+)
+n +
+−
+∆
+∆
+q
+q (9)
+U
+12
+2
+V
+D2
+20
+C
+A
+on
+P
+t
+o
+ro
+w
+l
+e
+P
+r
+C
+S
+B
+upply
+1
+1
+$
+$
+3
+2
+2
+4
+.
+.
+1
+9
+0
+9
+0 2
+,
+(qm (i a ) x−q(i))2
+otherwis
+m
+e
+ax
+FPX330-S102 Servo Bracket 1 $8.70
+τ(i) =−∇ U(q(i)) (10)
+Polymaker PLA PRO Filament 1 $24.99 limit q(i)
+U2D2 Power Hub Board 1 $19.99 where U(q(i)) is the repulsive potential function, ∆q is the
+14AWG Cable 1 $23.99 safety margin, and η is the scaling factor.
+3/4” Bearing 1 $6.99
+Screws - $15.99 C. Bi-manual Follower Arms Control with Dynamic Collision
+Avoidance
+Total $1229.95
+Most existing bi-manual teleoperation systems with a leader-
+follower setup command the follower arms by directly setting
+TABLE III: We present the bill of materials of one leader arm
+the joint position targets to the current joint positions of the
+teleoperation device with force feedback. The total cost is around
+leader arm. Instead, we employ a Riemannian Motion Policy
+$1229.95.
+(RMP) [24] implemented in Isaac Lab [19], where the RMP
+dynamically generates joint-space targets for the follower arms
+IX. ADDITIONALCONTROLLAWSFOROUR
+that best match the current joint positions of the leader arms
+TELEOPERATIONSYSTEM
+while incorporating real-time collision avoidance. Our system
+Here we define the additional control laws for our teleoper- prevents the follower arms from colliding with one another
+ation system with force feedback: friction compensation and or with external obstacles, such as the table, regardless of the
+joint limit avoidance. operator’s actions.
+A. Friction Compensation X. BEHAVIORCLONINGPOLICYARCHITECTUREAND
+TRAININGHYPERPARAMETERS
+Joint friction introduces resistive forces that impair re-
+sponsiveness, making precise motion control challenging and Our behavior cloning policy takes as input a RGB image
+reducing the system’s intuitive feel for the operator [20]. and current hand joint angles (proprioception). We obtain
+Friction also increases the physical effort required to back- tokens for the image observation via a ViT [7] and a token for
+drive the motor, leading to operator fatigue during prolonged joint proprioception via a linear layer. The weights of ViT is
+use. To this end, we use a dynamic friction model to explicitly initialized from the Soup 1M model from [6]. The tokens then
+compensate for static, Coulomb, and viscous friction [21]. pass through action chunking transformer, an encoder-decoder
+We mitigate the effects of static friction by introducing a transformer, to output a sequence of actions [32]. The action
+small, high-frequency oscillatory signal to the control input, space is the absolute joint angles of the two arms for box lift,
+which generates micro-vibrations that prevent the motors the absolute angles of a single arm for non-prehensile pivot
+from settling into static friction states, thereby enabling and rolling dough, and the absolute angles of a arm and the
+smoothertransitionsfromresttomotion[21].Thestaticfriction gripper for fruit pick and place. A key decision that greatly
+compensation torque τ is as follows: improves policy generalization is to exclude current arm joints
+ss
+(cid:40) from the proprioception. Intuitively, this may force the model
+µ(i)cos(πt) if q˙(i) <q˙(i),
+τ(i) = s f s (7) to extract object information from image observations, rather
+ss
+0 otherwise than overfitting to predict actions close to current arm states.
+=== Page 14 ===
+Hyperparameter Value FACTR AdaNorm NoiseAug
+Train(%) 90.0 25.0 85.0
+Behavior Policy Training
+Test(%) 77.7 6.1 65.0
+Optimizer AdamW
+TABLE V: Pivot task training and testing performance.
+Base Learning Rate 3e-4
+Weight Decay 0.05
+BoxLift Pivot RollingDough
+Optimizer Momentum β ,β =0.9,0.95
+1 2
+ACT(Vision-Only) 35/120 30/130 0/60
+Batch Size 128
+Bi-ACT 68/120 76/130 41/60
+Learning Rate Schedule Cosine Decay
+FACTR(Ours) 105/120 101/130 46/60
+Total Steps 20000-50000
+Warmup Steps 500 TABLE VI: Policy evaluation on unseen objects across 3 tasks.
+Augmentation RandomResizeCrop
+GPU RTX4090 (24 gb)
+Wall-Clock Time 2-6 hours
+Visual Backbone ViT Architecture
+Patch Size 16
+# Layers 12
+# MHSA Heads 12
+Fig. 10: We more than doubled the testing set size across 3 tasks.
+Hidden Dim 768
+Class Token Yes leverage vision altogether. Our curriculum approach eliminates
+Positional Encoding sin cos such tradeoff between vision and force, allowing the policy to
+attend properly to both force and vision.
+Action Chunking Transformer Architecture
+Moretestobjects.Wedoubledthenumberoftestingobjects
+# Encoder Layers 6
+used in three of our tasks, visualized in Fig. 10 and updated
+# Decoder Layers 6
+the success rate comparison figure in Tab. VI. By conducting
+# MHSA Heads 8
+testing on more unseen objects and comparing with the best
+Hidden Dim 512
+performing baseline (Bi-ACT), we observe that our method
+Feed-Forward Dim 2048
+yields an improved generalization performance.
+Dropout 0.1
+Positional Encoding sin cos XII. DETAILEDQUANTITATIVERESULTS
+Action Chunk 100 We present the detailed evaluation results for each task in
+TABLE VII, VIII, IX, and X.
+TABLE IV: Policy Architecture and Training Hyperparameters
+We list key hyperparameters for our behavior policy training
+Table IV. In general, we are able to obtain well-performing
+policies with 20000-50000 gradient steps and 2-6 hours of
+wall-clock time training on a RTX4090.
+XI. ADDITIONALEXPERIMENTS
+Adaptive Layer Norm as an Alternative to a Curriculum
+As an alternative to a curriculum, we experimented with
+Adaptive Normalization Layers [23] on the action tokens
+conditionedontheforceinputtoimprovetheforceconditioning
+(AdaNorm in Tab. V). However, we found that it creates
+instability in training and leads to overfitting.
+Data Augmentation as alternative to curriculum. We run
+10 data augmentation experiments varying noise probabilities
+and noise levels applied to vision input. The best of these
+policies, shown as DataAug in Tab. V. We find that policies
+trained with lower augmentation levels perform well on train
+objects but worse than FACTR on test objects, likely because
+low levels of augmentations fail to facilitate proper attention to
+force. Higher levels of augmentation policies do not perform
+well across train and test sets, likely because they fail to
+=== Page 15 ===
+Train Test Train Avg Test Avg
+Box1 Box2 Box3 Box4 Box5 Box6 Box7
+ACT (Vision-Only) 10/10 7/10 1/10 1/10 6/10 3/10 1/10 100.0% 31.7%
+ACT (Vision+Force) 10/10 2/10 4/10 4/10 10/10 10/10 5/10 100.0% 58.3%
+FACTR 10/10 8/10 7/10 10/10 10/10 10/10 10/10 100.0% 91.7%
+TABLE VII: Comparison of methods for Box Lift task.
+Train Test Train Avg Test Avg
+Box1 Box2 Box3 Box4 Box5 Box6 Box7
+ACT (Vision-Only) 10/10 9/10 3/10 0/10 7/10 2/10 1/10 95.0% 26.0%
+ACT (Vision+Force) 9/10 9/10 1/10 2/10 9/10 4/10 5/10 90.0% 42.0%
+FACTR 9/10 9/10 6/10 5/10 10/10 7/10 10/10 90.0% 76.0%
+TABLE VIII: Comparison of methods for Non-Prehensile Pivot task.
+Train Test Train Avg Test Avg
+Obj1 Obj2 Obj3 Obj4
+ACT (Vision-Only) 5/5 0/5 4/5 0/5 100.0% 26.7%
+ACT (Vision+Force) 5/5 3/5 4/5 4/5 100.0% 73.3%
+FACTR 5/5 4/5 5/5 5/5 100.0% 93.3%
+TABLE IX: Comparison of methods for Fruit Pick-Place task.
+Train Test Train Avg Test Avg
+Obj1 Obj2 Obj3 Obj4
+ACT (Vision-Only) 0/5 0/5 0/5 0/5 0.0% 0.0%
+ACT (Vision+Force) 4/5 4/5 3/5 4/5 80.0% 70.0%
+FACTR 5/5 4/5 4/5 4/5 90.0% 80.0%
+TABLE X: Comparison of methods for Rolling Dough task.
