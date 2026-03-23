@@ -65,3 +65,6 @@ class CameraConfig(draccus.ChoiceRegistry, abc.ABC):  # type: ignore  # TODO: ad
     @property
     def type(self) -> str:
         return str(self.get_choice_name(self.__class__))
+
+
+# Registration happens inside cameras/utils.py dynamically.

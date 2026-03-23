@@ -135,6 +135,8 @@ def init_keyboard_listener():
     events["exit_early"] = False
     events["rerecord_episode"] = False
     events["stop_recording"] = False
+    events["start_episode"] = False    # New: Trigger for manual start
+    events["discard_episode"] = False  # New: Trigger for trash/discard
 
     if is_headless():
         logging.warning(
@@ -148,12 +150,30 @@ def init_keyboard_listener():
 
     def on_press(key):
         try:
+            # Check for character keys (S, L)
+            if hasattr(key, 'char'):
+                if key.char == 's' or key.char == 'S':
+                    print(" 'S' key pressed. Starting episode recording...")
+                    events["start_episode"] = True
+                elif key.char == 'l' or key.char == 'L':
+                    print(" 'L' key pressed. Stopping and DISCARDING (Trash) episode...")
+                    events["discard_episode"] = True
+                    events["exit_early"] = True
+
+            # Check for special keys
             if key == keyboard.Key.right:
                 print("Right arrow key pressed. Exiting loop...")
                 events["exit_early"] = True
             elif key == keyboard.Key.left:
                 print("Left arrow key pressed. Exiting loop and rerecord the last episode...")
                 events["rerecord_episode"] = True
+                events["exit_early"] = True
+            elif key == keyboard.Key.space:
+                print("Space key pressed. Stopping and SAVING episode...")
+                events["exit_early"] = True
+            elif key == keyboard.Key.backspace:
+                print("Backspace key pressed. Stopping and DISCARDING (Trash) episode...")
+                events["discard_episode"] = True
                 events["exit_early"] = True
             elif key == keyboard.Key.esc:
                 print("Escape key pressed. Stopping data recording...")

@@ -38,8 +38,9 @@ from tqdm import tqdm
 from lerobot.utils.decorators import check_if_already_connected, check_if_not_connected
 from lerobot.utils.utils import enter_pressed, move_cursor_up
 
-type NameOrID = str | int
-type Value = int | float
+import typing
+NameOrID: typing.TypeAlias = str | int
+Value: typing.TypeAlias = int | float
 
 logger = logging.getLogger(__name__)
 

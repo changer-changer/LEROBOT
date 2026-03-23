@@ -45,6 +45,15 @@ When implementing a new policy class (e.g. `DiffusionPolicy`) follow these steps
 """
 
 import itertools
+import typing
+
+# Monkey-patch typing.Unpack for Python < 3.11
+if not hasattr(typing, "Unpack"):
+    try:
+        from typing_extensions import Unpack
+        typing.Unpack = Unpack
+    except ImportError:
+        pass
 
 from lerobot.__version__ import __version__  # noqa: F401
 

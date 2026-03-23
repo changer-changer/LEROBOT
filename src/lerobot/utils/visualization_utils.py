@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import numbers
 import os
 
@@ -58,20 +59,7 @@ def log_rerun_data(
     """
     Logs observation and action data to Rerun for real-time visualization.
 
-    This function iterates through the provided observation and action dictionaries and sends their contents
-    to the Rerun viewer. It handles different data types appropriately:
-    - Scalars values (floats, ints) are logged as `rr.Scalars`.
-    - 3D NumPy arrays that resemble images (e.g., with 1, 3, or 4 channels first) are transposed
-      from CHW to HWC format, (optionally) compressed to JPEG and logged as `rr.Image` or `rr.EncodedImage`.
-    - 1D NumPy arrays are logged as a series of individual scalars, with each element indexed.
-    - Other multi-dimensional arrays are flattened and logged as individual scalars.
-
-    Keys are automatically namespaced with "observation." or "action." if not already present.
-
-    Args:
-        observation: An optional dictionary containing observation data to log.
-        action: An optional dictionary containing action data to log.
-        compress_images: Whether to compress images before logging to save bandwidth & memory in exchange for cpu and quality.
+    Optimized for high-performance tactile and point-cloud data.
     """
     if observation:
         for k, v in observation.items():
@@ -86,12 +74,30 @@ def log_rerun_data(
                 # Convert CHW -> HWC when needed
                 if arr.ndim == 3 and arr.shape[0] in (1, 3, 4) and arr.shape[-1] not in (1, 3, 4):
                     arr = np.transpose(arr, (1, 2, 0))
-                if arr.ndim == 1:
+
+                if arr.ndim == 2 and arr.shape[1] in (2, 3):
+                    # Efficient Point Cloud Logging (Tactile, LiDAR, etc.)
+                    # Shape (N, 2) or (N, 3)
+                    rr.log(key, rr.Points3D(arr))
+                elif arr.ndim == 3 and arr.shape[2] in (1, 3, 4):
+                    # Image logging - REMOVE static=True as it's a dynamic feed
+                    img_entity = rr.Image(arr).compress() if compress_images else rr.Image(arr)
+                    rr.log(key, entity=img_entity)
+                elif arr.ndim == 1:
+                    # Scalar array: Cap at 64 to prevent "logging blowout"
+                    if arr.size > 64:
+                        logging.debug(f"Skipping Rerun log for large 1D array '{key}' (size {arr.size})")
+                        continue
                     for i, vi in enumerate(arr):
                         rr.log(f"{key}_{i}", rr.Scalars(float(vi)))
                 else:
-                    img_entity = rr.Image(arr).compress() if compress_images else rr.Image(arr)
-                    rr.log(key, entity=img_entity, static=True)
+                    # Fallback for other arrays: Cap at 64 elements
+                    if arr.size > 64:
+                         logging.debug(f"Skipping Rerun log for large multi-dim array '{key}' (size {arr.size})")
+                         continue
+                    flat = arr.flatten()
+                    for i, vi in enumerate(flat):
+                        rr.log(f"{key}_{i}", rr.Scalars(float(vi)))
 
     if action:
         for k, v in action.items():
@@ -103,10 +109,11 @@ def log_rerun_data(
                 rr.log(key, rr.Scalars(float(v)))
             elif isinstance(v, np.ndarray):
                 if v.ndim == 1:
+                    if v.size > 64: continue
                     for i, vi in enumerate(v):
                         rr.log(f"{key}_{i}", rr.Scalars(float(vi)))
                 else:
-                    # Fall back to flattening higher-dimensional arrays
+                    if v.size > 64: continue
                     flat = v.flatten()
                     for i, vi in enumerate(flat):
                         rr.log(f"{key}_{i}", rr.Scalars(float(vi)))

@@ -16,6 +16,13 @@ import platform
 import time
 
 
+def busy_wait(seconds):
+    """
+    Compatible alias for precise_sleep.
+    """
+    precise_sleep(seconds)
+
+
 def precise_sleep(seconds: float, spin_threshold: float = 0.010, sleep_margin: float = 0.005):
     """
     Wait for `seconds` with better precision than time.sleep alone at the expense of more CPU usage.

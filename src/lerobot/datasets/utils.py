@@ -637,7 +637,12 @@ def hw_to_dataset_features(
         for key, ftype in hw_features.items()
         if ftype is float or (isinstance(ftype, PolicyFeature) and ftype.type != FeatureType.VISUAL)
     }
-    cam_fts = {key: shape for key, shape in hw_features.items() if isinstance(shape, tuple)}
+    # Categorize features:
+    # 1. Scalar floats -> joint/state features
+    # 2. 3D Tuples -> Camera/Image/Video features
+    # 3. Other Tuples -> Other N-D array features (e.g. PointClouds)
+    cam_fts = {key: shape for key, shape in hw_features.items() if isinstance(shape, tuple) and len(shape) == 3}
+    other_nd_fts = {key: shape for key, shape in hw_features.items() if isinstance(shape, tuple) and len(shape) != 3}
 
     if joint_fts and prefix == ACTION:
         features[prefix] = {
@@ -658,6 +663,13 @@ def hw_to_dataset_features(
             "dtype": "video" if use_video else "image",
             "shape": shape,
             "names": ["height", "width", "channels"],
+        }
+
+    for key, shape in other_nd_fts.items():
+        # Treat other N-D arrays as generic float32 features
+        features[f"{prefix}.{key}"] = {
+            "dtype": "float32",
+            "shape": shape,
         }
 
     _validate_feature_names(features)
@@ -685,10 +697,25 @@ def build_dataset_frame(
     for key, ft in ds_features.items():
         if key in DEFAULT_FEATURES or not key.startswith(prefix):
             continue
-        elif ft["dtype"] == "float32" and len(ft["shape"]) == 1:
-            frame[key] = np.array([values[name] for name in ft["names"]], dtype=np.float32)
+        elif ft["dtype"] == "float32":
+            if "names" in ft:
+                # Grouped scalars (e.g. observation.state)
+                frame[key] = np.array([values[name] for name in ft["names"]], dtype=np.float32)
+            else:
+                # Direct N-D array retrieval (e.g. observation.tac3d_sensor)
+                val = values[key.removeprefix(f"{prefix}.")]
+                frame[key] = np.asanyarray(val).astype(np.float32)
         elif ft["dtype"] in ["image", "video"]:
-            frame[key] = values[key.removeprefix(f"{prefix}.images.")]
+            img = values[key.removeprefix(f"{prefix}.images.")]
+            # H, W, C
+            expected_h, expected_w, _ = ft["shape"]
+            if img.shape[0] != expected_h or img.shape[1] != expected_w:
+                # Logger import is at top level
+                logging.debug(f"Resizing {key} from {img.shape[:2]} to {(expected_h, expected_w)}")
+                img_pil = PILImage.fromarray(img)
+                img_pil = img_pil.resize((expected_w, expected_h), resample=PILImage.BILINEAR)
+                img = np.array(img_pil)
+            frame[key] = img
 
     return frame
 
@@ -1077,7 +1104,7 @@ def validate_feature_numpy_array(
         if actual_dtype != np.dtype(expected_dtype):
             error_message += f"The feature '{name}' of dtype '{actual_dtype}' is not of the expected dtype '{expected_dtype}'.\n"
 
-        if actual_shape != expected_shape:
+        if list(actual_shape) != list(expected_shape):
             error_message += f"The feature '{name}' of shape '{actual_shape}' does not have the expected shape '{expected_shape}'.\n"
     else:
         error_message += f"The feature '{name}' is not a 'np.ndarray'. Expected type is '{expected_dtype}', but type '{type(value)}' provided instead.\n"
@@ -1232,7 +1259,9 @@ class LookAheadError(Exception):
     pass
 
 
-class Backtrackable[T]:
+from typing import Generic, TypeVar
+T = TypeVar('T')
+class Backtrackable(Generic[T]):
     """
     Wrap any iterator/iterable so you can step back up to `history` items
     and look ahead up to `lookahead` items.

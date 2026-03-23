@@ -250,8 +250,10 @@ class ProcessorMigrationError(Exception):
         )
 
 
+from typing import Generic
+
 @dataclass
-class DataProcessorPipeline[TInput, TOutput](HubMixin):
+class DataProcessorPipeline(HubMixin, Generic[TInput, TOutput]):
     """A sequential pipeline for processing data, integrated with the Hugging Face Hub.
 
     This class chains together multiple `ProcessorStep` instances to form a complete
